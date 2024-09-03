@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package filesync;
+
+option go_package = "go_sync/filesync;filesync";
+
+service FileSync {
+  rpc SyncFile(stream FileChunk) returns (stream SyncResponse);
+}
+
+message FileChunk {
+  string filename = 1;
+  bytes content = 2;
+}
+
+message SyncResponse {
+  string message = 1;
+}
