@@ -37,3 +37,4 @@ test:
 	chmod +x main
 	cp main ./A/
 	cp main ./B/
+	clear

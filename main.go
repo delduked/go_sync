@@ -16,6 +16,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/peer"
 )
 
 var activeTransfers = make(map[string]bool)
@@ -27,10 +28,17 @@ type server struct {
 }
 
 func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
+	// Log when a connection is made
+	if p, ok := peer.FromContext(stream.Context()); ok {
+		log.Printf("Server: Connection established from %s", p.Addr)
+	}
+	defer func() {
+		log.Println("Server: Connection closed.")
+	}()
+
 	log.Println("Server: Started receiving file stream.")
 	var filePath string
 	var file *os.File
-	//var err error
 
 	defer func() {
 		if file != nil {
@@ -60,7 +68,7 @@ func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
 
 			mu.Lock()
 			if activeTransfers[chunk.Filename] {
-				log.Printf("Server: File %s is already being transferred, skipping...", chunk.Filename)
+				// log.Printf("Server: File %s is already being transferred, skipping...", chunk.Filename)
 				mu.Unlock()
 				return nil // Skip if this file is already being transferred
 			}
@@ -68,7 +76,7 @@ func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
 			mu.Unlock()
 		}
 
-		log.Printf("Server: Receiving chunk for file %s", chunk.Filename)
+		// log.Printf("Server: Receiving chunk for file %s", chunk.Filename)
 
 		if _, err := file.Write(chunk.Content); err != nil {
 			log.Printf("Server: Error writing chunk to file: %v\n", err)
@@ -109,7 +117,7 @@ func startClient(remoteAddr, filePath string) {
 	// Mark the file as being transferred before starting the stream
 	mu.Lock()
 	if activeTransfers[filepath.Base(filePath)] {
-		log.Printf("Client: File %s is already being transferred, skipping...", filePath)
+		// log.Printf("Client: File %s is already being transferred, skipping...", filePath)
 		mu.Unlock()
 		return // Skip if this file is already being transferred
 	}
@@ -125,11 +133,15 @@ func startClient(remoteAddr, filePath string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second) // Increase timeout for large files
 	defer cancel()
 
+	log.Printf("Client: Attempting to connect to %s", remoteAddr)
 	conn, err := grpc.Dial(remoteAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Client: Failed to connect to %s: %v", remoteAddr, err)
 	}
-	defer conn.Close()
+	defer func() {
+		log.Println("Client: Connection closed.")
+		conn.Close()
+	}()
 
 	client := pb.NewFileSyncClient(conn)
 	stream, err := client.SyncFile(ctx)
@@ -160,7 +172,7 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 	for {
 		n, err := file.Read(buffer)
 		if n > 0 {
-			log.Printf("Client: Sending chunk of size %d for file %s\n", n, filename)
+			// log.Printf("Client: Sending chunk of size %d for file %s\n", n, filename)
 			if err := stream.Send(&pb.FileChunk{
 				Filename: filename,
 				Content:  buffer[:n],
@@ -169,12 +181,12 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 				return err
 			}
 
-			res, err := stream.Recv()
+			_, err := stream.Recv()
 			if err != nil && err != io.EOF {
 				log.Printf("Client: Error receiving acknowledgment: %v\n", err)
 				return err
 			}
-			log.Printf("Client: Server acknowledgment: %s\n", res.Message)
+			// log.Printf("Client: Server acknowledgment: %s\n", res.Message)
 		}
 		if err == io.EOF {
 			log.Println("Client: Reached end of file.")
@@ -219,7 +231,7 @@ func watchFolderForRealTimeSync(folderPath, remoteAddr string) {
 			if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write {
 				mu.Lock()
 				if activeTransfers[filepath.Base(event.Name)] {
-					log.Printf("File %s is already being transferred, skipping...", event.Name)
+					// log.Printf("File %s is already being transferred, skipping...", event.Name)
 					mu.Unlock()
 					continue
 				}
