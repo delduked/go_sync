@@ -27,6 +27,7 @@ type server struct {
 	localFolder string
 }
 
+// SyncFile is the function to sync files
 func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
 	// Log when a connection is made
 	if p, ok := peer.FromContext(stream.Context()); ok {
@@ -68,15 +69,12 @@ func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
 
 			mu.Lock()
 			if activeTransfers[chunk.Filename] {
-				// log.Printf("Server: File %s is already being transferred, skipping...", chunk.Filename)
 				mu.Unlock()
 				return nil // Skip if this file is already being transferred
 			}
 			activeTransfers[chunk.Filename] = true
 			mu.Unlock()
 		}
-
-		// log.Printf("Server: Receiving chunk for file %s", chunk.Filename)
 
 		if _, err := file.Write(chunk.Content); err != nil {
 			log.Printf("Server: Error writing chunk to file: %v\n", err)
@@ -96,6 +94,27 @@ func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
 	return nil
 }
 
+func (s *server) DeleteFile(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
+	log.Printf("Server: Deleting file or folder: %s", req.Filename)
+
+	// Check if the file or folder exists before attempting to delete
+	if _, err := os.Stat(req.Filename); os.IsNotExist(err) {
+		log.Printf("Server: File or folder does not exist: %s", req.Filename)
+		return &pb.DeleteResponse{Message: "File or folder does not exist"}, nil
+	}
+
+	// Attempt to delete the file or folder
+	err := os.RemoveAll(req.Filename)
+	if err != nil {
+		log.Printf("Server: Error deleting file or folder: %v. Possible permission issue", err)
+		return &pb.DeleteResponse{Message: "Error deleting file or folder"}, err
+	}
+
+	log.Printf("Server: Successfully deleted file or folder: %s", req.Filename)
+	return &pb.DeleteResponse{Message: "File or folder deleted"}, nil
+}
+
+
 func startServer(port, localFolder string) {
 	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -111,13 +130,17 @@ func startServer(port, localFolder string) {
 	}
 }
 
-func startClient(remoteAddr, filePath string) {
+func startClient(remoteAddr, filePath string, isDelete bool) {
+	if isDelete {
+		deleteFileOnRemote(remoteAddr, filePath)
+		return
+	}
+
 	log.Printf("Client: Preparing to sync file %s to %s", filePath, remoteAddr)
 
 	// Mark the file as being transferred before starting the stream
 	mu.Lock()
 	if activeTransfers[filepath.Base(filePath)] {
-		// log.Printf("Client: File %s is already being transferred, skipping...", filePath)
 		mu.Unlock()
 		return // Skip if this file is already being transferred
 	}
@@ -133,15 +156,11 @@ func startClient(remoteAddr, filePath string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second) // Increase timeout for large files
 	defer cancel()
 
-	log.Printf("Client: Attempting to connect to %s", remoteAddr)
 	conn, err := grpc.Dial(remoteAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Client: Failed to connect to %s: %v", remoteAddr, err)
 	}
-	defer func() {
-		log.Println("Client: Connection closed.")
-		conn.Close()
-	}()
+	defer conn.Close()
 
 	client := pb.NewFileSyncClient(conn)
 	stream, err := client.SyncFile(ctx)
@@ -154,6 +173,27 @@ func startClient(remoteAddr, filePath string) {
 	}
 
 	log.Printf("Client: Finished syncing file %s", filePath)
+}
+
+func deleteFileOnRemote(remoteAddr, filePath string) {
+	log.Printf("Client: Preparing to delete file or folder %s on remote %s", filePath, remoteAddr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	conn, err := grpc.Dial(remoteAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Client: Failed to connect to %s: %v", remoteAddr, err)
+	}
+	defer conn.Close()
+
+	client := pb.NewFileSyncClient(conn)
+	_, err = client.DeleteFile(ctx, &pb.DeleteRequest{Filename: filePath})
+	if err != nil {
+		log.Fatalf("Client: Failed to delete file or folder: %v", err)
+	}
+
+	log.Printf("Client: Successfully deleted file or folder %s on remote %s", filePath, remoteAddr)
 }
 
 func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) error {
@@ -172,7 +212,6 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 	for {
 		n, err := file.Read(buffer)
 		if n > 0 {
-			// log.Printf("Client: Sending chunk of size %d for file %s\n", n, filename)
 			if err := stream.Send(&pb.FileChunk{
 				Filename: filename,
 				Content:  buffer[:n],
@@ -186,7 +225,6 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 				log.Printf("Client: Error receiving acknowledgment: %v\n", err)
 				return err
 			}
-			// log.Printf("Client: Server acknowledgment: %s\n", res.Message)
 		}
 		if err == io.EOF {
 			log.Println("Client: Reached end of file.")
@@ -198,7 +236,6 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 		}
 	}
 
-	// Close the stream
 	if err := stream.CloseSend(); err != nil {
 		log.Printf("Client: Error closing stream: %v\n", err)
 		return err
@@ -207,7 +244,6 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 	log.Printf("Client: Finished streaming file %s\n", filePath)
 	return nil
 }
-
 func watchFolderForRealTimeSync(folderPath, remoteAddr string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -228,18 +264,26 @@ func watchFolderForRealTimeSync(folderPath, remoteAddr string) {
 			if !ok {
 				return
 			}
+
+			// Handle file/folder creations and modifications
 			if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write {
 				mu.Lock()
 				if activeTransfers[filepath.Base(event.Name)] {
-					// log.Printf("File %s is already being transferred, skipping...", event.Name)
 					mu.Unlock()
 					continue
 				}
 				mu.Unlock()
 
 				log.Printf("Detected file change: %s", event.Name)
-				go startClient(remoteAddr, event.Name)
+				go startClient(remoteAddr, event.Name, false) // Sync the file to remote system
 			}
+
+			// Handle file/folder deletions and moves (rename)
+			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+				log.Printf("Detected file/folder removal or move to trash: %s", event.Name)
+				go startClient(remoteAddr, event.Name, true) // Delete the file on the remote system
+			}
+
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
@@ -249,8 +293,8 @@ func watchFolderForRealTimeSync(folderPath, remoteAddr string) {
 	}
 }
 
+
 func main() {
-	// Parse command-line arguments
 	localFolder := flag.String("local", "", "Local folder to watch for file changes")
 	remoteAddr := flag.String("remoteAddr", "", "Address of the remote system")
 	port := flag.String("port", "50051", "Port on which the gRPC server will run")
@@ -260,12 +304,9 @@ func main() {
 		log.Fatalf("Both flags -local and -remoteAddr must be provided")
 	}
 
-	// Start the gRPC server
 	go startServer(*port, *localFolder)
 
-	// Delay to ensure the server is up before starting the watcher
 	time.Sleep(2 * time.Second)
 
-	// Start watching the local folder for new files
 	watchFolderForRealTimeSync(*localFolder, *remoteAddr)
 }

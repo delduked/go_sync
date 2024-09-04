@@ -6,8 +6,16 @@ option go_package = "go_sync/filesync;filesync";
 
 service FileSync {
   rpc SyncFile(stream FileChunk) returns (stream SyncResponse);
+  rpc DeleteFile(DeleteRequest) returns (DeleteResponse); // New method for deletion
 }
 
+message DeleteRequest {
+    string filename = 1;  // The path of the file or directory to be deleted
+}
+
+message DeleteResponse {
+    string message = 1;  // Confirmation message
+}
 message FileChunk {
   string filename = 1;
   bytes content = 2;
