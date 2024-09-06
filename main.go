@@ -9,16 +9,17 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	pb "go_sync/filesync"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/grandcat/zeroconf"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/peer"
-	mdns "github.com/hashicorp/mdns"
 )
 
 var (
@@ -106,26 +107,80 @@ func (s *server) DeleteFile(ctx context.Context, req *pb.DeleteRequest) (*pb.Del
 	return &pb.DeleteResponse{Message: "File or folder deleted"}, nil
 }
 
+func getHostIP() (net.IP, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, iface := range ifaces {
+		// Ignore interfaces that are down, loopback, or Docker-related (veth)
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 || strings.Contains(iface.Name, "veth") {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// Return the first valid IPv4 address
+			if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+				return ip, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no valid IPv4 address found")
+}
+
 func discoverPeersPeriodically() {
-	for {
-		entriesCh := make(chan *mdns.ServiceEntry, 4)
+	// Get the local machine's IP address
+	localIP, err := getHostIP()
+	if err != nil {
+		log.Fatalf("Failed to get local IP address: %v", err)
+	}
 
-		// Start a lookup for services
-		go func() {
-			mdns.Lookup("_filesync._tcp", entriesCh)
-			close(entriesCh)
-		}()
+	// Channel to receive discovered services
+	entries := make(chan *zeroconf.ServiceEntry)
 
-		for entry := range entriesCh {
-			remoteAddr := fmt.Sprintf("%s:%d", entry.AddrV4, entry.Port)
+	go func(results <-chan *zeroconf.ServiceEntry) {
+		for entry := range results {
+			// Skip if the discovered service is from the local machine
+			if entry.AddrIPv4[0].String() == localIP.String() {
+				continue
+			}
+
+			remoteAddr := fmt.Sprintf("%s:%d", entry.AddrIPv4[0], entry.Port)
 			mu.Lock()
-			peers[entry.AddrV4.String()] = remoteAddr
+			peers[entry.AddrIPv4[0].String()] = remoteAddr
 			mu.Unlock()
 			log.Printf("Discovered peer: %s", remoteAddr)
 		}
+	}(entries)
 
-		// Sleep for a few seconds before the next discovery
-		time.Sleep(10 * time.Second)
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		log.Fatalf("Failed to initialize resolver: %v", err)
+	}
+
+	for {
+		// No timeout: keep browsing for services continuously
+		err := resolver.Browse(context.Background(), "_filesync._tcp", "local.", entries)
+		if err != nil {
+			log.Fatalf("Failed to browse services: %v", err)
+		}
+
+		time.Sleep(5 * time.Second) // Pause before the next discovery round
 	}
 }
 
@@ -147,6 +202,20 @@ func startServer(port, localFolder string) {
 
 	s := grpc.NewServer()
 	pb.RegisterFileSyncServer(s, &server{localFolder: localFolder})
+
+	// Register service via mDNS using zeroconf
+	server, err := zeroconf.Register(
+		"gRPC File Sync Service",        // Service Name
+		"_filesync._tcp",                // Service Type
+		"local.",                        // Domain
+		50051,                           // Port
+		[]string{"txtvers=1", "path=/"}, // Text records
+		nil,                             // Interface
+	)
+	if err != nil {
+		log.Fatalf("Failed to register service: %v", err)
+	}
+	defer server.Shutdown()
 
 	log.Printf("Server is running on port %s, syncing folder: %s", port, localFolder)
 	if err := s.Serve(lis); err != nil {
@@ -224,7 +293,6 @@ func deleteFileOnRemote(remoteAddr, filePath string) {
 
 	log.Printf("Client: Successfully deleted file or folder %s on remote %s", filePath, remoteAddr)
 }
-
 
 func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) error {
 	log.Printf("Client: Started streaming file %s\n", filePath)
