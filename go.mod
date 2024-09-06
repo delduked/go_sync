@@ -4,6 +4,7 @@ go 1.22.1
 
 require (
 	github.com/fsnotify/fsnotify v1.7.0
+	github.com/grandcat/zeroconf v1.0.0
 	google.golang.org/grpc v1.66.0
 	google.golang.org/protobuf v1.34.1
 )
@@ -12,7 +13,6 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
-	github.com/grandcat/zeroconf v1.0.0 // indirect
 	github.com/hashicorp/mdns v1.0.5 // indirect
 	github.com/holoplot/go-avahi v1.0.1 // indirect
 	github.com/miekg/dns v1.1.41 // indirect

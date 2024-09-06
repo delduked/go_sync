@@ -8,9 +8,11 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	pb "go_sync/filesync"
@@ -18,6 +20,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/grandcat/zeroconf"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/peer"
 )
@@ -25,7 +28,8 @@ import (
 var (
 	activeTransfers = make(map[string]bool)
 	mu              sync.Mutex
-	peers           = make(map[string]string) // To store discovered peers (IP:port)
+	peers           = make(map[string]string)           // To store discovered peers (IP:port)
+	connections     = make(map[string]*grpc.ClientConn) // To store persistent gRPC connections
 )
 
 type server struct {
@@ -96,16 +100,20 @@ func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
 }
 
 func (s *server) DeleteFile(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
-	log.Printf("Server: Deleting file or folder: %s", req.Filename)
-	err := os.RemoveAll(req.Filename)
+	// Construct the full file path using the local folder and the file name
+	fullFilePath := filepath.Join(s.localFolder, req.Filename)
+
+	log.Printf("Server: Deleting file or folder: %s", fullFilePath)
+	err := os.RemoveAll(fullFilePath)
 	if err != nil {
 		log.Printf("Server: Error deleting file or folder: %v", err)
 		return &pb.DeleteResponse{Message: "Error deleting file or folder"}, err
 	}
 
-	log.Printf("Server: Successfully deleted file or folder: %s", req.Filename)
+	log.Printf("Server: Successfully deleted file or folder: %s", fullFilePath)
 	return &pb.DeleteResponse{Message: "File or folder deleted"}, nil
 }
+
 
 func getHostIP() (net.IP, error) {
 	ifaces, err := net.Interfaces()
@@ -161,10 +169,38 @@ func discoverPeersPeriodically() {
 			}
 
 			remoteAddr := fmt.Sprintf("%s:%d", entry.AddrIPv4[0], entry.Port)
+
+			// Check if the peer is already connected
 			mu.Lock()
-			peers[entry.AddrIPv4[0].String()] = remoteAddr
+			conn, exists := connections[remoteAddr]
 			mu.Unlock()
-			log.Printf("Discovered peer: %s", remoteAddr)
+
+			// If the connection exists but is no longer valid, reconnect
+			if exists {
+				state := conn.GetState()
+				log.Printf("Peer %s is in state: %v", remoteAddr, state)
+				if state == connectivity.TransientFailure || state == connectivity.Shutdown {
+					log.Printf("Connection to peer %s is lost (state: %v), reconnecting...", remoteAddr, state)
+					conn.Close()
+					mu.Lock()
+					delete(connections, remoteAddr) // Remove invalid connection
+					mu.Unlock()
+					exists = false // Trigger new connection below
+				}
+			}
+
+			// If the peer is not already connected, establish a new gRPC connection
+			if !exists {
+				conn, err := grpc.Dial(remoteAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+				if err != nil {
+					log.Printf("Failed to connect to peer %s: %v", remoteAddr, err)
+				} else {
+					mu.Lock()
+					connections[remoteAddr] = conn
+					mu.Unlock()
+					log.Printf("Connected to peer: %s", remoteAddr)
+				}
+			}
 		}
 	}(entries)
 
@@ -188,9 +224,17 @@ func getAnyPeer() (string, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	for _, addr := range peers {
+	// Log the contents of the connections map for debugging
+	if len(connections) == 0 {
+		log.Println("No active connections in the connections map")
+		return "", fmt.Errorf("no peers found")
+	}
+
+	for addr := range connections {
+		log.Printf("Active peer found: %s", addr)
 		return addr, nil
 	}
+
 	return "", fmt.Errorf("no peers found")
 }
 
@@ -230,24 +274,27 @@ func startClient(filePath string, isDelete bool) {
 		return
 	}
 
+	// Extract the base file name (e.g., "me.jpg") to sync/delete
+	fileName := filepath.Base(filePath)
+
 	if isDelete {
-		deleteFileOnRemote(remoteAddr, filePath)
+		deleteFileOnRemote(remoteAddr, fileName)
 		return
 	}
 
-	log.Printf("Client: Preparing to sync file %s to %s", filePath, remoteAddr)
+	log.Printf("Client: Preparing to sync file %s to %s", fileName, remoteAddr)
 
 	mu.Lock()
-	if activeTransfers[filepath.Base(filePath)] {
+	if activeTransfers[fileName] {
 		mu.Unlock()
 		return
 	}
-	activeTransfers[filepath.Base(filePath)] = true
+	activeTransfers[fileName] = true
 	mu.Unlock()
 
 	defer func() {
 		mu.Lock()
-		delete(activeTransfers, filepath.Base(filePath))
+		delete(activeTransfers, fileName)
 		mu.Unlock()
 	}()
 
@@ -270,11 +317,26 @@ func startClient(filePath string, isDelete bool) {
 		log.Fatalf("Client: Failed to sync file: %v", err)
 	}
 
-	log.Printf("Client: Finished syncing file %s", filePath)
+	log.Printf("Client: Finished syncing file %s", fileName)
 }
 
-func deleteFileOnRemote(remoteAddr, filePath string) {
-	log.Printf("Client: Preparing to delete file or folder %s on remote %s", filePath, remoteAddr)
+func shutdownConnections() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	log.Println("Shutting down all active connections...")
+	for addr, conn := range connections {
+		log.Printf("Closing connection to %s", addr)
+		err := conn.Close()
+		if err != nil {
+			log.Printf("Error closing connection to %s: %v", addr, err)
+		}
+	}
+	log.Println("All connections closed.")
+}
+
+func deleteFileOnRemote(remoteAddr, fileName string) {
+	log.Printf("Client: Preparing to delete file %s on remote %s", fileName, remoteAddr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -286,13 +348,14 @@ func deleteFileOnRemote(remoteAddr, filePath string) {
 	defer conn.Close()
 
 	client := pb.NewFileSyncClient(conn)
-	_, err = client.DeleteFile(ctx, &pb.DeleteRequest{Filename: filePath})
+	_, err = client.DeleteFile(ctx, &pb.DeleteRequest{Filename: fileName})
 	if err != nil {
 		log.Fatalf("Client: Failed to delete file or folder: %v", err)
 	}
 
-	log.Printf("Client: Successfully deleted file or folder %s on remote %s", filePath, remoteAddr)
+	log.Printf("Client: Successfully deleted file %s on remote %s", fileName, remoteAddr)
 }
+
 
 func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) error {
 	log.Printf("Client: Started streaming file %s\n", filePath)
@@ -343,19 +406,19 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 	return nil
 }
 
-func watchFolderForRealTimeSync(folderPath string) {
+func watchFolderForRealTimeSync(localFolder string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatalf("failed to create watcher: %v", err)
 	}
 	defer watcher.Close()
 
-	err = watcher.Add(folderPath)
+	err = watcher.Add(localFolder)
 	if err != nil {
 		log.Fatalf("failed to add folder to watcher: %v", err)
 	}
 
-	log.Printf("Watching folder: %s", folderPath)
+	log.Printf("Watching folder: %s", localFolder)
 
 	for {
 		select {
@@ -401,12 +464,23 @@ func main() {
 		log.Fatalf("Flag -local must be provided")
 	}
 
+	// Start the gRPC server and peer discovery in separate goroutines
 	go startServer(*port, *localFolder)
-
-	// Start peer discovery in the background
 	go discoverPeersPeriodically()
 
-	time.Sleep(2 * time.Second)
+	// Watch the folder for real-time file sync
+	go watchFolderForRealTimeSync(*localFolder)
 
-	watchFolderForRealTimeSync(*localFolder)
+	// Set up signal catching for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Wait for a termination signal
+	sig := <-sigChan
+	log.Printf("Received signal: %v. Shutting down gracefully...", sig)
+
+	// Call the shutdown function to close all active connections
+	shutdownConnections()
+
+	log.Println("Shutdown complete. Exiting.")
 }
