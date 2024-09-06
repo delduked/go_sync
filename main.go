@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -17,27 +18,26 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/peer"
+	mdns "github.com/hashicorp/mdns"
 )
 
-var activeTransfers = make(map[string]bool)
-var mu sync.Mutex
+var (
+	activeTransfers = make(map[string]bool)
+	mu              sync.Mutex
+	peers           = make(map[string]string) // To store discovered peers (IP:port)
+)
 
 type server struct {
 	pb.UnimplementedFileSyncServer
 	localFolder string
 }
 
-// SyncFile is the function to sync files
 func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
-	// Log when a connection is made
 	if p, ok := peer.FromContext(stream.Context()); ok {
 		log.Printf("Server: Connection established from %s", p.Addr)
 	}
-	defer func() {
-		log.Println("Server: Connection closed.")
-	}()
+	defer log.Println("Server: Connection closed.")
 
-	log.Println("Server: Started receiving file stream.")
 	var filePath string
 	var file *os.File
 
@@ -96,17 +96,9 @@ func (s *server) SyncFile(stream pb.FileSync_SyncFileServer) error {
 
 func (s *server) DeleteFile(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
 	log.Printf("Server: Deleting file or folder: %s", req.Filename)
-
-	// Check if the file or folder exists before attempting to delete
-	if _, err := os.Stat(req.Filename); os.IsNotExist(err) {
-		log.Printf("Server: File or folder does not exist: %s", req.Filename)
-		return &pb.DeleteResponse{Message: "File or folder does not exist"}, nil
-	}
-
-	// Attempt to delete the file or folder
 	err := os.RemoveAll(req.Filename)
 	if err != nil {
-		log.Printf("Server: Error deleting file or folder: %v. Possible permission issue", err)
+		log.Printf("Server: Error deleting file or folder: %v", err)
 		return &pb.DeleteResponse{Message: "Error deleting file or folder"}, err
 	}
 
@@ -114,6 +106,38 @@ func (s *server) DeleteFile(ctx context.Context, req *pb.DeleteRequest) (*pb.Del
 	return &pb.DeleteResponse{Message: "File or folder deleted"}, nil
 }
 
+func discoverPeersPeriodically() {
+	for {
+		entriesCh := make(chan *mdns.ServiceEntry, 4)
+
+		// Start a lookup for services
+		go func() {
+			mdns.Lookup("_filesync._tcp", entriesCh)
+			close(entriesCh)
+		}()
+
+		for entry := range entriesCh {
+			remoteAddr := fmt.Sprintf("%s:%d", entry.AddrV4, entry.Port)
+			mu.Lock()
+			peers[entry.AddrV4.String()] = remoteAddr
+			mu.Unlock()
+			log.Printf("Discovered peer: %s", remoteAddr)
+		}
+
+		// Sleep for a few seconds before the next discovery
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func getAnyPeer() (string, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for _, addr := range peers {
+		return addr, nil
+	}
+	return "", fmt.Errorf("no peers found")
+}
 
 func startServer(port, localFolder string) {
 	lis, err := net.Listen("tcp", ":"+port)
@@ -130,7 +154,13 @@ func startServer(port, localFolder string) {
 	}
 }
 
-func startClient(remoteAddr, filePath string, isDelete bool) {
+func startClient(filePath string, isDelete bool) {
+	remoteAddr, err := getAnyPeer() // Get any discovered peer
+	if err != nil {
+		log.Println("Client: No peers available for syncing")
+		return
+	}
+
 	if isDelete {
 		deleteFileOnRemote(remoteAddr, filePath)
 		return
@@ -138,11 +168,10 @@ func startClient(remoteAddr, filePath string, isDelete bool) {
 
 	log.Printf("Client: Preparing to sync file %s to %s", filePath, remoteAddr)
 
-	// Mark the file as being transferred before starting the stream
 	mu.Lock()
 	if activeTransfers[filepath.Base(filePath)] {
 		mu.Unlock()
-		return // Skip if this file is already being transferred
+		return
 	}
 	activeTransfers[filepath.Base(filePath)] = true
 	mu.Unlock()
@@ -153,7 +182,7 @@ func startClient(remoteAddr, filePath string, isDelete bool) {
 		mu.Unlock()
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second) // Increase timeout for large files
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	conn, err := grpc.Dial(remoteAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -195,6 +224,7 @@ func deleteFileOnRemote(remoteAddr, filePath string) {
 
 	log.Printf("Client: Successfully deleted file or folder %s on remote %s", filePath, remoteAddr)
 }
+
 
 func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) error {
 	log.Printf("Client: Started streaming file %s\n", filePath)
@@ -244,7 +274,8 @@ func streamFileInRealTime(stream pb.FileSync_SyncFileClient, filePath string) er
 	log.Printf("Client: Finished streaming file %s\n", filePath)
 	return nil
 }
-func watchFolderForRealTimeSync(folderPath, remoteAddr string) {
+
+func watchFolderForRealTimeSync(folderPath string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatalf("failed to create watcher: %v", err)
@@ -275,13 +306,13 @@ func watchFolderForRealTimeSync(folderPath, remoteAddr string) {
 				mu.Unlock()
 
 				log.Printf("Detected file change: %s", event.Name)
-				go startClient(remoteAddr, event.Name, false) // Sync the file to remote system
+				go startClient(event.Name, false) // Sync the file to remote system
 			}
 
 			// Handle file/folder deletions and moves (rename)
 			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
 				log.Printf("Detected file/folder removal or move to trash: %s", event.Name)
-				go startClient(remoteAddr, event.Name, true) // Delete the file on the remote system
+				go startClient(event.Name, true) // Delete the file on the remote system
 			}
 
 		case err, ok := <-watcher.Errors:
@@ -293,20 +324,21 @@ func watchFolderForRealTimeSync(folderPath, remoteAddr string) {
 	}
 }
 
-
 func main() {
 	localFolder := flag.String("local", "", "Local folder to watch for file changes")
-	remoteAddr := flag.String("remoteAddr", "", "Address of the remote system")
 	port := flag.String("port", "50051", "Port on which the gRPC server will run")
 	flag.Parse()
 
-	if *localFolder == "" || *remoteAddr == "" {
-		log.Fatalf("Both flags -local and -remoteAddr must be provided")
+	if *localFolder == "" {
+		log.Fatalf("Flag -local must be provided")
 	}
 
 	go startServer(*port, *localFolder)
 
+	// Start peer discovery in the background
+	go discoverPeersPeriodically()
+
 	time.Sleep(2 * time.Second)
 
-	watchFolderForRealTimeSync(*localFolder, *remoteAddr)
+	watchFolderForRealTimeSync(*localFolder)
 }
