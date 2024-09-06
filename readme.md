@@ -1,102 +1,98 @@
-# File Sync Service
+# Go File Synchronization Service
 
-## Overview
+This project implements a **real-time file synchronization system** using Go, `gRPC`, and `fsnotify`. The primary purpose is to monitor a local folder for changes (new files, modifications, or deletions) and synchronize those changes with connected peers in real-time over the network using `gRPC`.
 
-This Go application provides a real-time file synchronization service between two remote systems using gRPC. It listens to a specified local folder and syncs any newly created or modified files to a corresponding folder on a remote system.
+## Features
 
-### Key Features:
-- **Real-Time File Sync:** Watches a local folder for changes and immediately syncs files to a remote folder.
-- **gRPC Communication:** Utilizes gRPC to handle file transfer between the two systems.
-- **Concurrent Transfers:** Manages multiple file transfers simultaneously without interference.
+- **Real-Time File Synchronization**: As files are created, modified, or deleted in the local folder, they are immediately synced with other peers on the network.
+- **Peer Discovery**: Peers are automatically discovered on the same network using `zeroconf` (multicast DNS), removing the need for manual configuration.
+- **Concurrent Transfer**: The file transfer starts as soon as a peer detects a file change, and it can handle multiple transfers concurrently.
 
-## Setup Instructions
+## Key Behavior
 
-### Prerequisites
-- **Go**: Ensure you have Go installed on your system. You can download it from [golang.org](https://golang.org/dl/).
-- **gRPC and Protocol Buffers**: Install the necessary gRPC tools and dependencies.
+- **File Transfer During Reception**: While the original peer is receiving a file from another system, it can also start sending the file to its connected peers before the file is fully downloaded. This ensures efficient file distribution across the network.
+- **Real-Time Monitoring**: Using `fsnotify`, the system watches the designated folder and triggers file sync or deletion operations whenever changes are detected.
+  
+## How It Works
 
-### Installation
-1. Clone the repository:
-   ```sh
-   git clone https://github.com/yourusername/go_sync.git
+1. **gRPC Server**: Each peer runs a gRPC server, which listens for file sync requests.
+2. **File Watching**: The system monitors a local folder for changes (file creations, modifications, and deletions).
+3. **File Transfer**: When a new file is detected, the system starts streaming the file in chunks to other connected peers. As chunks are received by a peer, the peer can start forwarding the file to its own peers, allowing simultaneous transfer.
+4. **Peer Discovery**: Peers on the network are discovered automatically using `zeroconf`. Once discovered, they are connected through a persistent `gRPC` connection, enabling efficient file sharing.
+5. **File Deletion**: If a file is deleted locally, it is also deleted on all connected peers.
+
+## Prerequisites
+
+Before running this project, make sure you have the following installed:
+
+- **Go**: [Download Go](https://golang.org/dl/)
+- **gRPC**: gRPC is automatically included as a dependency in Go modules.
+- **fsnotify**: A Go package to monitor file system changes (included as a dependency).
+- **zeroconf**: Used for peer discovery (included as a dependency).
+
+## Setup
+
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/yourusername/go_sync
    cd go_sync
    ```
 
-2. Install the required Go packages:
-   ```sh
-   go get google.golang.org/grpc
-   go get github.com/fsnotify/fsnotify
+2. **Install dependencies**:
+
+   Make sure all necessary Go modules are installed:
+
+   ```bash
+   go mod tidy
    ```
 
-3. Compile the application:
-   ```sh
-   go build -o filesync
+3. **Run the service**:
+
+   To start the synchronization service, run the following command with your folder path:
+
+   ```bash
+   go run main.go -local="/path/to/your/folder" -port=50051
    ```
 
-### Usage
+   - Replace `/path/to/your/folder` with the folder you want to monitor.
+   - You can change the port (default is 50051) if needed.
 
-#### 1. Run the gRPC Server
-On the first system (Server A), start the gRPC server. This server will listen for file sync requests and update its local folder with incoming files.
+## Usage
 
-```sh
-./filesync -local /path/to/local/folder -port 50051
+1. **Start the service**: Run the above command on each machine that should participate in file synchronization.
+2. **File Sync**: Any file added or modified in the specified folder will be synchronized with the connected peers in real-time.
+3. **File Deletion Sync**: If a file is deleted, the deletion will be propagated to all peers, removing the file from their folders as well.
+
+### Example
+
+```bash
+go run main.go -local="/home/user/myfolder" -port=50051
 ```
 
-- `-local`: Path to the folder on Server A that you want to sync.
-- `-port`: Port number on which the gRPC server will run (default is 50051).
+In this example:
+- The program monitors `/home/user/myfolder` for changes.
+- It listens on port 50051 for incoming sync requests.
 
-#### 2. Run the File Watcher and Client
-On the second system (Client B), start the file watcher. This client will monitor the local folder for changes and sync any new or modified files to Server A.
+## How to Stop the Service
 
-```sh
-./filesync -local /path/to/local/folder -remoteAddr serverA_IP:50051
-```
+To stop the service gracefully, press `Ctrl+C` in the terminal where the service is running. This will close all active connections and shut down the service properly.
 
-- `-local`: Path to the folder on Client B that you want to monitor.
-- `-remoteAddr`: The IP address and port of Server A's gRPC server.
+## Technical Details
 
-### Example Workflow
+### File Transfer During Reception
 
-1. **Start the Server on Server A:**
-   ```sh
-   ./filesync -local /home/user/server_folder -port 50051
-   ```
-   This command starts a gRPC server that listens on port 50051 and syncs files to the `/home/user/server_folder` directory.
+- **Original Peer**: When the original peer (the system where the file was first added or modified) starts receiving a file, it immediately writes it in chunks to the local folder. As each chunk is received, it can simultaneously forward those chunks to any connected peers. This behavior ensures that file synchronization can happen quickly, even while the file is still being downloaded by the original peer.
+- **Peers**: Once a peer starts receiving a file from the original peer, it saves the file in its local folder. Like the original peer, it can start forwarding the file to its own peers while still receiving chunks of the file.
 
-2. **Start the Watcher on Client B:**
-   ```sh
-   ./filesync -local /home/user/client_folder -remoteAddr 192.168.1.100:50051
-   ```
-   This command starts the file watcher on Client B, monitoring the `/home/user/client_folder` directory. It will sync any new or modified files to Server A's folder at `192.168.1.100:50051`.
+### Peer Discovery
 
-3. **File Syncing:**
-   - When you create or modify a file in the `/home/user/client_folder` on Client B, the file will be immediately synced to `/home/user/server_folder` on Server A.
-   - The server logs connections and transfers, providing feedback on successful and unsuccessful file syncs.
+- Peers are discovered automatically using `zeroconf`. Once a peer is found, a persistent connection is established using `gRPC`. This allows for seamless file synchronization between multiple systems on the same network without the need for manual configuration.
 
-## Detailed Explanation of the Code
+### File Watching and Syncing
 
-### 1. **Main Function**
-The main function initializes the server and the file watcher based on the command-line arguments provided.
+- The program uses the `fsnotify` library to monitor the specified folder. When a file is created or modified, the system begins streaming the file in real-time to other connected peers. If a file is deleted or moved, the system notifies the peers to remove the corresponding file from their folders.
 
-### 2. **Server (gRPC)**
-The `startServer` function initializes a gRPC server that listens for incoming file streams. It uses the `SyncFile` method to handle file chunks received from the client.
+## Future Improvements
 
-- **Connection Logging:** Logs when a client connects or disconnects.
-- **File Writing:** Writes received file chunks to the specified local folder.
-
-### 3. **Client**
-The `startClient` function initiates a connection to the server and begins streaming a file in real-time using gRPC.
-
-- **File Streaming:** Reads the file in chunks and sends it to the server.
-- **Acknowledgment:** Receives acknowledgment from the server for each chunk sent.
-
-### 4. **Folder Watcher**
-The `watchFolderForRealTimeSync` function monitors the specified local folder for any file changes using `fsnotify`. When a new or modified file is detected, it starts the client to sync that file to the server.
-
-### 5. **Concurrency and Safety**
-- **Mutex Locking:** Ensures that the file transfer map is accessed safely across multiple goroutines, preventing race conditions.
-- **Active Transfers Map:** Keeps track of currently active file transfers to avoid duplicate sync attempts.
-
-## Conclusion
-
-This file sync service provides a robust, real-time solution for synchronizing files between two remote systems. It is ideal for environments where maintaining identical directories across different systems is crucial. By leveraging gRPC for communication, it ensures efficient and reliable file transfers with minimal latency.
+- Implement **Cascading Synchronization**: In the current version, each peer syncs directly with its connected peers. A future update will allow a more sophisticated cascading sync, where each peer syncs with a few peers, and those peers further propagate the file to others, achieving more efficient distribution.
