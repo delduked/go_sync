@@ -19,133 +19,94 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FileSync_SyncFile_FullMethodName   = "/filesync.FileSync/SyncFile"
-	FileSync_DeleteFile_FullMethodName = "/filesync.FileSync/DeleteFile"
+	FileSyncService_SyncFiles_FullMethodName = "/FileSyncService/SyncFiles"
 )
 
-// FileSyncClient is the client API for FileSync service.
+// FileSyncServiceClient is the client API for FileSyncService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type FileSyncClient interface {
-	SyncFile(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileChunk, SyncResponse], error)
-	DeleteFile(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
+type FileSyncServiceClient interface {
+	SyncFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse], error)
 }
 
-type fileSyncClient struct {
+type fileSyncServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewFileSyncClient(cc grpc.ClientConnInterface) FileSyncClient {
-	return &fileSyncClient{cc}
+func NewFileSyncServiceClient(cc grpc.ClientConnInterface) FileSyncServiceClient {
+	return &fileSyncServiceClient{cc}
 }
 
-func (c *fileSyncClient) SyncFile(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileChunk, SyncResponse], error) {
+func (c *fileSyncServiceClient) SyncFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &FileSync_ServiceDesc.Streams[0], FileSync_SyncFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[0], FileSyncService_SyncFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[FileChunk, SyncResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[FileSyncRequest, FileSyncResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type FileSync_SyncFileClient = grpc.BidiStreamingClient[FileChunk, SyncResponse]
+type FileSyncService_SyncFilesClient = grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse]
 
-func (c *fileSyncClient) DeleteFile(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteResponse)
-	err := c.cc.Invoke(ctx, FileSync_DeleteFile_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// FileSyncServer is the server API for FileSync service.
-// All implementations must embed UnimplementedFileSyncServer
+// FileSyncServiceServer is the server API for FileSyncService service.
+// All implementations must embed UnimplementedFileSyncServiceServer
 // for forward compatibility.
-type FileSyncServer interface {
-	SyncFile(grpc.BidiStreamingServer[FileChunk, SyncResponse]) error
-	DeleteFile(context.Context, *DeleteRequest) (*DeleteResponse, error)
-	mustEmbedUnimplementedFileSyncServer()
+type FileSyncServiceServer interface {
+	SyncFiles(grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]) error
+	mustEmbedUnimplementedFileSyncServiceServer()
 }
 
-// UnimplementedFileSyncServer must be embedded to have
+// UnimplementedFileSyncServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedFileSyncServer struct{}
+type UnimplementedFileSyncServiceServer struct{}
 
-func (UnimplementedFileSyncServer) SyncFile(grpc.BidiStreamingServer[FileChunk, SyncResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method SyncFile not implemented")
+func (UnimplementedFileSyncServiceServer) SyncFiles(grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method SyncFiles not implemented")
 }
-func (UnimplementedFileSyncServer) DeleteFile(context.Context, *DeleteRequest) (*DeleteResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteFile not implemented")
-}
-func (UnimplementedFileSyncServer) mustEmbedUnimplementedFileSyncServer() {}
-func (UnimplementedFileSyncServer) testEmbeddedByValue()                  {}
+func (UnimplementedFileSyncServiceServer) mustEmbedUnimplementedFileSyncServiceServer() {}
+func (UnimplementedFileSyncServiceServer) testEmbeddedByValue()                         {}
 
-// UnsafeFileSyncServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to FileSyncServer will
+// UnsafeFileSyncServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to FileSyncServiceServer will
 // result in compilation errors.
-type UnsafeFileSyncServer interface {
-	mustEmbedUnimplementedFileSyncServer()
+type UnsafeFileSyncServiceServer interface {
+	mustEmbedUnimplementedFileSyncServiceServer()
 }
 
-func RegisterFileSyncServer(s grpc.ServiceRegistrar, srv FileSyncServer) {
-	// If the following call pancis, it indicates UnimplementedFileSyncServer was
+func RegisterFileSyncServiceServer(s grpc.ServiceRegistrar, srv FileSyncServiceServer) {
+	// If the following call pancis, it indicates UnimplementedFileSyncServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&FileSync_ServiceDesc, srv)
+	s.RegisterService(&FileSyncService_ServiceDesc, srv)
 }
 
-func _FileSync_SyncFile_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(FileSyncServer).SyncFile(&grpc.GenericServerStream[FileChunk, SyncResponse]{ServerStream: stream})
+func _FileSyncService_SyncFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(FileSyncServiceServer).SyncFiles(&grpc.GenericServerStream[FileSyncRequest, FileSyncResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type FileSync_SyncFileServer = grpc.BidiStreamingServer[FileChunk, SyncResponse]
+type FileSyncService_SyncFilesServer = grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]
 
-func _FileSync_DeleteFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileSyncServer).DeleteFile(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileSync_DeleteFile_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileSyncServer).DeleteFile(ctx, req.(*DeleteRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// FileSync_ServiceDesc is the grpc.ServiceDesc for FileSync service.
+// FileSyncService_ServiceDesc is the grpc.ServiceDesc for FileSyncService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var FileSync_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "filesync.FileSync",
-	HandlerType: (*FileSyncServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "DeleteFile",
-			Handler:    _FileSync_DeleteFile_Handler,
-		},
-	},
+var FileSyncService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "FileSyncService",
+	HandlerType: (*FileSyncServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "SyncFile",
-			Handler:       _FileSync_SyncFile_Handler,
+			StreamName:    "SyncFiles",
+			Handler:       _FileSyncService_SyncFiles_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

@@ -1,26 +1,42 @@
 syntax = "proto3";
+option go_package = "filesync/;filesync";
 
-package filesync;
-
-option go_package = "go_sync/filesync;filesync";
-
-service FileSync {
-  rpc SyncFile(stream FileChunk) returns (stream SyncResponse);
-  rpc DeleteFile(DeleteRequest) returns (DeleteResponse); // New method for deletion
+service FileSyncService {
+  rpc SyncFiles (stream FileSyncRequest) returns (stream FileSyncResponse);
 }
 
-message DeleteRequest {
-    string filename = 1;  // The path of the file or directory to be deleted
+message FileSyncRequest {
+  oneof request {
+    FileChunk file_chunk = 1;
+    FileDelete file_delete = 2;
+    FileRename file_rename = 3;
+    Acknowledgment ack = 4;
+    Poll poll = 5;
+  }
 }
 
-message DeleteResponse {
-    string message = 1;  // Confirmation message
-}
 message FileChunk {
-  string filename = 1;
-  bytes content = 2;
+  string file_name = 1;
+  bytes chunk_data = 2;
 }
 
-message SyncResponse {
+message FileDelete {
+  string file_name = 1;
+}
+
+message FileRename {
+  string old_name = 1;
+  string new_name = 2;
+}
+
+message FileSyncResponse {
+  string message = 1;
+}
+
+message Acknowledgment {  // New message type for acknowledgments
+  string message = 1;
+}
+
+message Poll {
   string message = 1;
 }
