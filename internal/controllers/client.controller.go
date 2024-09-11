@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/log" // Bubble Tea log package for colorful logs
 	"github.com/grandcat/zeroconf"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 )
 
 // Shared resource with a map of IPs to gRPC client connections
@@ -170,15 +171,15 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 				// Handle discovery of a new peer
 				for _, ip := range entry.AddrIPv4 {
 					if ip.String() != localIP {
-						// Verify service instance name or TXT records if necessary
-						if entry.ServiceInstanceName() == instance {
-							// Skip if it's the same instance
-							continue
-						}
-						log.Infof("Discovered service '%s' at IP: %s", entry.Instance, ip.String())
-						err := sd.AddClientConnection(ip.String(), "50051")
-						if err != nil {
-							log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
+						// Verify discovered peer by making a gRPC ping call
+						log.Infof("Discovered service at IP: %s", ip.String())
+						if sd.verifyPeer(ip.String(), "50051") {
+							err := sd.AddClientConnection(ip.String(), "50051")
+							if err != nil {
+								log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
+							}
+						} else {
+							log.Warnf("IP %s did not respond correctly, skipping...", ip.String())
 						}
 					} else {
 						log.Infof("Skipping local IP: %s", ip.String())
@@ -198,6 +199,45 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 	<-ctx.Done()
 	log.Warn("Shutting down mDNS discovery...")
 	close(entries)
+}
+
+// verifyPeer tries to establish a gRPC connection and ping the discovered peer
+func (sd *SharedData) verifyPeer(ip, port string) bool {
+	// Dial the discovered gRPC server
+	conn, err := grpc.NewClient(ip+":"+port, grpc.WithInsecure(), grpc.WithTimeout(3*time.Second))
+	if err != nil {
+		log.Errorf("Failed to dial %s: %v", ip, err)
+		return false
+	}
+	defer conn.Close()
+
+	// Check connection state
+	if conn.GetState() != connectivity.Ready {
+		log.Warnf("Connection to %s is not ready", ip)
+		return false
+	}
+
+	// Create a new client and send a ping request
+	client := pb.NewFileSyncServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	stream, err := client.SyncFiles(ctx)
+	if err != nil {
+		log.Warnf("Ping to %s failed: %v", ip, err)
+		return false
+	}
+
+	stream.Send(&pb.FileSyncRequest{
+		Request: &pb.FileSyncRequest_Poll{
+			Poll: &pb.Poll{
+				Message: "Verifying peer",
+			},
+		},
+	})
+
+	log.Infof("Successfully verified peer at %s", ip)
+	return true
 }
 
 // RemoveClientConnection removes a gRPC client connection by IP and closes it
