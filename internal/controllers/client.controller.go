@@ -211,7 +211,7 @@ func (sd *SharedData) verifyPeer(ip, port string) bool {
 
 	// Check connection state
 	if conn.GetState() != connectivity.Ready {
-		log.Warnf("Connection to %s is not ready", ip)
+		// log.Warnf("Connection to %s is not ready", ip)
 		return false
 	}
 
