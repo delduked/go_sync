@@ -3,6 +3,8 @@ package pkg
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/log"
@@ -66,4 +68,22 @@ func parseIPNet(addr net.Addr) (net.IP, *net.IPNet) {
 		return v.IP, &net.IPNet{IP: v.IP, Mask: v.IP.DefaultMask()}
 	}
 	return nil, nil
+}
+func GetFileList() ([]string, error) {
+	var files []string
+	err := filepath.Walk("./sync_folder", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file list: %v", err)
+	}
+
+	return files, nil
 }

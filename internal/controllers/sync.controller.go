@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	pb "go_sync/filesync" 
+	pb "go_sync/filesync"
 
 	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"

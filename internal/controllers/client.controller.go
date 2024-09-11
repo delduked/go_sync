@@ -21,6 +21,7 @@ type SharedData struct {
 	mu          sync.RWMutex
 	Clients     map[string]*grpc.ClientConn // Map of IPs to gRPC client connections
 	SyncedFiles map[string]struct{}         // Tracks files currently being synchronized
+	WatchDir    string                      // Directory being watched
 }
 
 // Function to create and store a gRPC client connection
@@ -198,6 +199,31 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 	<-ctx.Done()
 	log.Warn("Shutting down mDNS discovery...")
 	close(entries)
+}
+
+func (sd *SharedData) syncMissingFiles(peerFileList []string) error {
+	localFiles, err := pkg.GetFileList()
+	if err != nil {
+		return err
+	}
+
+	// Create a set of local files
+	localFileSet := make(map[string]struct{})
+	for _, file := range localFiles {
+		localFileSet[file] = struct{}{}
+	}
+
+	// Send files that the peer doesn't have
+	for _, peerFile := range peerFileList {
+		if _, exists := localFileSet[peerFile]; !exists {
+			log.Printf("Peer is missing file: %s, sending...", peerFile)
+
+			
+			
+		}
+	}
+
+	return nil
 }
 
 // verifyPeer tries to establish a gRPC connection and ping the discovered peer

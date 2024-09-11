@@ -12,6 +12,8 @@ message FileSyncRequest {
     FileRename file_rename = 3;
     Acknowledgment ack = 4;
     Poll poll = 5;
+    FileList file_list = 6;
+
   }
 }
 
@@ -33,10 +35,14 @@ message FileSyncResponse {
   string message = 1;
 }
 
-message Acknowledgment {  // New message type for acknowledgments
+message Acknowledgment { 
   string message = 1;
 }
 
 message Poll {
   string message = 1;
+}
+
+message FileList {
+  repeated string files = 1;
 }

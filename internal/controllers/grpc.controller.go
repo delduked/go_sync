@@ -31,6 +31,8 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 			services.Poll(req.GetPoll(), stream)
 		case *pb.FileSyncRequest_Ack:
 			services.Ack(req.GetAck(), stream)
+		case *pb.FileSyncRequest_FileList:
+			services.List(req.GetFileList(), stream)
 		}
 	}
 }
