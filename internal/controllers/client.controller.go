@@ -16,8 +16,9 @@ import (
 
 // Shared resource with a map of IPs to gRPC client connections
 type SharedData struct {
-	mu      sync.RWMutex
-	Clients map[string]*grpc.ClientConn // Map of IPs to gRPC client connections
+	mu          sync.RWMutex
+	Clients     map[string]*grpc.ClientConn // Map of IPs to gRPC client connections
+	SyncedFiles map[string]struct{}         // Tracks files currently being synchronized
 }
 
 // Function to create and store a gRPC client connection
@@ -204,6 +205,22 @@ func (sd *SharedData) RemoveClientConnection(ip string) error {
 	delete(sd.Clients, ip)
 	log.Infof("Removed gRPC client connection to %s", ip)
 	return nil
+}
+
+// Function to mark a file as being synchronized
+func (sd *SharedData) markFileAsInProgress(fileName string) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	log.Infof("Marking file %s as in progress", fileName)
+	sd.SyncedFiles[fileName] = struct{}{}
+}
+
+// Function to mark a file synchronization as complete
+func (sd *SharedData) markFileAsComplete(fileName string) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	log.Infof("Marking file %s as complete", fileName)
+	delete(sd.SyncedFiles, fileName)
 }
 
 // getLocalIP retrieves the local IP address from the network interfaces

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	pb "go_sync/filesync" // Import your protobufs here
+	pb "go_sync/filesync" 
 
 	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
@@ -42,7 +42,7 @@ func NewSyncServer(watchDir, port string) (*SyncServer, error) {
 		listener:   listener,
 		watchDir:   watchDir,
 		port:       port,
-		sharedData: &SharedData{Clients: make(map[string]*grpc.ClientConn)},
+		sharedData: &SharedData{Clients: make(map[string]*grpc.ClientConn), SyncedFiles: make(map[string]struct{})}, // Add map to track synced files
 	}
 
 	return server, nil
@@ -54,7 +54,6 @@ func (s *SyncServer) Start(wg *sync.WaitGroup) error {
 
 	// Start gRPC server in a goroutine
 	go func() {
-
 		log.Printf("Starting gRPC server on port %s...", s.port)
 		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{})
 		if err := s.grpcServer.Serve(s.listener); err != nil {
@@ -69,13 +68,6 @@ func (s *SyncServer) Start(wg *sync.WaitGroup) error {
 	}
 
 	return nil
-}
-
-// Stop gracefully stops the gRPC server and closes resources
-func (s *SyncServer) Stop() {
-	log.Println("Stopping gRPC server...")
-	s.grpcServer.GracefulStop()
-	s.listener.Close()
 }
 
 // WatchDirectory monitors the directory for file system events (create, modify, delete, rename)
@@ -97,7 +89,12 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 				if !ok {
 					return
 				}
-				s.handleFileEvent(event)
+				// Check if this file is already in progress (to avoid re-sending)
+				if _, inProgress := s.sharedData.SyncedFiles[event.Name]; !inProgress {
+					s.handleFileEvent(event)
+				} else {
+					log.Printf("Skipping file %s, already in sync", event.Name)
+				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
@@ -115,16 +112,20 @@ func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 	switch {
 	case event.Op&fsnotify.Create == fsnotify.Create:
 		log.Println("File created:", event.Name)
+		s.sharedData.markFileAsInProgress(event.Name) // Mark file as in progress
 		s.startStreamingFile(event.Name)
 	case event.Op&fsnotify.Write == fsnotify.Write:
 		log.Println("File modified:", event.Name)
+		s.sharedData.markFileAsInProgress(event.Name) // Mark file as in progress
 		s.startStreamingFile(event.Name)
 	case event.Op&fsnotify.Remove == fsnotify.Remove:
 		log.Println("File deleted:", event.Name)
 		s.propagateDelete(event.Name)
+		s.sharedData.markFileAsComplete(event.Name) // Mark file as complete
 	case event.Op&fsnotify.Rename == fsnotify.Rename:
 		log.Println("File renamed:", event.Name)
 		s.propagateRename(event.Name)
+		s.sharedData.markFileAsComplete(event.Name) // Mark file as complete
 	}
 }
 
@@ -133,6 +134,7 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Println("Error opening file:", err)
+		s.sharedData.markFileAsComplete(filePath) // Mark file as complete in case of error
 		return
 	}
 	defer file.Close()
@@ -142,6 +144,7 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 		n, err := file.Read(buffer)
 		if err != nil && err != io.EOF {
 			log.Println("Error reading file:", err)
+			s.sharedData.markFileAsComplete(filePath) // Mark file as complete in case of error
 			return
 		}
 		if n == 0 {
@@ -149,6 +152,7 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 		}
 		s.sendFileChunkToPeers(filePath, buffer[:n])
 	}
+	s.sharedData.markFileAsComplete(filePath) // Mark file as complete when finished
 }
 
 // Send file chunk to peers using gRPC stream

@@ -38,9 +38,12 @@ func main() {
 
 	// Start the server
 	wg.Add(1)
-	if err := server.Start(&wg); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	go func() {
+		defer wg.Done()
+		if err := server.Start(&wg); err != nil {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
 
 	// Wait for the server to finish
 	wg.Wait()
