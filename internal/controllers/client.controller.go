@@ -138,14 +138,18 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 	log.Infof("Local IP: %s", localIP)
 
 	// Register the service to make itself discoverable
-	instance := fmt.Sprintf("grpc-service-%s", localIP)
-	service, err := zeroconf.Register(instance, "_grpc._tcp", "local.", 50051, []string{"txtv=1"}, nil)
+	instance := fmt.Sprintf("filesync-%s", localIP)
+	serviceType := "_filesync._tcp"
+	domain := "local."
+	txtRecords := []string{"version=1.0"}
+
+	server, err := zeroconf.Register(instance, serviceType, domain, 50051, txtRecords, nil)
 	if err != nil {
 		log.Fatalf("Failed to register mDNS service: %v", err)
 	}
-	defer service.Shutdown()
+	defer server.Shutdown()
 
-	// Start mDNS browsing for other services
+	// Initialize mDNS resolver
 	resolver, err := zeroconf.NewResolver(nil)
 	if err != nil {
 		log.Fatalf("Failed to initialize mDNS resolver: %v", err)
@@ -166,7 +170,12 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 				// Handle discovery of a new peer
 				for _, ip := range entry.AddrIPv4 {
 					if ip.String() != localIP {
-						log.Infof("Discovered service at IP: %s", ip.String())
+						// Verify service instance name or TXT records if necessary
+						if entry.ServiceInstanceName() == instance {
+							// Skip if it's the same instance
+							continue
+						}
+						log.Infof("Discovered service '%s' at IP: %s", entry.Instance, ip.String())
 						err := sd.AddClientConnection(ip.String(), "50051")
 						if err != nil {
 							log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
@@ -179,8 +188,8 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 		}
 	}(entries)
 
-	// Browse for services in the "_grpc._tcp" domain
-	err = resolver.Browse(ctx, "_grpc._tcp", "local.", entries)
+	// Start mDNS browsing for other services
+	err = resolver.Browse(ctx, serviceType, domain, entries)
 	if err != nil {
 		log.Fatalf("Failed to browse mDNS: %v", err)
 	}
