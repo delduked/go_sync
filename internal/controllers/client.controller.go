@@ -141,9 +141,9 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 
 	// Register the service to make itself discoverable
 	instance := fmt.Sprintf("filesync-%s", localIP)
-	serviceType := "_myapp_filesync._tcp" // Use a unique service type
+	serviceType := "_myapp_filesync._tcp" // Custom service type
 	domain := "local."
-	txtRecords := []string{"version=1.0", "service_id=go_sync"} // Add unique TXT records
+	txtRecords := []string{"version=1.0", "service_id=my_unique_service"}
 
 	server, err := zeroconf.Register(instance, serviceType, domain, 50051, txtRecords, nil)
 	if err != nil {
@@ -162,30 +162,22 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		for entry := range results {
-			if entry.TTL == 0 { // mDNS "Goodbye" messages usually have a TTL of 0
-				// Handle removal of a peer
+			// Skip if it's the local IP or a TTL == 0 (Goodbye message)
+			if len(entry.AddrIPv4) == 0 || entry.AddrIPv4[0].String() == localIP || entry.TTL == 0 {
+				continue
+			}
+
+			// Check TXT records to see if it's advertising the correct service
+			if pkg.ValidateService(entry.Text) {
 				for _, ip := range entry.AddrIPv4 {
-					log.Infof("Service at IP %s has left the network", ip.String())
-					sd.RemoveClientConnection(ip.String())
-				}
-			} else {
-				// Handle discovery of a new peer
-				for _, ip := range entry.AddrIPv4 {
-					if ip.String() != localIP {
-						// Verify that the discovered service has the correct TXT records
-						if pkg.ValidateService(entry.Text) {
-							log.Infof("Discovered service at IP: %s with valid TXT records", ip.String())
-							err := sd.AddClientConnection(ip.String(), "50051")
-							if err != nil {
-								log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
-							}
-						} else {
-							// log.Warnf("Service at IP %s does not match required criteria, skipping...", ip.String())
-						}
-					} else {
-						log.Infof("Skipping local IP: %s", ip.String())
+					log.Infof("Discovered valid service at IP: %s", ip.String())
+					err := sd.AddClientConnection(ip.String(), "50051")
+					if err != nil {
+						log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
 					}
 				}
+			} else {
+				log.Warnf("Service at IP %s did not advertise the correct service, skipping...", entry.AddrIPv4[0].String())
 			}
 		}
 	}(entries)
