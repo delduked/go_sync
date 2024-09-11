@@ -77,6 +77,7 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 		return nil, err
 	}
 
+	log.Printf("Watching directory: %s", s.watchDir)
 	err = watcher.Add(s.watchDir)
 	if err != nil {
 		return nil, err
