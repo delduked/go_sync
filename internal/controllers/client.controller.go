@@ -137,7 +137,15 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 
 	log.Infof("Local IP: %s", localIP)
 
-	// Initialize mDNS resolver
+	// Register the service to make itself discoverable
+	instance := fmt.Sprintf("grpc-service-%s", localIP)
+	service, err := zeroconf.Register(instance, "_grpc._tcp", "local.", 50051, []string{"txtv=1"}, nil)
+	if err != nil {
+		log.Fatalf("Failed to register mDNS service: %v", err)
+	}
+	defer service.Shutdown()
+
+	// Start mDNS browsing for other services
 	resolver, err := zeroconf.NewResolver(nil)
 	if err != nil {
 		log.Fatalf("Failed to initialize mDNS resolver: %v", err)
@@ -171,7 +179,7 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 		}
 	}(entries)
 
-	// Start mDNS browsing for gRPC services on the network
+	// Browse for services in the "_grpc._tcp" domain
 	err = resolver.Browse(ctx, "_grpc._tcp", "local.", entries)
 	if err != nil {
 		log.Fatalf("Failed to browse mDNS: %v", err)
