@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "go_sync/filesync" // Import your protobufs here
+	"go_sync/pkg"
 
 	"github.com/charmbracelet/log" // Bubble Tea log package for colorful logs
 	"github.com/grandcat/zeroconf"
@@ -140,9 +141,9 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 
 	// Register the service to make itself discoverable
 	instance := fmt.Sprintf("filesync-%s", localIP)
-	serviceType := "_filesync._tcp"
+	serviceType := "_myapp_filesync._tcp" // Use a unique service type
 	domain := "local."
-	txtRecords := []string{"version=1.0"}
+	txtRecords := []string{"version=1.0", "service_id=go_sync"} // Add unique TXT records
 
 	server, err := zeroconf.Register(instance, serviceType, domain, 50051, txtRecords, nil)
 	if err != nil {
@@ -171,13 +172,15 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 				// Handle discovery of a new peer
 				for _, ip := range entry.AddrIPv4 {
 					if ip.String() != localIP {
-						// Verify discovered peer by making a gRPC ping call
-						log.Infof("Discovered service at IP: %s", ip.String())
-						if sd.verifyPeer(ip.String(), "50051") {
+						// Verify that the discovered service has the correct TXT records
+						if pkg.ValidateService(entry.Text) {
+							log.Infof("Discovered service at IP: %s with valid TXT records", ip.String())
 							err := sd.AddClientConnection(ip.String(), "50051")
 							if err != nil {
 								log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
 							}
+						} else {
+							// log.Warnf("Service at IP %s does not match required criteria, skipping...", ip.String())
 						}
 					} else {
 						log.Infof("Skipping local IP: %s", ip.String())
