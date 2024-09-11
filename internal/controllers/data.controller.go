@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -123,43 +124,126 @@ func (sd *SharedData) PeriodicCheck(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-// mDNS service that automatically updates the map with discovered gRPC services
+// StartMDNSDiscovery discovers gRPC services via mDNS and excludes its own IP
 func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	resolver, err := zeroconf.NewResolver(nil)
+	// Find local IP address to exclude from discovery
+	localIP, err := getLocalIP()
 	if err != nil {
-		log.Fatal("Failed to initialize mDNS resolver: %v", err)
+		log.Fatalf("Failed to get local IP: %v", err)
 	}
 
+	log.Infof("Local IP: %s", localIP)
+
+	// Initialize mDNS resolver
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		log.Fatalf("Failed to initialize mDNS resolver: %v", err)
+	}
+
+	// Channel to receive discovered entries
 	entries := make(chan *zeroconf.ServiceEntry)
 
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		for entry := range results {
-			// If an IPv4 address is found, add it to the Clients map
-			if len(entry.AddrIPv4) > 0 {
-				ip := entry.AddrIPv4[0].String()
-				log.Infof("Discovered service at IP: %s", ip)
-
-				// Try to add the discovered client connection (port can be customized)
-				err := sd.AddClientConnection(ip, "50051")
-				if err != nil {
-					log.Errorf("Failed to add client connection for %s: %v", ip, err)
+			if entry.TTL == 0 { // mDNS "Goodbye" messages usually have a TTL of 0
+				// Handle removal of a peer
+				for _, ip := range entry.AddrIPv4 {
+					log.Infof("Service at IP %s has left the network", ip.String())
+					sd.RemoveClientConnection(ip.String())
+				}
+			} else {
+				// Handle discovery of a new peer
+				for _, ip := range entry.AddrIPv4 {
+					if ip.String() != localIP {
+						log.Infof("Discovered service at IP: %s", ip.String())
+						err := sd.AddClientConnection(ip.String(), "50051")
+						if err != nil {
+							log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
+						}
+					} else {
+						log.Infof("Skipping local IP: %s", ip.String())
+					}
 				}
 			}
 		}
 	}(entries)
 
-	go func() {
-		// Handle context cancellation
-		<-ctx.Done()
-		log.Warn("Shutting down mDNS discovery...")
-		close(entries)
-	}()
-
-	// Browse for services in the "_grpc._tcp" domain
-	err = resolver.Browse(context.Background(), "_grpc._tcp", "local.", entries)
+	// Start mDNS browsing for gRPC services on the network
+	err = resolver.Browse(ctx, "_grpc._tcp", "local.", entries)
 	if err != nil {
-		log.Fatal("Failed to browse mDNS: %v", err)
+		log.Fatalf("Failed to browse mDNS: %v", err)
 	}
+
+	// Handle context cancellation for graceful shutdown
+	<-ctx.Done()
+	log.Warn("Shutting down mDNS discovery...")
+	close(entries)
+}
+
+// RemoveClientConnection removes a gRPC client connection by IP and closes it
+func (sd *SharedData) RemoveClientConnection(ip string) error {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+
+	// Check if the IP exists in the map
+	conn, exists := sd.Clients[ip]
+	if !exists {
+		log.Warnf("Connection to %s does not exist, cannot remove", ip)
+		return nil
+	}
+
+	// Close the connection
+	err := conn.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close connection to %s: %v", ip, err)
+	}
+
+	// Remove the connection from the map
+	delete(sd.Clients, ip)
+	log.Infof("Removed gRPC client connection to %s", ip)
+	return nil
+}
+
+// getLocalIP retrieves the local IP address from the network interfaces
+func getLocalIP() (string, error) {
+	// Get a list of all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", fmt.Errorf("unable to get network interfaces: %w", err)
+	}
+
+	// Loop through each interface
+	for _, iface := range interfaces {
+		// Skip down or loopback interfaces
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		// Get addresses for this interface
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return "", fmt.Errorf("unable to get addresses for interface %s: %w", iface.Name, err)
+		}
+
+		// Loop through the addresses and find the first valid IPv4 address
+		for _, addr := range addrs {
+			var ip net.IP
+
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// Ensure this is a valid global unicast address
+			if ip != nil && ip.IsGlobalUnicast() && ip.To4() != nil {
+				return ip.String(), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no valid local IP address found")
 }
