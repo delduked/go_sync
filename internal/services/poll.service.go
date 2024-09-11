@@ -8,7 +8,7 @@ import (
 )
 
 func Poll(req *pb.Poll, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
-	log.Printf("Received poll request: %s", req.Message)
+	log.Infof("Received poll request: %s", req.Message)
 
 	// Respond to the poll with a status message
 	err := stream.SendMsg(&pb.FileSyncResponse{
