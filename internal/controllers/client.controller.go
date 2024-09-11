@@ -178,8 +178,6 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 							if err != nil {
 								log.Errorf("Failed to add client connection for %s: %v", ip.String(), err)
 							}
-						} else {
-							log.Warnf("IP %s did not respond correctly, skipping...", ip.String())
 						}
 					} else {
 						log.Infof("Skipping local IP: %s", ip.String())
