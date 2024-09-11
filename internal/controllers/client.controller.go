@@ -143,7 +143,7 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 	instance := fmt.Sprintf("filesync-%s", localIP)
 	serviceType := "_myapp_filesync._tcp" // Custom service type
 	domain := "local."
-	txtRecords := []string{"version=1.0", "service_id=my_unique_service"}
+	txtRecords := []string{"version=1.0", "service_id=go_sync"}
 
 	server, err := zeroconf.Register(instance, serviceType, domain, 50051, txtRecords, nil)
 	if err != nil {
@@ -165,7 +165,7 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 			// Check if the discovered IP is in the same subnet
 			for _, ip := range entry.AddrIPv4 {
 				if !pkg.IsInSameSubnet(ip.String(), localSubnet) {
-					log.Warnf("Skipping service at IP %s, outside the local subnet", ip.String())
+					// log.Warnf("Skipping service at IP %s, outside the local subnet", ip.String())
 					continue
 				}
 
