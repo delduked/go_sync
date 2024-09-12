@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	pb "go_sync/filesync"
+	"go_sync/pkg"
 
+	"github.com/charmbracelet/log" // Bubble Tea log package for colorful logs
 	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
 )
@@ -49,7 +51,7 @@ func NewSyncServer(watchDir, port string) (*SyncServer, error) {
 }
 
 // Start starts the gRPC server and file watcher
-func (s *SyncServer) Start(wg *sync.WaitGroup) error {
+func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context) error {
 	defer wg.Done()
 
 	// Start gRPC server in a goroutine
@@ -66,6 +68,9 @@ func (s *SyncServer) Start(wg *sync.WaitGroup) error {
 	if err != nil {
 		return fmt.Errorf("failed to start directory watcher: %v", err)
 	}
+
+	wg.Add(1)
+	go s.syncMissingFiles(ctx, wg)
 
 	return nil
 }
@@ -100,7 +105,7 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 				if !ok {
 					return
 				}
-				log.Println("Error:", err)
+				log.Print("Error:", err)
 			}
 		}
 	}()
@@ -112,19 +117,19 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 	switch {
 	case event.Op&fsnotify.Create == fsnotify.Create:
-		log.Println("File created:", event.Name)
+		log.Print("File created:", event.Name)
 		s.sharedData.markFileAsInProgress(event.Name) // Mark file as in progress
 		s.startStreamingFile(event.Name)
 	case event.Op&fsnotify.Write == fsnotify.Write:
-		log.Println("File modified:", event.Name)
+		log.Print("File modified:", event.Name)
 		s.sharedData.markFileAsInProgress(event.Name) // Mark file as in progress
 		s.startStreamingFile(event.Name)
 	case event.Op&fsnotify.Remove == fsnotify.Remove:
-		log.Println("File deleted:", event.Name)
+		log.Print("File deleted:", event.Name)
 		s.propagateDelete(event.Name)
 		s.sharedData.markFileAsComplete(event.Name) // Mark file as complete
 	case event.Op&fsnotify.Rename == fsnotify.Rename:
-		log.Println("File renamed:", event.Name)
+		log.Print("File renamed:", event.Name)
 		s.propagateRename(event.Name)
 		s.sharedData.markFileAsComplete(event.Name) // Mark file as complete
 	}
@@ -134,7 +139,7 @@ func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 func (s *SyncServer) startStreamingFile(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		log.Println("Error opening file:", err)
+		log.Print("Error opening file:", err)
 		s.sharedData.markFileAsComplete(filePath) // Mark file as complete in case of error
 		return
 	}
@@ -144,7 +149,7 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 	for {
 		n, err := file.Read(buffer)
 		if err != nil && err != io.EOF {
-			log.Println("Error reading file:", err)
+			log.Print("Error reading file:", err)
 			s.sharedData.markFileAsComplete(filePath) // Mark file as complete in case of error
 			return
 		}
@@ -179,6 +184,80 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte) {
 		})
 		if err != nil {
 			log.Printf("Error sending chunk to peer %s: %v", peer, err)
+		}
+	}
+}
+
+func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Warn("Shutting down list check...")
+			return
+		case <-ticker.C:
+
+			localFiles, err := pkg.GetFileList()
+			if err != nil {
+				log.Errorf("Failed to get local file list: %v", err)
+				return
+			}
+			if len(localFiles) == 0 {
+				log.Warn("No files to sync")
+				return
+			}
+
+			s.sharedData.mu.RLock() // Lock for reading the clients
+			for ip, conn := range s.sharedData.Clients {
+				// Open stream if not already done and send a request
+				go func(ip string, conn *grpc.ClientConn) {
+					client := pb.NewFileSyncServiceClient(conn)
+					stream, err := client.SyncFiles(context.Background())
+					if err != nil {
+						log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
+						return
+					}
+
+					poll := fmt.Sprintf("Poll request from server: %s", ip)
+					stream.Send(&pb.FileSyncRequest{
+						Request: &pb.FileSyncRequest_FileList{
+							FileList: &pb.FileList{
+								Files: localFiles,
+							}}})
+					if err != nil {
+						log.Errorf("Error sending list to %s: %v", ip, err)
+						return
+					}
+					log.Infof("Sent list to %s: %s", ip, poll)
+
+					go func() {
+						for {
+							response, err := stream.Recv()
+							if err != nil {
+								log.Errorf("Error receiving response from %s: %v", ip, err)
+								return
+							}
+							if err == io.EOF {
+								log.Warnf("Stream closed by %s", ip)
+								return
+							}
+							if response.Filestosend != nil || len(response.Filestosend) != 0 {
+								for _, file := range response.Filestosend {
+									s.sharedData.markFileAsInProgress(file)
+									s.startStreamingFile(file)
+									s.sharedData.markFileAsComplete(file)
+								}
+							}
+						}
+					}()
+
+				}(ip, conn)
+			}
+			s.sharedData.mu.RUnlock() // Unlock after sending queries
 		}
 	}
 }

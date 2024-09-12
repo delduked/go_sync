@@ -201,31 +201,6 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 	close(entries)
 }
 
-func (sd *SharedData) syncMissingFiles(peerFileList []string) error {
-	localFiles, err := pkg.GetFileList()
-	if err != nil {
-		return err
-	}
-
-	// Create a set of local files
-	localFileSet := make(map[string]struct{})
-	for _, file := range localFiles {
-		localFileSet[file] = struct{}{}
-	}
-
-	// Send files that the peer doesn't have
-	for _, peerFile := range peerFileList {
-		if _, exists := localFileSet[peerFile]; !exists {
-			log.Printf("Peer is missing file: %s, sending...", peerFile)
-
-			
-			
-		}
-	}
-
-	return nil
-}
-
 // verifyPeer tries to establish a gRPC connection and ping the discovered peer
 func (sd *SharedData) verifyPeer(ip, port string) bool {
 	// Dial the discovered gRPC server
