@@ -189,77 +189,84 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte) {
 }
 
 func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
+    defer wg.Done()
 
-	ticker := time.NewTicker(20 * time.Second)
-	defer ticker.Stop()
+    ticker := time.NewTicker(20 * time.Second) // Adjust the sync interval if needed
+    defer ticker.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Warn("Shutting down list check...")
-			return
-		case <-ticker.C:
+    for {
+        select {
+        case <-ctx.Done():
+            log.Warn("Shutting down list check...")
+            return
+        case <-ticker.C:
 
-			localFiles, err := pkg.GetFileList()
-			if err != nil {
-				log.Errorf("Failed to get local file list: %v", err)
-				return
-			}
-			if len(localFiles) == 0 {
-				log.Warn("No files to sync")
-				return
-			}
+            localFiles, err := pkg.GetFileList()
+            if err != nil {
+                log.Errorf("Failed to get local file list: %v", err)
+                return
+            }
 
-			s.sharedData.mu.RLock() // Lock for reading the clients
-			for ip, conn := range s.sharedData.Clients {
-				// Open stream if not already done and send a request
-				go func(ip string, conn *grpc.ClientConn) {
-					client := pb.NewFileSyncServiceClient(conn)
-					stream, err := client.SyncFiles(context.Background())
-					if err != nil {
-						log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
-						return
-					}
+            if len(localFiles) == 0 {
+                log.Warn("No files to sync")
+                return
+            } else {
+                log.Infof("Local files: %v", localFiles)
+            }
 
-					poll := fmt.Sprintf("Poll request from server: %s", ip)
-					stream.Send(&pb.FileSyncRequest{
-						Request: &pb.FileSyncRequest_FileList{
-							FileList: &pb.FileList{
-								Files: localFiles,
-							}}})
-					if err != nil {
-						log.Errorf("Error sending list to %s: %v", ip, err)
-						return
-					}
-					log.Infof("Sent list to %s: %s", ip, poll)
+            s.sharedData.mu.RLock() // Lock for reading the clients
+            for ip, conn := range s.sharedData.Clients {
+                go func(ip string, conn *grpc.ClientConn) {
+                    client := pb.NewFileSyncServiceClient(conn)
+                    stream, err := client.SyncFiles(context.Background())
+                    if err != nil {
+                        log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
+                        return
+                    }
 
-					go func() {
-						for {
-							response, err := stream.Recv()
-							if err != nil {
-								log.Errorf("Error receiving response from %s: %v", ip, err)
-								return
-							}
-							if err == io.EOF {
-								log.Warnf("Stream closed by %s", ip)
-								return
-							}
-							if response.Filestosend != nil || len(response.Filestosend) != 0 {
-								for _, file := range response.Filestosend {
-									s.sharedData.markFileAsInProgress(file)
-									s.startStreamingFile(file)
-									s.sharedData.markFileAsComplete(file)
-								}
-							}
-						}
-					}()
+                    log.Infof("Opened stream with %s to check missing files", ip)
 
-				}(ip, conn)
-			}
-			s.sharedData.mu.RUnlock() // Unlock after sending queries
-		}
-	}
+                    // Send local files to peer
+                    err = stream.Send(&pb.FileSyncRequest{
+                        Request: &pb.FileSyncRequest_FileList{
+                            FileList: &pb.FileList{
+                                Files: localFiles,
+                            }},
+                    })
+                    if err != nil {
+                        log.Errorf("Error sending list to %s: %v", ip, err)
+                        return
+                    }
+                    log.Infof("Sent list to %s: %v", ip, localFiles)
+
+                    // Receive response from peer (files they are missing)
+                    for {
+                        response, err := stream.Recv()
+                        if err == io.EOF {
+                            log.Warnf("Stream closed by %s", ip)
+                            break
+                        }
+                        if err != nil {
+                            log.Errorf("Error receiving response from %s: %v", ip, err)
+                            break
+                        }
+
+                        if response.Filestosend != nil && len(response.Filestosend) > 0 {
+                            log.Infof("Peer %s is missing files: %v", ip, response.Filestosend)
+
+                            for _, file := range response.Filestosend {
+                                s.sharedData.markFileAsInProgress(file)
+                                log.Infof("Sending file %s to peer %s", file, ip)
+                                s.startStreamingFile(file)
+                                s.sharedData.markFileAsComplete(file)
+                            }
+                        }
+                    }
+                }(ip, conn)
+            }
+            s.sharedData.mu.RUnlock() // Unlock after sending queries
+        }
+    }
 }
 
 // Handle file delete event
