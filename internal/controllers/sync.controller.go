@@ -227,7 +227,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
                     log.Infof("Opened stream with %s to check missing files", ip)
 
                     // Send local files to peer
-                    err = stream.Send(&pb.FileSyncRequest{
+                    err = stream.SendMsg(&pb.FileSyncRequest{
                         Request: &pb.FileSyncRequest_FileList{
                             FileList: &pb.FileList{
                                 Files: localFiles,
