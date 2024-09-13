@@ -19,9 +19,9 @@ import (
 // Shared resource with a map of IPs to gRPC client connections
 type SharedData struct {
 	mu          sync.RWMutex
-	Clients     []*grpc.ClientConn // Map of IPs to gRPC client connections
-	SyncedFiles []string           // List of files being synchronized
-	WatchDir    string             // Directory being watched
+	Clients     []string // Map of IPs to gRPC client connections
+	SyncedFiles []string // List of files being synchronized
+	WatchDir    string   // Directory being watched
 }
 
 // Function to create and store a gRPC client connection
@@ -37,13 +37,13 @@ func (sd *SharedData) AddClientConnection(ip string, port string) error {
 
 	log.Infof("Created connection to: %s", conn.Target())
 
-	if pkg.ContainsConn(sd.Clients, conn) {
+	if pkg.ContainsString(sd.Clients, conn.Target()) {
 		log.Warnf("Connection to %s already exists, skipping...", ip)
 		return nil
 	}
 
 	// Store the connection in the map
-	sd.Clients = append(sd.Clients, conn)
+	sd.Clients = append(sd.Clients, conn.Target())
 	log.Infof("Added gRPC client connection to %s", conn.Target())
 	return nil
 }
@@ -100,9 +100,10 @@ func (sd *SharedData) PeriodicCheck(ctx context.Context, wg *sync.WaitGroup) {
 			log.Warn("Shutting down periodic check...")
 			return
 		case <-ticker.C:
-			for _, conn := range sd.Clients {
+			for _, ip := range sd.Clients {
 				// Open stream if not already done and send a request
-				go func(conn *grpc.ClientConn) {
+				go func(ip string) {
+					conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 					client := pb.NewFileSyncServiceClient(conn)
 					stream, err := client.SyncFiles(context.Background())
 					if err != nil {
@@ -121,7 +122,7 @@ func (sd *SharedData) PeriodicCheck(ctx context.Context, wg *sync.WaitGroup) {
 						return
 					}
 					log.Infof("Sent periodic poll to %s: %s", conn.Target(), poll)
-				}(conn)
+				}(ip)
 			}
 		}
 	}
@@ -240,33 +241,25 @@ func (sd *SharedData) verifyPeer(ip, port string) bool {
 }
 
 // RemoveClientConnection removes a gRPC client connection by IP and closes it
-func (sd *SharedData) RemoveClientConnection(conn *grpc.ClientConn) error {
+// func (sd *SharedData) RemoveClientConnection(ip string) error {
 
-	// Check if the IP exists in the map
-	exist := pkg.ContainsConn(sd.Clients, conn)
-	ip := conn.Target()
+// 	// Check if the IP exists in the map
+// 	exist := pkg.ContainsString(sd.Clients, ip)
 
-	if exist {
-		log.Warnf("Connection to %s does not exist, skipping...", conn.Target())
-		return nil
-	}
+// 	if !exist {
 
-	// Close the connection
-	err := conn.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close connection to %s: %v", ip, err)
-	}
+// 	}
 
-	for i, c := range sd.Clients {
-		if c == conn {
-			sd.Clients = append(sd.Clients[:i], sd.Clients[i+1:]...)
-			break
-		}
-	}
+// 	for i, c := range sd.Clients {
+// 		if c == ip {
+// 			sd.Clients = append(sd.Clients[:i], sd.Clients[i+1:]...)
+// 			break
+// 		}
+// 	}
 
-	log.Infof("Removed gRPC client connection to %s", ip)
-	return nil
-}
+// 	log.Infof("Removed gRPC client connection to %s", ip)
+// 	return nil
+// }
 
 // Function to mark a file as being synchronized
 func (sd *SharedData) markFileAsInProgress(fileName string) {

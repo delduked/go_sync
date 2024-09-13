@@ -9,14 +9,13 @@ import (
 	"syscall"
 
 	"github.com/charmbracelet/log"
-	"google.golang.org/grpc"
 )
 
 func main() {
 	var wg sync.WaitGroup
 
 	sharedData := &controllers.SharedData{
-		Clients: make([]*grpc.ClientConn, 0),
+		Clients: make([]string, 0),
 	}
 
 	// Create a context that can be canceled

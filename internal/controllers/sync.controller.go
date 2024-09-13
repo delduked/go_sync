@@ -45,8 +45,8 @@ func NewSyncServer(watchDir, port string) (*SyncServer, error) {
 		watchDir:   watchDir,
 		port:       port,
 		sharedData: &SharedData{
-			Clients:     make([]*grpc.ClientConn, 0), // Initialize slice of pointers
-			SyncedFiles: make([]string, 0),           // Initialize map to track synced files
+			Clients:     make([]string, 0), // Initialize slice of pointers
+			SyncedFiles: make([]string, 0), // Initialize map to track synced files
 		},
 	}
 
@@ -167,7 +167,12 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 // Send file chunk to peers using gRPC stream
 func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte) {
 
-	for peer, conn := range s.sharedData.Clients {
+	for peer, ip := range s.sharedData.Clients {
+		conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Print("failed to connect to gRPC server at %s", ip)
+			continue
+		}
 		client := pb.NewFileSyncServiceClient(conn)
 		stream, err := client.SyncFiles(context.Background())
 		if err != nil {
@@ -215,14 +220,19 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 			// Check if there are any clients connected
 			log.Infof("Number of connected clients: %d", len(s.sharedData.Clients))
 			for _, conn := range s.sharedData.Clients {
-				log.Infof("Client found: %s", conn.Target())
+				log.Infof("Client found: %s", conn)
 			}
 
 			if len(s.sharedData.Clients) > 0 {
 				log.Info("Starting list check with peers...")
-				for _, conn := range s.sharedData.Clients {
-					go func(conn *grpc.ClientConn) {
-						log.Infof("Checking missing files with %s", conn.Target())
+				for _, ip := range s.sharedData.Clients {
+					go func(ip string) {
+						log.Infof("Checking missing files with %s", ip)
+						conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+						if err != nil {
+							fmt.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
+							return
+						}
 						client := pb.NewFileSyncServiceClient(conn)
 						stream, err := client.SyncFiles(context.Background())
 						if err != nil {
@@ -268,7 +278,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 								}
 							}
 						}
-					}(conn)
+					}(ip)
 				}
 			} else {
 				log.Warn("No connected clients to sync with")
@@ -281,6 +291,11 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 func (s *SyncServer) propagateDelete(fileName string) {
 
 	for peer, conn := range s.sharedData.Clients {
+		conn, err := grpc.NewClient(conn, grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Printf("failed to connect to gRPC server at %s: %v", conn.Target(), err)
+			continue
+		}
 		client := pb.NewFileSyncServiceClient(conn)
 		stream, err := client.SyncFiles(context.Background())
 		if err != nil {
