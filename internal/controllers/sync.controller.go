@@ -193,7 +193,7 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte) {
 func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	ticker := time.NewTicker(20 * time.Second) // Adjust the sync interval if needed
+	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -212,14 +212,11 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 
 			log.Infof("Local files found: %v", localFiles)
 
-			if len(localFiles) == 0 {
-				log.Warn("No files to sync")
-				return
-			} else {
-				log.Infof("Local files: %v", localFiles)
-			}
-
+			// Check if there are any clients connected
 			log.Infof("Number of connected clients: %d", len(s.sharedData.Clients))
+			for _, conn := range s.sharedData.Clients {
+				log.Infof("Client found: %s", conn.Target())
+			}
 
 			if len(s.sharedData.Clients) > 0 {
 				log.Info("Starting list check with peers...")

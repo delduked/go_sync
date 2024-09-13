@@ -26,12 +26,16 @@ type SharedData struct {
 
 // Function to create and store a gRPC client connection
 func (sd *SharedData) AddClientConnection(ip string, port string) error {
+	sd.mu.Lock() // Lock for writing
+	defer sd.mu.Unlock()
 
 	// Create a connection to the gRPC server at the specified IP
 	conn, err := grpc.NewClient(ip+":"+port, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
 	}
+
+	log.Infof("Created connection to: %s", conn.Target())
 
 	if pkg.ContainsConn(sd.Clients, conn) {
 		log.Warnf("Connection to %s already exists, skipping...", ip)

@@ -100,6 +100,7 @@ func ContainsString[T *grpc.ClientConn | string](slice []T, conn T) bool {
 
 func ContainsConn(slice []*grpc.ClientConn, conn *grpc.ClientConn) bool {
 	for _, item := range slice {
+		log.Infof("Checking connection %s against %s", item.Target(), conn.Target())
 		if item.Target() == conn.Target() {
 			return true
 		}
