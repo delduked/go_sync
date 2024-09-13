@@ -213,10 +213,11 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
             } else {
                 log.Infof("Local files: %v", localFiles)
             }
-
+			
             s.sharedData.mu.RLock() // Lock for reading the clients
             for ip, conn := range s.sharedData.Clients {
-                go func(ip string, conn *grpc.ClientConn) {
+				go func(ip string, conn *grpc.ClientConn) {
+					log.Infof("Checking missing files with %s", ip)
                     client := pb.NewFileSyncServiceClient(conn)
                     stream, err := client.SyncFiles(context.Background())
                     if err != nil {
