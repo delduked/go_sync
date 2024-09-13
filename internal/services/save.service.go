@@ -10,7 +10,7 @@ import (
 )
 
 func Save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
-	filePath := filepath.Join("./sync_folder", req.FileName)
+	filePath := filepath.Clean(req.FileName)
 	log.Printf("Saving file chunk: %s", filePath)
 
 	// check if file exists
