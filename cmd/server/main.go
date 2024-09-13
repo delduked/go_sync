@@ -16,7 +16,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	sharedData := &controllers.SharedData{
-		Clients: make(map[string]*grpc.ClientConn),
+		Clients: make([]*grpc.ClientConn, 0),
 	}
 
 	// Create a context that can be canceled
