@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -31,7 +30,7 @@ type SyncServer struct {
 const chunkSize = 1024 // Size of file chunks for streaming
 
 // NewSyncServer creates a new SyncServer with default settings
-func NewSyncServer(watchDir, port string) (*SyncServer, error) {
+func NewSyncServer(sharedData *SharedData,watchDir, port string) (*SyncServer, error) {
 	// Create TCP listener
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -44,10 +43,7 @@ func NewSyncServer(watchDir, port string) (*SyncServer, error) {
 		listener:   listener,
 		watchDir:   watchDir,
 		port:       port,
-		sharedData: &SharedData{
-			Clients:     make([]string, 0), // Initialize slice of pointers
-			SyncedFiles: make([]string, 0), // Initialize map to track synced files
-		},
+		sharedData: sharedData,
 	}
 
 	return server, nil
@@ -176,11 +172,11 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte) {
 		client := pb.NewFileSyncServiceClient(conn)
 		stream, err := client.SyncFiles(context.Background())
 		if err != nil {
-			log.Printf("Error starting stream to peer %s: %v", peer, err)
+			log.Printf("Error starting stream to peer %v: %v", peer, err)
 			continue
 		}
 
-		log.Printf("Sending chunk of file %s to peer", fileName, conn.Target())
+		log.Printf("Sending chunk of file %s to peer %v", fileName, conn.Target())
 		err = stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileChunk{
 				FileChunk: &pb.FileChunk{
@@ -190,7 +186,7 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte) {
 			},
 		})
 		if err != nil {
-			log.Printf("Error sending chunk to peer %s: %v", peer, err)
+			log.Printf("Error sending chunk to peer %v: %v", peer, err)
 		}
 	}
 }
@@ -223,14 +219,14 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 				log.Infof("Client found: %s", conn)
 			}
 
-			if len(s.sharedData.Clients) > 0 {
+			if len(s.sharedData.Clients) != 0 {
 				log.Info("Starting list check with peers...")
 				for _, ip := range s.sharedData.Clients {
 					go func(ip string) {
 						log.Infof("Checking missing files with %s", ip)
 						conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 						if err != nil {
-							fmt.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
+							log.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
 							return
 						}
 						client := pb.NewFileSyncServiceClient(conn)
@@ -267,7 +263,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 								break
 							}
 
-							if response.Filestosend != nil && len(response.Filestosend) > 0 {
+							if len(response.Filestosend) == 0 {
 								log.Infof("Peer %s is missing files: %v", conn.Target(), response.Filestosend)
 
 								for _, file := range response.Filestosend {
@@ -299,7 +295,7 @@ func (s *SyncServer) propagateDelete(fileName string) {
 		client := pb.NewFileSyncServiceClient(conn)
 		stream, err := client.SyncFiles(context.Background())
 		if err != nil {
-			log.Printf("Error starting stream to peer %s: %v", peer, err)
+			log.Printf("Error starting stream to peer %v: %v", peer, err)
 			continue
 		}
 
@@ -309,7 +305,7 @@ func (s *SyncServer) propagateDelete(fileName string) {
 			},
 		})
 		if err != nil {
-			log.Printf("Error sending delete request to peer %s: %v", peer, err)
+			log.Printf("Error sending delete request to peer %v: %v", peer, err)
 		}
 	}
 }
@@ -319,28 +315,28 @@ func (s *SyncServer) propagateRename(fileName string) {
 	// Implement renaming logic, similar to propagateDelete
 }
 
-// Save file chunk to the local directory
-func (s *SyncServer) saveFileChunk(chunk *pb.FileChunk) error {
-	path := filepath.Join(s.watchDir, chunk.FileName)
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+// // Save file chunk to the local directory
+// func (s *SyncServer) saveFileChunk(chunk *pb.FileChunk) error {
+// 	path := filepath.Join(s.watchDir, chunk.FileName)
+// 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer file.Close()
 
-	_, err = file.Write(chunk.ChunkData)
-	return err
-}
+// 	_, err = file.Write(chunk.ChunkData)
+// 	return err
+// }
 
-// Delete a file from the local directory
-func (s *SyncServer) deleteFile(fileName string) error {
-	path := filepath.Join(s.watchDir, fileName)
-	return os.Remove(path)
-}
+// // Delete a file from the local directory
+// func (s *SyncServer) deleteFile(fileName string) error {
+// 	path := filepath.Join(s.watchDir, fileName)
+// 	return os.Remove(path)
+// }
 
-// Rename a file in the local directory
-func (s *SyncServer) renameFile(oldName, newName string) error {
-	oldPath := filepath.Join(s.watchDir, oldName)
-	newPath := filepath.Join(s.watchDir, newName)
-	return os.Rename(oldPath, newPath)
-}
+// // Rename a file in the local directory
+// func (s *SyncServer) renameFile(oldName, newName string) error {
+// 	oldPath := filepath.Join(s.watchDir, oldName)
+// 	newPath := filepath.Join(s.watchDir, newName)
+// 	return os.Rename(oldPath, newPath)
+// }

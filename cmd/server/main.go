@@ -30,7 +30,7 @@ func main() {
 	go sharedData.PeriodicCheck(ctx, &wg)
 
 	// Create a new SyncServer
-	server, err := controllers.NewSyncServer("./sync_folder", "50051")
+	server, err := controllers.NewSyncServer(sharedData, "./sync_folder", "50051")
 	if err != nil {
 		log.Fatalf("Failed to create sync server: %v", err)
 	}
