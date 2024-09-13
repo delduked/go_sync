@@ -27,7 +27,8 @@ type SyncServer struct {
 }
 
 // Configuration
-const chunkSize = 1024 // Size of file chunks for streaming
+// 32 KB buffer size for file chunks
+const chunkSize = 32 * 1024
 
 // NewSyncServer creates a new SyncServer with default settings
 func NewSyncServer(sharedData *SharedData,watchDir, port string) (*SyncServer, error) {
