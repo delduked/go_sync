@@ -31,8 +31,8 @@ func List(req *pb.FileList, stream grpc.BidiStreamingServer[pb.FileSyncRequest, 
 
 	// if I have a file the peer doesn't have, make a list of files the peer
 	// needs to request
-	for file := range localFileSet {
-		if _, ok := peerFileMap[file]; !ok {
+	for file := range peerFileMap {
+		if _, ok := localFileSet[file]; !ok {
 			fileToSend = append(fileToSend, file)
 		}
 	}

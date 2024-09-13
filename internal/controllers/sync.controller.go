@@ -226,7 +226,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 						log.Infof("Checking missing files with %s", ip)
 						conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 						if err != nil {
-							log.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
+							log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
 							return
 						}
 						client := pb.NewFileSyncServiceClient(conn)
@@ -263,7 +263,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 								break
 							}
 
-							if len(response.Filestosend) == 0 {
+							if len(response.Filestosend) != 0 {
 								log.Infof("Peer %s is missing files: %v", conn.Target(), response.Filestosend)
 
 								for _, file := range response.Filestosend {
@@ -272,6 +272,8 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 									s.startStreamingFile(file)
 									s.sharedData.markFileAsComplete(file)
 								}
+							} else {
+								log.Infof("Peer %s is currently in sync. No files to sync", conn.Target())
 							}
 						}
 					}(ip)
