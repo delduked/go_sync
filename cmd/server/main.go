@@ -9,14 +9,13 @@ import (
 	"syscall"
 
 	"github.com/charmbracelet/log"
-	"google.golang.org/grpc"
 )
 
 func main() {
 	var wg sync.WaitGroup
 
 	sharedData := &controllers.SharedData{
-		Clients: make(map[string]*grpc.ClientConn),
+		Clients: make([]string, 0),
 	}
 
 	// Create a context that can be canceled
@@ -31,7 +30,7 @@ func main() {
 	go sharedData.PeriodicCheck(ctx, &wg)
 
 	// Create a new SyncServer
-	server, err := controllers.NewSyncServer("./sync_folder", "50051")
+	server, err := controllers.NewSyncServer(sharedData, "./sync_folder", "50051")
 	if err != nil {
 		log.Fatalf("Failed to create sync server: %v", err)
 	}
@@ -40,7 +39,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Start(&wg); err != nil {
+		if err := server.Start(&wg, ctx); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()

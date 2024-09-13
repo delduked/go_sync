@@ -19,21 +19,15 @@ import (
 // Shared resource with a map of IPs to gRPC client connections
 type SharedData struct {
 	mu          sync.RWMutex
-	Clients     map[string]*grpc.ClientConn // Map of IPs to gRPC client connections
-	SyncedFiles map[string]struct{}         // Tracks files currently being synchronized
-	WatchDir    string                      // Directory being watched
+	Clients     []string // Map of IPs to gRPC client connections
+	SyncedFiles []string // List of files being synchronized
+	WatchDir    string   // Directory being watched
 }
 
 // Function to create and store a gRPC client connection
 func (sd *SharedData) AddClientConnection(ip string, port string) error {
-	sd.mu.Lock()
+	sd.mu.Lock() // Lock for writing
 	defer sd.mu.Unlock()
-
-	// Check if the IP already exists in the map
-	if _, exists := sd.Clients[ip]; exists {
-		log.Warnf("Connection to %s already exists, skipping...", ip)
-		return nil
-	}
 
 	// Create a connection to the gRPC server at the specified IP
 	conn, err := grpc.NewClient(ip+":"+port, grpc.WithInsecure(), grpc.WithBlock())
@@ -41,9 +35,16 @@ func (sd *SharedData) AddClientConnection(ip string, port string) error {
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
 	}
 
+	log.Infof("Created connection to: %s", conn.Target())
+
+	if pkg.ContainsString(sd.Clients, conn.Target()) {
+		log.Warnf("Connection to %s already exists, skipping...", ip)
+		return nil
+	}
+
 	// Store the connection in the map
-	sd.Clients[ip] = conn
-	log.Infof("Added gRPC client connection to %s", ip)
+	sd.Clients = append(sd.Clients, conn.Target())
+	log.Infof("Added gRPC client connection to %s", conn.Target())
 	return nil
 }
 
@@ -99,31 +100,30 @@ func (sd *SharedData) PeriodicCheck(ctx context.Context, wg *sync.WaitGroup) {
 			log.Warn("Shutting down periodic check...")
 			return
 		case <-ticker.C:
-			sd.mu.RLock() // Lock for reading the clients
-			for ip, conn := range sd.Clients {
+			for _, ip := range sd.Clients {
 				// Open stream if not already done and send a request
-				go func(ip string, conn *grpc.ClientConn) {
+				go func(ip string) {
+					conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 					client := pb.NewFileSyncServiceClient(conn)
 					stream, err := client.SyncFiles(context.Background())
 					if err != nil {
-						log.Errorf("Failed to open stream for periodic check on %s: %v", ip, err)
+						log.Errorf("Failed to open stream for periodic check on %s: %v", conn.Target(), err)
 						return
 					}
 
-					poll := fmt.Sprintf("Poll request from server: %s", ip)
+					poll := fmt.Sprintf("Poll request from server: %s", conn.Target())
 					stream.Send(&pb.FileSyncRequest{
 						Request: &pb.FileSyncRequest_Poll{
 							Poll: &pb.Poll{
 								Message: poll,
 							}}})
 					if err != nil {
-						log.Errorf("Error sending poll to %s: %v", ip, err)
+						log.Errorf("Error sending poll to %s: %v", conn.Target(), err)
 						return
 					}
-					log.Infof("Sent periodic poll to %s: %s", ip, poll)
-				}(ip, conn)
+					log.Infof("Sent periodic poll to %s: %s", conn.Target(), poll)
+				}(ip)
 			}
-			sd.mu.RUnlock() // Unlock after sending queries
 		}
 	}
 }
@@ -201,31 +201,6 @@ func (sd *SharedData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup
 	close(entries)
 }
 
-func (sd *SharedData) syncMissingFiles(peerFileList []string) error {
-	localFiles, err := pkg.GetFileList()
-	if err != nil {
-		return err
-	}
-
-	// Create a set of local files
-	localFileSet := make(map[string]struct{})
-	for _, file := range localFiles {
-		localFileSet[file] = struct{}{}
-	}
-
-	// Send files that the peer doesn't have
-	for _, peerFile := range peerFileList {
-		if _, exists := localFileSet[peerFile]; !exists {
-			log.Printf("Peer is missing file: %s, sending...", peerFile)
-
-			
-			
-		}
-	}
-
-	return nil
-}
-
 // verifyPeer tries to establish a gRPC connection and ping the discovered peer
 func (sd *SharedData) verifyPeer(ip, port string) bool {
 	// Dial the discovered gRPC server
@@ -266,43 +241,51 @@ func (sd *SharedData) verifyPeer(ip, port string) bool {
 }
 
 // RemoveClientConnection removes a gRPC client connection by IP and closes it
-func (sd *SharedData) RemoveClientConnection(ip string) error {
-	sd.mu.Lock()
-	defer sd.mu.Unlock()
+// func (sd *SharedData) RemoveClientConnection(ip string) error {
 
-	// Check if the IP exists in the map
-	conn, exists := sd.Clients[ip]
-	if !exists {
-		log.Warnf("Connection to %s does not exist, cannot remove", ip)
-		return nil
-	}
+// 	// Check if the IP exists in the map
+// 	exist := pkg.ContainsString(sd.Clients, ip)
 
-	// Close the connection
-	err := conn.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close connection to %s: %v", ip, err)
-	}
+// 	if !exist {
 
-	// Remove the connection from the map
-	delete(sd.Clients, ip)
-	log.Infof("Removed gRPC client connection to %s", ip)
-	return nil
-}
+// 	}
+
+// 	for i, c := range sd.Clients {
+// 		if c == ip {
+// 			sd.Clients = append(sd.Clients[:i], sd.Clients[i+1:]...)
+// 			break
+// 		}
+// 	}
+
+// 	log.Infof("Removed gRPC client connection to %s", ip)
+// 	return nil
+// }
 
 // Function to mark a file as being synchronized
 func (sd *SharedData) markFileAsInProgress(fileName string) {
-	sd.mu.Lock()
+	sd.mu.Lock() // Lock the slice for writing
 	defer sd.mu.Unlock()
-	log.Infof("Marking file %s as in progress", fileName)
-	sd.SyncedFiles[fileName] = struct{}{}
+
+	if !pkg.ContainsString(sd.SyncedFiles, fileName) {
+		log.Infof("Marking file %s as in progress", fileName)
+		sd.SyncedFiles = append(sd.SyncedFiles, fileName)
+	} else {
+		log.Infof("File %s is already in progress", fileName)
+	}
 }
 
 // Function to mark a file synchronization as complete
 func (sd *SharedData) markFileAsComplete(fileName string) {
-	sd.mu.Lock()
+	sd.mu.Lock() // Lock the slice for writing
 	defer sd.mu.Unlock()
-	log.Infof("Marking file %s as complete", fileName)
-	delete(sd.SyncedFiles, fileName)
+
+	for i, file := range sd.SyncedFiles {
+		if file == fileName {
+			log.Infof("Marking file %s as complete", fileName)
+			sd.SyncedFiles = append(sd.SyncedFiles[:i], sd.SyncedFiles[i+1:]...)
+			break
+		}
+	}
 }
 
 // getLocalIP retrieves the local IP address from the network interfaces

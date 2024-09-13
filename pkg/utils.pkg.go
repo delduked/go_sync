@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"google.golang.org/grpc"
 )
 
 // validateService checks if the discovered service contains the required TXT records
@@ -86,4 +87,23 @@ func GetFileList() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func ContainsString[T *grpc.ClientConn | string](slice []T, conn T) bool {
+	for _, item := range slice {
+		if item == conn {
+			return true
+		}
+	}
+	return false
+}
+
+func ContainsConn(slice []*grpc.ClientConn, conn *grpc.ClientConn) bool {
+	for _, item := range slice {
+		log.Infof("Checking connection %s against %s", item.Target(), conn.Target())
+		if item.Target() == conn.Target() {
+			return true
+		}
+	}
+	return false
 }
