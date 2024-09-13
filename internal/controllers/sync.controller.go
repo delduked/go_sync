@@ -99,7 +99,7 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 					return
 				}
 				// Check if this file is already in progress (to avoid re-sending)
-				if pkg.Contains[string](s.sharedData.SyncedFiles, event.Name) {
+				if pkg.ContainsString(s.sharedData.SyncedFiles, event.Name) {
 					s.handleFileEvent(event)
 				} else {
 					log.Printf("Skipping file %s, already in sync", event.Name)

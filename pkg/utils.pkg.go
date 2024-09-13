@@ -89,9 +89,18 @@ func GetFileList() ([]string, error) {
 	return files, nil
 }
 
-func Contains[T *grpc.ClientConn | string](slice []T, conn T) bool {
-	for _, str := range slice {
-		if str == conn {
+func ContainsString[T *grpc.ClientConn | string](slice []T, conn T) bool {
+	for _, item := range slice {
+		if item == conn {
+			return true
+		}
+	}
+	return false
+}
+
+func ContainsConn(slice []*grpc.ClientConn, conn *grpc.ClientConn) bool {
+	for _, item := range slice {
+		if item.Target() == conn.Target() {
 			return true
 		}
 	}

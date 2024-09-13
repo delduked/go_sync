@@ -33,12 +33,10 @@ func (sd *SharedData) AddClientConnection(ip string, port string) error {
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
 	}
 
-	if pkg.Contains(sd.Clients, conn) {
+	if pkg.ContainsConn(sd.Clients, conn) {
 		log.Warnf("Connection to %s already exists, skipping...", ip)
 		return nil
 	}
-
-	log.Printf("test %s :", conn.Target())
 
 	// Store the connection in the map
 	sd.Clients = append(sd.Clients, conn)
@@ -241,7 +239,7 @@ func (sd *SharedData) verifyPeer(ip, port string) bool {
 func (sd *SharedData) RemoveClientConnection(conn *grpc.ClientConn) error {
 
 	// Check if the IP exists in the map
-	exist := pkg.Contains[*grpc.ClientConn](sd.Clients, conn)
+	exist := pkg.ContainsConn(sd.Clients, conn)
 	ip := conn.Target()
 
 	if exist {
@@ -271,7 +269,7 @@ func (sd *SharedData) markFileAsInProgress(fileName string) {
 	sd.mu.Lock() // Lock the slice for writing
 	defer sd.mu.Unlock()
 
-	if !pkg.Contains(sd.SyncedFiles, fileName) {
+	if !pkg.ContainsString(sd.SyncedFiles, fileName) {
 		log.Infof("Marking file %s as in progress", fileName)
 		sd.SyncedFiles = append(sd.SyncedFiles, fileName)
 	} else {
