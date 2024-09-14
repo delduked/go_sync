@@ -98,8 +98,6 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 				// Check if this file is already in progress (to avoid re-sending)
 				if pkg.ContainsString(s.sharedData.SyncedFiles, event.Name) {
 					s.handleFileEvent(event)
-				} else {
-					log.Printf("Skipping file %s, already in sync", event.Name)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
