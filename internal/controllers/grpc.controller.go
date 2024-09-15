@@ -46,6 +46,7 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
 	filePath := filepath.Clean(req.FileName)
 	isFirstChunk := req.ChunkNumber == 1
+	var file *os.File
 	if isFirstChunk {
 		// Truncate the file if it's the first chunk
 		file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -54,27 +55,7 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 			s.SharedData.markFileAsComplete(filePath)
 		}
 		defer file.Close()
-
-		_, err = file.Write(req.ChunkData)
-		if err != nil {
-			log.Errorf("Error writing chunk %d of file %s: %v", req.ChunkNumber, req.FileName, err)
-			s.SharedData.markFileAsComplete(filePath)
-		}
-
-		// Check if the transfer is complete
-		if req.ChunkNumber == req.TotalChunks {
-			log.Printf("File %s transfer complete", filePath)
-			s.SharedData.markFileAsComplete(filePath)
-		}
-
-		// Send an acknowledgment back to the client
-		err = stream.SendMsg(&pb.FileSyncResponse{
-			Message: "File chunk saved successfully",
-		})
-		if err != nil {
-			log.Errorf("Error sending acknowledgment: %v", err)
-		}
-
+		
 	} else {
 		// Open the file in append mode for subsequent chunks
 		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
@@ -83,25 +64,25 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 			s.SharedData.markFileAsComplete(filePath)
 		}
 		defer file.Close()
-
-		_, err = file.Write(req.ChunkData)
-		if err != nil {
-			log.Errorf("Error writing chunk %d of file %s: %v", req.ChunkNumber, req.FileName, err)
-			s.SharedData.markFileAsComplete(filePath)
-		}
-
-		// Check if the transfer is complete
-		if req.ChunkNumber == req.TotalChunks {
-			log.Printf("File %s transfer complete", filePath)
-			s.SharedData.markFileAsComplete(filePath)
-		}
-
-		// Send an acknowledgment back to the client
-		err = stream.SendMsg(&pb.FileSyncResponse{
-			Message: "File chunk saved successfully",
-		})
-		if err != nil {
-			log.Errorf("Error sending acknowledgment: %v", err)
-		}
 	}
+	_, err := file.Write(req.ChunkData)
+	if err != nil {
+		log.Errorf("Error writing chunk %d of file %s: %v", req.ChunkNumber, req.FileName, err)
+		s.SharedData.markFileAsComplete(filePath)
+	}
+
+	// Check if the transfer is complete
+	if req.ChunkNumber == req.TotalChunks {
+		log.Printf("File %s transfer complete", filePath)
+		s.SharedData.markFileAsComplete(filePath)
+	}
+
+	// Send an acknowledgment back to the client
+	err = stream.SendMsg(&pb.FileSyncResponse{
+		Message: "File chunk saved successfully",
+	})
+	if err != nil {
+		log.Errorf("Error sending acknowledgment: %v", err)
+	}
+
 }
