@@ -138,6 +138,7 @@ func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 	case event.Has(fsnotify.Remove):
 		// delete file on peer
 		log.Printf("File deleted: %s", event.Name)
+		s.sharedData.markFileAsInProgress(event.Name)
 		s.streamDelete(event.Name)
 	}
 
@@ -368,6 +369,7 @@ func (s *SyncServer) streamDelete(fileName string) {
 					break
 				}
 
+				s.sharedData.markFileAsComplete(fileName)
 				log.Printf("Received response from %v: %v", peer, recv.Message)
 			}
 		}()
