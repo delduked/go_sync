@@ -302,16 +302,12 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 									log.Infof("Peer %s is missing files: %v", conn.Target(), response.Filestosend)
 						
 									for _, file := range response.Filestosend {
-										s.sharedData.mu.Lock()
 										s.sharedData.markFileAsInProgress(file)
-										s.sharedData.mu.Unlock()
 						
 										log.Infof("Sending file %s to peer %s", file, conn.Target())
 										go s.startStreamingFile(file)
 						
-										s.sharedData.mu.Lock()
 										s.sharedData.markFileAsComplete(file)
-										s.sharedData.mu.Unlock()
 									}
 								} else {
 									log.Infof("Peer %s is currently in sync. No files to sync", conn.Target())
