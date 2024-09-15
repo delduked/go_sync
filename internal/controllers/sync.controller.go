@@ -333,10 +333,10 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 						log.Infof("Sent list to %s: %v", conn.Target(), localFiles)
 						
 						// Ensure stream closure after sending
-						err = stream.CloseSend()
-						if err != nil {
-							log.Errorf("Error closing stream: %v", err)
-						}
+						// err = stream.CloseSend()
+						// if err != nil {
+						// 	log.Errorf("Error closing stream: %v", err)
+						// }
 
 					}(ip)
 				}
