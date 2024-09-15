@@ -31,7 +31,7 @@ type SyncServer struct {
 const chunkSize = 32 * 1024
 
 // NewSyncServer creates a new SyncServer with default settings
-func NewSyncServer(sharedData *SharedData, watchDir, port string) (*SyncServer, error) {
+func NewSyncServer(sharedData *SharedData,watchDir, port string) (*SyncServer, error) {
 	// Create TCP listener
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -96,8 +96,9 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 					return
 				}
 				// Check if this file is already in progress (to avoid re-sending)
-				s.handleFileEvent(event)
-
+				// if pkg.ContainsString(s.sharedData.SyncedFiles, event.Name) {
+					s.handleFileEvent(event)
+				// }
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
@@ -113,7 +114,7 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 // Handle file events such as create, modify, delete, rename
 func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 	switch {
-	case event.Op&fsnotify.Create == fsnotify.Create && pkg.ContainsString(s.sharedData.SyncedFiles, event.Name):
+	case event.Op&fsnotify.Create == fsnotify.Create:
 		log.Print("File created:", event.Name)
 		s.sharedData.markFileAsInProgress(event.Name) // Mark file as in progress
 		s.startStreamingFile(event.Name)
