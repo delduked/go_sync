@@ -92,7 +92,7 @@ func (s *FileSyncServer) Delete(req *pb.FileDelete, stream grpc.BidiStreamingSer
 	s.SharedData.markFileAsComplete(filePath)
 
 	// Send an acknowledgment back to the client
-	err = stream.SendMsg(&pb.FileSyncResponse{
+	err = stream.Send(&pb.FileSyncResponse{
 		Message: fmt.Sprintf("File %s deleted successfully", req.FileName),
 	})
 	if err != nil {

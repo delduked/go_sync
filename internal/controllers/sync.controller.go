@@ -127,11 +127,11 @@ func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 	s.sharedData.mu.Unlock()
 
 	switch {
-	case event.Op&fsnotify.Create == fsnotify.Create:
+	case event.Has(fsnotify.Create):
 		// instant file creation on peer
 		log.Printf("File created: %s", event.Name)
 		s.startStreamingFile(event.Name)
-	case event.Op&fsnotify.Write == fsnotify.Write:
+	case event.Has(fsnotify.Write):
 		// If file has been modified, start streaming new chunks file on peer
 		log.Printf("File modified: %s", event.Name)
 		s.startStreamingFile(event.Name)
