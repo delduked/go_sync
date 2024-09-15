@@ -150,12 +150,11 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Print("Error opening file:", err)
-		s.sharedData.markFileAsComplete(filePath) // Mark file as complete in case of error
+		s.sharedData.markFileAsComplete(filePath)
 		return
 	}
 	defer file.Close()
 
-	// Get the file size
 	fileInfo, err := file.Stat()
 	if err != nil {
 		log.Print("Error getting file info:", err)
@@ -163,29 +162,34 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 		return
 	}
 	fileSize := fileInfo.Size()
-	totalChunks := int((fileSize + chunkSize - 1) / chunkSize) // Calculate the total number of chunks
+	chunkSize := int64(32 * 1024)
+	totalChunks := int((fileSize + chunkSize - 1) / chunkSize)
+	log.Printf("File size: %d bytes, Chunk size: %d bytes, Total chunks: %d", fileSize, chunkSize, totalChunks)
 
+	chunks := make([][]byte, 0, totalChunks)
 	buffer := make([]byte, chunkSize)
-	chunkNumber := 0
 
 	for {
 		n, err := file.Read(buffer)
 		if err != nil && err != io.EOF {
 			log.Print("Error reading file:", err)
-			s.sharedData.markFileAsComplete(filePath) // Mark file as complete in case of error
+			s.sharedData.markFileAsComplete(filePath)
 			return
 		}
 		if n == 0 {
 			break
 		}
-		chunkNumber++
-		s.sendFileChunkToPeers(filePath, buffer[:n], chunkNumber, totalChunks)
+		chunkData := make([]byte, n)
+		copy(chunkData, buffer[:n])
+		chunks = append(chunks, chunkData)
 	}
-	s.sharedData.markFileAsComplete(filePath) // Mark file as complete when finished
+
+	s.sendFileChunkToPeers(filePath, chunks, totalChunks)
+	s.sharedData.markFileAsComplete(filePath)
 }
 
 // Send file chunk to peers using gRPC stream
-func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte, chunkNumber int, totalChunks int) {
+func (s *SyncServer) sendFileChunkToPeers(fileName string, chunks [][]byte, totalChunks int) {
 	s.sharedData.mu.RLock()
 	clients := make([]string, len(s.sharedData.Clients))
 	copy(clients, s.sharedData.Clients)
@@ -206,19 +210,28 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunk []byte, chunkNu
 			continue
 		}
 
-		log.Printf("Sending chunk %d/%d of file %s to peer %s", chunkNumber, totalChunks, fileName, ip)
-		err = stream.Send(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileChunk{
-				FileChunk: &pb.FileChunk{
-					FileName:    fileName,
-					ChunkData:   chunk,
-					ChunkNumber: int32(chunkNumber),
-					TotalChunks: int32(totalChunks),
+		for chunkNumber, chunk := range chunks {
+			log.Printf("Sending chunk %d/%d of file %s to peer %s", chunkNumber+1, totalChunks, fileName, ip)
+			err = stream.Send(&pb.FileSyncRequest{
+				Request: &pb.FileSyncRequest_FileChunk{
+					FileChunk: &pb.FileChunk{
+						FileName:    fileName,
+						ChunkData:   chunk,
+						ChunkNumber: int32(chunkNumber + 1),
+						TotalChunks: int32(totalChunks),
+					},
 				},
-			},
-		})
+			})
+			if err != nil {
+				log.Printf("Error sending chunk to peer %s: %v", ip, err)
+				break
+			}
+		}
+
+		// Close the stream after sending all chunks
+		err = stream.CloseSend()
 		if err != nil {
-			log.Printf("Error sending chunk to peer %s: %v", ip, err)
+			log.Printf("Error closing stream to peer %s: %v", ip, err)
 		}
 	}
 }
