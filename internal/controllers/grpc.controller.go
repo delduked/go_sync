@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	pb "go_sync/filesync"
 	"go_sync/internal/services"
 	"io"
@@ -30,13 +31,9 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 		case *pb.FileSyncRequest_FileChunk:
 			s.Save(req.GetFileChunk(), stream)
 		case *pb.FileSyncRequest_FileDelete:
-			services.Delete(req.GetFileDelete(), stream)
-		case *pb.FileSyncRequest_FileRename:
-			services.Modify(req.GetFileRename(), stream)
+			s.Delete(req.GetFileDelete(), stream)
 		case *pb.FileSyncRequest_Poll:
 			services.Poll(req.GetPoll(), stream)
-		case *pb.FileSyncRequest_Ack:
-			services.Ack(req.GetAck(), stream)
 		case *pb.FileSyncRequest_FileList:
 			services.List(req.GetFileList(), stream)
 		}
@@ -82,4 +79,23 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 	}
 }
 
+func (s *FileSyncServer) Delete(req *pb.FileDelete, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
+	filePath := filepath.Join("./sync_folder", req.FileName)
+	log.Printf("Deleting file: %s", filePath)
 
+	s.SharedData.markFileAsInProgress(filePath)
+	err := os.Remove(filePath)
+	if err != nil {
+		log.Errorf("Error deleting file: %v", err)
+		return
+	}
+	s.SharedData.markFileAsComplete(filePath)
+
+	// Send an acknowledgment back to the client
+	err = stream.Send(&pb.FileSyncResponse{
+		Message: fmt.Sprintf("File %s deleted successfully", req.FileName),
+	})
+	if err != nil {
+		log.Errorf("Error sending acknowledgment: %v", err)
+	}
+}

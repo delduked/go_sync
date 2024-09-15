@@ -128,23 +128,25 @@ func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 
 	switch {
 	case event.Op&fsnotify.Create == fsnotify.Create:
+		// instant file creation on peer
 		log.Printf("File created: %s", event.Name)
 		s.startStreamingFile(event.Name)
 	case event.Op&fsnotify.Write == fsnotify.Write:
+		// If file has been modified, start streaming new chunks file on peer
 		log.Printf("File modified: %s", event.Name)
 		s.startStreamingFile(event.Name)
 	case event.Op&fsnotify.Remove == fsnotify.Remove:
+		// delete file on peer
 		log.Printf("File deleted: %s", event.Name)
-		s.propagateDelete(event.Name)
-	case event.Op&fsnotify.Rename == fsnotify.Rename:
-		log.Printf("File renamed: %s", event.Name)
-		s.propagateRename(event.Name)
+		s.streamDelete(event.Name)
+	// case event.Op&fsnotify.Rename == fsnotify.Rename:
+	// 	// rename file on peer
+	// 	log.Printf("File renamed: %s", event.Name)
+	// 	s.propagateRename(event.Name)
 	}
 
 	// After processing, remove the file from SyncedFiles
-	s.sharedData.mu.Lock()
 	s.sharedData.markFileAsComplete(event.Name)
-	s.sharedData.mu.Unlock()
 }
 
 // Start streaming a file to all peers
@@ -286,7 +288,6 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 						log.Infof("Opened stream with %s to check missing files", conn.Target())
 
 						go func() {
-							// Receive response from peer (files they are missing)
 							for {
 								response, err := stream.Recv()
 								if err == io.EOF {
@@ -297,16 +298,16 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 									log.Errorf("Error receiving response from %s: %v", conn.Target(), err)
 									break
 								}
-						
+
 								if len(response.Filestosend) != 0 {
 									log.Infof("Peer %s is missing files: %v", conn.Target(), response.Filestosend)
-						
+
 									for _, file := range response.Filestosend {
 										s.sharedData.markFileAsInProgress(file)
-						
+
 										log.Infof("Sending file %s to peer %s", file, conn.Target())
 										go s.startStreamingFile(file)
-						
+
 										s.sharedData.markFileAsComplete(file)
 									}
 								} else {
@@ -314,7 +315,6 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 								}
 							}
 						}()
-						
 
 						// Send local files to peer
 						err = stream.Send(&pb.FileSyncRequest{
@@ -328,7 +328,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 							return
 						}
 						log.Infof("Sent list to %s: %v", conn.Target(), localFiles)
-						
+
 						// Ensure stream closure after sending
 						// err = stream.CloseSend()
 						// if err != nil {
@@ -345,7 +345,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 // Handle file delete event
-func (s *SyncServer) propagateDelete(fileName string) {
+func (s *SyncServer) streamDelete(fileName string) {
 
 	for peer, conn := range s.sharedData.Clients {
 		conn, err := grpc.NewClient(conn, grpc.WithInsecure(), grpc.WithBlock())
@@ -360,6 +360,22 @@ func (s *SyncServer) propagateDelete(fileName string) {
 			continue
 		}
 
+		go func() {
+			for {
+				recv, err := stream.Recv()
+				if err != nil {
+					log.Printf("Error receiving response from %v: %v", peer, err)
+					break
+				}
+				if err == io.EOF {
+					log.Printf("Stream closed by %v", peer)
+					break
+				}
+
+				log.Printf("Received response from %v: %v", peer, recv.Message)
+			}
+		}()
+
 		err = stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileDelete{
 				FileDelete: &pb.FileDelete{FileName: fileName},
@@ -373,7 +389,47 @@ func (s *SyncServer) propagateDelete(fileName string) {
 
 // Handle file rename event
 func (s *SyncServer) propagateRename(fileName string) {
-	// Implement renaming logic, similar to propagateDelete
+	for peer, conn := range s.sharedData.Clients {
+		conn, err := grpc.NewClient(conn, grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Printf("failed to connect to gRPC server at %s: %v", conn.Target(), err)
+			continue
+		}
+		client := pb.NewFileSyncServiceClient(conn)
+		stream, err := client.SyncFiles(context.Background())
+		if err != nil {
+			log.Printf("Error starting stream to peer %v: %v", peer, err)
+			continue
+		}
+
+		go func() {
+			for {
+				recv, err := stream.Recv()
+				if err != nil {
+					log.Printf("Error receiving response from %v: %v", peer, err)
+					break
+				}
+				if err == io.EOF {
+					log.Printf("Stream closed by %v", peer)
+					break
+				}
+
+				log.Printf("Received response from %v: %v", peer, recv.Message)
+			}
+		}()
+
+		err = stream.Send(&pb.FileSyncRequest{
+			Request: &pb.FileSyncRequest_FileRename{
+				FileRename: &pb.FileRename{
+					OldName: fileName,
+					NewName: fileName,
+				},
+			},
+		})
+		if err != nil {
+			log.Printf("Error sending delete request to peer %v: %v", peer, err)
+		}
+	}
 }
 
 // // Save file chunk to the local directory
