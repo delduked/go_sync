@@ -28,7 +28,7 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 
 		switch req.GetRequest().(type) {
 		case *pb.FileSyncRequest_FileChunk:
-			services.Save(req.GetFileChunk(), stream)
+			s.Save(req.GetFileChunk(), stream)
 		case *pb.FileSyncRequest_FileDelete:
 			services.Delete(req.GetFileDelete(), stream)
 		case *pb.FileSyncRequest_FileRename:
