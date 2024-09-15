@@ -320,7 +320,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 						}()
 						
 						// Send local files to peer
-						err = stream.SendMsg(&pb.FileSyncRequest{
+						err = stream.Send(&pb.FileSyncRequest{
 							Request: &pb.FileSyncRequest_FileList{
 								FileList: &pb.FileList{
 									Files: localFiles,
