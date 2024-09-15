@@ -318,7 +318,8 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 							Request: &pb.FileSyncRequest_FileList{
 								FileList: &pb.FileList{
 									Files: localFiles,
-								}},
+								},
+							},
 						})
 						if err != nil {
 							log.Errorf("Error sending list to %s: %v", conn.Target(), err)

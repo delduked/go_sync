@@ -80,7 +80,7 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 }
 
 func (s *FileSyncServer) Delete(req *pb.FileDelete, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
-	filePath := filepath.Join("./sync_folder", req.FileName)
+	filePath := filepath.Clean(req.FileName)
 	log.Printf("Deleting file: %s", filePath)
 
 	s.SharedData.markFileAsInProgress(filePath)
@@ -92,7 +92,7 @@ func (s *FileSyncServer) Delete(req *pb.FileDelete, stream grpc.BidiStreamingSer
 	s.SharedData.markFileAsComplete(filePath)
 
 	// Send an acknowledgment back to the client
-	err = stream.Send(&pb.FileSyncResponse{
+	err = stream.SendMsg(&pb.FileSyncResponse{
 		Message: fmt.Sprintf("File %s deleted successfully", req.FileName),
 	})
 	if err != nil {
