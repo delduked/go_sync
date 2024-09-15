@@ -51,7 +51,7 @@ func NewSyncServer(sharedData *SharedData, watchDir, port string) (*SyncServer, 
 }
 
 // Start starts the gRPC server and file watcher
-func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context,sd  *SharedData) error {
+func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context, sd *SharedData) error {
 	defer wg.Done()
 
 	// Start gRPC server in a goroutine
@@ -285,6 +285,40 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 
 						log.Infof("Opened stream with %s to check missing files", conn.Target())
 
+						go func() {
+							// Receive response from peer (files they are missing)
+							for {
+								response, err := stream.Recv()
+								if err == io.EOF {
+									log.Warnf("Stream closed by %s", conn.Target())
+									break
+								}
+								if err != nil {
+									log.Errorf("Error receiving response from %s: %v", conn.Target(), err)
+									break
+								}
+						
+								if len(response.Filestosend) != 0 {
+									log.Infof("Peer %s is missing files: %v", conn.Target(), response.Filestosend)
+						
+									for _, file := range response.Filestosend {
+										s.sharedData.mu.Lock()
+										s.sharedData.markFileAsInProgress(file)
+										s.sharedData.mu.Unlock()
+						
+										log.Infof("Sending file %s to peer %s", file, conn.Target())
+										s.startStreamingFile(file)
+						
+										s.sharedData.mu.Lock()
+										s.sharedData.markFileAsComplete(file)
+										s.sharedData.mu.Unlock()
+									}
+								} else {
+									log.Infof("Peer %s is currently in sync. No files to sync", conn.Target())
+								}
+							}
+						}()
+						
 						// Send local files to peer
 						err = stream.SendMsg(&pb.FileSyncRequest{
 							Request: &pb.FileSyncRequest_FileList{
@@ -297,32 +331,13 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 							return
 						}
 						log.Infof("Sent list to %s: %v", conn.Target(), localFiles)
-
-						// Receive response from peer (files they are missing)
-						for {
-							response, err := stream.Recv()
-							if err == io.EOF {
-								log.Warnf("Stream closed by %s", conn.Target())
-								break
-							}
-							if err != nil {
-								log.Errorf("Error receiving response from %s: %v", conn.Target(), err)
-								break
-							}
-
-							if len(response.Filestosend) != 0 {
-								log.Infof("Peer %s is missing files: %v", conn.Target(), response.Filestosend)
-
-								for _, file := range response.Filestosend {
-									s.sharedData.markFileAsInProgress(file)
-									log.Infof("Sending file %s to peer %s", file, conn.Target())
-									s.startStreamingFile(file)
-									s.sharedData.markFileAsComplete(file)
-								}
-							} else {
-								log.Infof("Peer %s is currently in sync. No files to sync", conn.Target())
-							}
+						
+						// Ensure stream closure after sending
+						err = stream.CloseSend()
+						if err != nil {
+							log.Errorf("Error closing stream: %v", err)
 						}
+
 					}(ip)
 				}
 			} else {
