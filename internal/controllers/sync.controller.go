@@ -307,7 +307,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 										s.sharedData.mu.Unlock()
 						
 										log.Infof("Sending file %s to peer %s", file, conn.Target())
-										s.startStreamingFile(file)
+										go s.startStreamingFile(file)
 						
 										s.sharedData.mu.Lock()
 										s.sharedData.markFileAsComplete(file)
