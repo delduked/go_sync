@@ -135,14 +135,10 @@ func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 		// If file has been modified, start streaming new chunks file on peer
 		log.Printf("File modified: %s", event.Name)
 		s.startStreamingFile(event.Name)
-	case event.Op&fsnotify.Remove == fsnotify.Remove:
+	case event.Has(fsnotify.Remove):
 		// delete file on peer
 		log.Printf("File deleted: %s", event.Name)
 		s.streamDelete(event.Name)
-	// case event.Op&fsnotify.Rename == fsnotify.Rename:
-	// 	// rename file on peer
-	// 	log.Printf("File renamed: %s", event.Name)
-	// 	s.propagateRename(event.Name)
 	}
 
 	// After processing, remove the file from SyncedFiles
