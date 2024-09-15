@@ -28,7 +28,7 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 
 		switch req.GetRequest().(type) {
 		case *pb.FileSyncRequest_FileChunk:
-			s.Save(req.GetFileChunk(), stream)
+			services.Save(req.GetFileChunk(), stream)
 		case *pb.FileSyncRequest_FileDelete:
 			services.Delete(req.GetFileDelete(), stream)
 		case *pb.FileSyncRequest_FileRename:
@@ -55,7 +55,6 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 			s.SharedData.markFileAsComplete(filePath)
 		}
 		defer file.Close()
-		
 	} else {
 		// Open the file in append mode for subsequent chunks
 		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
@@ -65,6 +64,8 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 		}
 		defer file.Close()
 	}
+
+	// Write the chunk to the file
 	_, err := file.Write(req.ChunkData)
 	if err != nil {
 		log.Errorf("Error writing chunk %d of file %s: %v", req.ChunkNumber, req.FileName, err)
@@ -84,5 +85,4 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 	if err != nil {
 		log.Errorf("Error sending acknowledgment: %v", err)
 	}
-
 }

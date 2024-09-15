@@ -25,7 +25,7 @@ func Save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest,
 	}
 
 	// Open the file (or create if it doesn't exist), and append the chunk
-	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(filePath, os.O_TRUNC|os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Errorf("Error opening file: %v", err)
 		return
