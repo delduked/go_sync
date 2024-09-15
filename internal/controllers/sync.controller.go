@@ -51,13 +51,15 @@ func NewSyncServer(sharedData *SharedData, watchDir, port string) (*SyncServer, 
 }
 
 // Start starts the gRPC server and file watcher
-func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context) error {
+func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context,sd  *SharedData) error {
 	defer wg.Done()
 
 	// Start gRPC server in a goroutine
 	go func() {
 		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{})
+		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{
+			SharedData: sd,
+		})
 		if err := s.grpcServer.Serve(s.listener); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
 		}
