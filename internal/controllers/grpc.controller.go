@@ -3,7 +3,6 @@ package controllers
 import (
 	pb "go_sync/filesync"
 	"go_sync/internal/services"
-	"go_sync/pkg"
 	"io"
 	"os"
 	"path/filepath"
@@ -49,14 +48,7 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 	log.Printf("Saving file chunk: %s", filePath)
 
 	// Add the file to SyncedFiles
-	s.SharedData.mu.Lock()
-	if pkg.ContainsString(s.SharedData.SyncedFiles, filePath) {
-		log.Printf("File %s is already being synchronized. Ignoring.", filePath)
-		s.SharedData.mu.Unlock()
-		return
-	}
-	s.SharedData.SyncedFiles = append(s.SharedData.SyncedFiles, filePath)
-	s.SharedData.mu.Unlock()
+	s.SharedData.markFileAsInProgress(filePath)
 
 	// Open the file in append mode
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
