@@ -117,14 +117,7 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 
 // Handle file events such as create, modify, delete, rename
 func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
-	s.sharedData.mu.Lock()
-	// Add file to SyncedFiles to mark it as being synchronized
-	if pkg.ContainsString(s.sharedData.SyncedFiles, event.Name) {
-		s.sharedData.mu.Unlock()
-		return
-	}
-	s.sharedData.SyncedFiles = append(s.sharedData.SyncedFiles, event.Name)
-	s.sharedData.mu.Unlock()
+	s.sharedData.markFileAsInProgress(event.Name)
 
 	switch {
 	case event.Has(fsnotify.Create):
@@ -162,6 +155,7 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 		s.sharedData.markFileAsComplete(filePath)
 		return
 	}
+
 	fileSize := fileInfo.Size()
 	chunkSize := int64(32 * 1024)
 	totalChunks := int((fileSize + chunkSize - 1) / chunkSize)
@@ -197,7 +191,7 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunks [][]byte, tota
 	s.sharedData.mu.RUnlock()
 
 	for _, ip := range clients {
-		conn, err := grpc.Dial(ip, grpc.WithInsecure())
+		conn, err := grpc.NewClient(ip, grpc.WithInsecure())
 		if err != nil {
 			log.Printf("Failed to connect to gRPC server at %s: %v", ip, err)
 			continue
@@ -230,10 +224,10 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunks [][]byte, tota
 		}
 
 		// Close the stream after sending all chunks
-		err = stream.CloseSend()
-		if err != nil {
-			log.Printf("Error closing stream to peer %s: %v", ip, err)
-		}
+		// err = stream.CloseSend()
+		// if err != nil {
+		// 	log.Printf("Error closing stream to peer %s: %v", ip, err)
+		// }
 	}
 }
 
