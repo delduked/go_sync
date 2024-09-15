@@ -3,12 +3,12 @@ package controllers
 import (
 	pb "go_sync/filesync"
 	"go_sync/internal/services"
-	"go_sync/pkg"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/charmbracelet/log"
+	"google.golang.org/grpc"
 )
 
 type FileSyncServer struct {
@@ -43,41 +43,33 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 	}
 }
 
-func (s *FileSyncServer) Save(req *pb.FileChunk, stream pb.FileSyncService_SyncFilesServer) error {
+func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
 	filePath := filepath.Clean(req.FileName)
 	isFirstChunk := req.ChunkNumber == 1
 	var file *os.File
-	var err error
-
-	// Add the file to SyncedFiles
-	s.SharedData.mu.Lock()
-	if isFirstChunk {
-		if !pkg.ContainsString(s.SharedData.SyncedFiles, filePath) {
-			s.SharedData.SyncedFiles = append(s.SharedData.SyncedFiles, filePath)
-		}
-	}
-	s.SharedData.mu.Unlock()
-
 	if isFirstChunk {
 		// Truncate the file if it's the first chunk
-		file, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			log.Errorf("Error opening file: %v", err)
+			s.SharedData.markFileAsComplete(filePath)
+		}
+		defer file.Close()
 	} else {
 		// Open the file in append mode for subsequent chunks
-		file, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Errorf("Error opening file: %v", err)
+			s.SharedData.markFileAsComplete(filePath)
+		}
+		defer file.Close()
 	}
-	if err != nil {
-		log.Errorf("Error opening file: %v", err)
-		s.SharedData.markFileAsComplete(filePath)
-		return err
-	}
-	defer file.Close()
 
 	// Write the chunk to the file
-	_, err = file.Write(req.ChunkData)
+	_, err := file.Write(req.ChunkData)
 	if err != nil {
 		log.Errorf("Error writing chunk %d of file %s: %v", req.ChunkNumber, req.FileName, err)
 		s.SharedData.markFileAsComplete(filePath)
-		return err
 	}
 
 	// Check if the transfer is complete
@@ -87,13 +79,10 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream pb.FileSyncService_SyncF
 	}
 
 	// Send an acknowledgment back to the client
-	err = stream.Send(&pb.FileSyncResponse{
+	err = stream.SendMsg(&pb.FileSyncResponse{
 		Message: "File chunk saved successfully",
 	})
 	if err != nil {
 		log.Errorf("Error sending acknowledgment: %v", err)
-		return err
 	}
-
-	return nil
 }
