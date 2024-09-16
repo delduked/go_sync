@@ -57,9 +57,7 @@ func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context, sd *SharedDa
 	// Start gRPC server in a goroutine
 	go func() {
 		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{
-			SharedData: sd,
-		})
+		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{SharedData: sd})
 		if err := s.grpcServer.Serve(s.listener); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
 		}
@@ -73,6 +71,9 @@ func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context, sd *SharedDa
 
 	wg.Add(1)
 	go s.syncMissingFiles(ctx, wg)
+
+	wg.Add(1)
+	go s.List(ctx, wg)
 
 	return nil
 }
@@ -335,6 +336,40 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 		}
 	}
 }
+func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Warn("Shutting down list check...")
+			return
+		case <-ticker.C:
+			for peer, conn := range s.sharedData.Clients {
+				conn, err := grpc.NewClient(conn, grpc.WithInsecure(), grpc.WithBlock())
+				if err != nil {
+					log.Printf("failed to connect to gRPC server at %s: %v", conn.Target(), err)
+					continue
+				}
+				client := pb.NewFileSyncServiceClient(conn)
+				stream, err := client.State(context.Background(), &pb.Empty{})
+				if err != nil {
+					log.Printf("Error starting stream to peer %v: %v", peer, err)
+					continue
+				}
+				res, err := stream.Recv()
+				if err != nil {
+					log.Printf("Error receiving response from %v: %v", peer, err)
+					continue
+				}
+				log.Printf("Received response from %v: %v", peer, res.Message)
+			}
+		}
+	}
+}
 
 // Handle file delete event
 func (s *SyncServer) streamDelete(fileName string) {
@@ -371,7 +406,8 @@ func (s *SyncServer) streamDelete(fileName string) {
 
 		err = stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileDelete{
-				FileDelete: &pb.FileDelete{FileName: fileName},
+				FileDelete: &pb.FileDelete{
+					FileName: fileName},
 			},
 		})
 		if err != nil {

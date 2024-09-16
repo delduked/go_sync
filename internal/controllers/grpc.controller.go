@@ -4,6 +4,7 @@ import (
 	"fmt"
 	pb "go_sync/filesync"
 	"go_sync/internal/services"
+	"go_sync/pkg"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,9 +30,9 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 
 		switch req.GetRequest().(type) {
 		case *pb.FileSyncRequest_FileChunk:
-			s.Save(req.GetFileChunk(), stream)
+			s.save(req.GetFileChunk(), stream)
 		case *pb.FileSyncRequest_FileDelete:
-			s.Delete(req.GetFileDelete(), stream)
+			s.delete(req.GetFileDelete(), stream)
 		case *pb.FileSyncRequest_Poll:
 			services.Poll(req.GetPoll(), stream)
 		case *pb.FileSyncRequest_FileList:
@@ -39,8 +40,25 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 		}
 	}
 }
+func (s *FileSyncServer) State(req *pb.Empty, stream grpc.ServerStreamingServer[pb.StateRes]) error {
+	log.Infof("Received file list")
 
-func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
+	localFiles, err := pkg.GetFileList()
+	if err != nil {
+		log.Errorf("Error getting file list: %v", err)
+	}
+
+	err = stream.Send(&pb.StateRes{
+		Message: localFiles,
+	})
+	if err != nil {
+		log.Errorf("Error sending state response: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
 	filePath := filepath.Clean(req.FileName)
 	log.Printf("Saving file chunk: %s", filePath)
 
@@ -79,7 +97,7 @@ func (s *FileSyncServer) Save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 	}
 }
 
-func (s *FileSyncServer) Delete(req *pb.FileDelete, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
+func (s *FileSyncServer) delete(req *pb.FileDelete, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
 	filePath := filepath.Clean(req.FileName)
 	log.Printf("Deleting file: %s", filePath)
 

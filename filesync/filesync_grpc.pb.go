@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	FileSyncService_SyncFiles_FullMethodName = "/FileSyncService/SyncFiles"
+	FileSyncService_State_FullMethodName     = "/FileSyncService/State"
 )
 
 // FileSyncServiceClient is the client API for FileSyncService service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FileSyncServiceClient interface {
 	SyncFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse], error)
+	State(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateRes], error)
 }
 
 type fileSyncServiceClient struct {
@@ -50,11 +52,31 @@ func (c *fileSyncServiceClient) SyncFiles(ctx context.Context, opts ...grpc.Call
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_SyncFilesClient = grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse]
 
+func (c *fileSyncServiceClient) State(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateRes], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[1], FileSyncService_State_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Empty, StateRes]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_StateClient = grpc.ServerStreamingClient[StateRes]
+
 // FileSyncServiceServer is the server API for FileSyncService service.
 // All implementations must embed UnimplementedFileSyncServiceServer
 // for forward compatibility.
 type FileSyncServiceServer interface {
 	SyncFiles(grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]) error
+	State(*Empty, grpc.ServerStreamingServer[StateRes]) error
 	mustEmbedUnimplementedFileSyncServiceServer()
 }
 
@@ -67,6 +89,9 @@ type UnimplementedFileSyncServiceServer struct{}
 
 func (UnimplementedFileSyncServiceServer) SyncFiles(grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method SyncFiles not implemented")
+}
+func (UnimplementedFileSyncServiceServer) State(*Empty, grpc.ServerStreamingServer[StateRes]) error {
+	return status.Errorf(codes.Unimplemented, "method State not implemented")
 }
 func (UnimplementedFileSyncServiceServer) mustEmbedUnimplementedFileSyncServiceServer() {}
 func (UnimplementedFileSyncServiceServer) testEmbeddedByValue()                         {}
@@ -96,6 +121,17 @@ func _FileSyncService_SyncFiles_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_SyncFilesServer = grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]
 
+func _FileSyncService_State_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FileSyncServiceServer).State(m, &grpc.GenericServerStream[Empty, StateRes]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_StateServer = grpc.ServerStreamingServer[StateRes]
+
 // FileSyncService_ServiceDesc is the grpc.ServiceDesc for FileSyncService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -109,6 +145,11 @@ var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _FileSyncService_SyncFiles_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "State",
+			Handler:       _FileSyncService_State_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "filesync/filesync.proto",
