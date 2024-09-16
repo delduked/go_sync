@@ -3,7 +3,7 @@ option go_package = "filesync/;filesync";
 
 service FileSyncService {
   rpc SyncFiles(stream FileSyncRequest) returns (stream FileSyncResponse);
-  rpc State(Empty) returns (stream StateRes);
+  rpc State(StateReq) returns (stream StateRes);
 }
 
 message FileSyncRequest {
@@ -18,7 +18,7 @@ message FileSyncRequest {
   }
 }
 
-message Empty {}
+message StateReq {}
 message StateRes {
   repeated string message = 1;
 }

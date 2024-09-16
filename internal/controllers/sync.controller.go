@@ -265,45 +265,40 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 				for _, ip := range s.sharedData.Clients {
 					go func(ip string) {
 						log.Infof("Checking missing files with %s", ip)
-						conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+
+						stream, err := pkg.SyncStream(ip)
 						if err != nil {
-							log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
-							return
-						}
-						client := pb.NewFileSyncServiceClient(conn)
-						stream, err := client.SyncFiles(context.Background())
-						if err != nil {
-							log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+							log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
 							return
 						}
 
-						log.Infof("Opened stream with %s to check missing files", conn.Target())
+						log.Infof("Opened stream with %s to check missing files", ip)
 
 						go func() {
 							for {
 								response, err := stream.Recv()
 								if err == io.EOF {
-									log.Warnf("Stream closed by %s", conn.Target())
+									log.Warnf("Stream closed by %s", ip)
 									break
 								}
 								if err != nil {
-									log.Errorf("Error receiving response from %s: %v", conn.Target(), err)
+									log.Errorf("Error receiving response from %s: %v", ip, err)
 									break
 								}
 
 								if len(response.Filestosend) != 0 {
-									log.Infof("Peer %s is missing files: %v", conn.Target(), response.Filestosend)
+									log.Infof("Peer %s is missing files: %v", ip, response.Filestosend)
 
 									for _, file := range response.Filestosend {
 										s.sharedData.markFileAsInProgress(file)
 
-										log.Infof("Sending file %s to peer %s", file, conn.Target())
+										log.Infof("Sending file %s to peer %s", file, ip)
 										go s.startStreamingFile(file)
 
 										s.sharedData.markFileAsComplete(file)
 									}
 								} else {
-									log.Infof("Peer %s is currently in sync. No files to sync", conn.Target())
+									log.Infof("Peer %s is currently in sync. No files to sync", ip)
 								}
 							}
 						}()
@@ -317,16 +312,10 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 							},
 						})
 						if err != nil {
-							log.Errorf("Error sending list to %s: %v", conn.Target(), err)
+							log.Errorf("Error sending list to %s: %v", ip, err)
 							return
 						}
-						log.Infof("Sent list to %s: %v", conn.Target(), localFiles)
-
-						// Ensure stream closure after sending
-						// err = stream.CloseSend()
-						// if err != nil {
-						// 	log.Errorf("Error closing stream: %v", err)
-						// }
+						log.Infof("Sent list to %s: %v", ip, localFiles)
 
 					}(ip)
 				}
@@ -349,17 +338,13 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 			return
 		case <-ticker.C:
 			for peer, conn := range s.sharedData.Clients {
-				conn, err := grpc.NewClient(conn, grpc.WithInsecure(), grpc.WithBlock())
-				if err != nil {
-					log.Printf("failed to connect to gRPC server at %s: %v", conn.Target(), err)
-					continue
-				}
-				client := pb.NewFileSyncServiceClient(conn)
-				stream, err := client.State(context.Background(), &pb.Empty{})
+
+				stream, err := pkg.StateStream(conn)
 				if err != nil {
 					log.Printf("Error starting stream to peer %v: %v", peer, err)
 					continue
 				}
+
 				res, err := stream.Recv()
 				if err != nil {
 					log.Printf("Error receiving response from %v: %v", peer, err)
@@ -375,13 +360,8 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 func (s *SyncServer) streamDelete(fileName string) {
 
 	for peer, conn := range s.sharedData.Clients {
-		conn, err := grpc.NewClient(conn, grpc.WithInsecure(), grpc.WithBlock())
-		if err != nil {
-			log.Printf("failed to connect to gRPC server at %s: %v", conn.Target(), err)
-			continue
-		}
-		client := pb.NewFileSyncServiceClient(conn)
-		stream, err := client.SyncFiles(context.Background())
+
+		stream, err := pkg.SyncStream(conn)
 		if err != nil {
 			log.Printf("Error starting stream to peer %v: %v", peer, err)
 			continue
@@ -415,74 +395,3 @@ func (s *SyncServer) streamDelete(fileName string) {
 		}
 	}
 }
-
-// Handle file rename event
-func (s *SyncServer) propagateRename(fileName string) {
-	for peer, conn := range s.sharedData.Clients {
-		conn, err := grpc.NewClient(conn, grpc.WithInsecure(), grpc.WithBlock())
-		if err != nil {
-			log.Printf("failed to connect to gRPC server at %s: %v", conn.Target(), err)
-			continue
-		}
-		client := pb.NewFileSyncServiceClient(conn)
-		stream, err := client.SyncFiles(context.Background())
-		if err != nil {
-			log.Printf("Error starting stream to peer %v: %v", peer, err)
-			continue
-		}
-
-		go func() {
-			for {
-				recv, err := stream.Recv()
-				if err != nil {
-					log.Printf("Error receiving response from %v: %v", peer, err)
-					break
-				}
-				if err == io.EOF {
-					log.Printf("Stream closed by %v", peer)
-					break
-				}
-
-				log.Printf("Received response from %v: %v", peer, recv.Message)
-			}
-		}()
-
-		err = stream.Send(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileRename{
-				FileRename: &pb.FileRename{
-					OldName: fileName,
-					NewName: fileName,
-				},
-			},
-		})
-		if err != nil {
-			log.Printf("Error sending delete request to peer %v: %v", peer, err)
-		}
-	}
-}
-
-// // Save file chunk to the local directory
-// func (s *SyncServer) saveFileChunk(chunk *pb.FileChunk) error {
-// 	path := filepath.Join(s.watchDir, chunk.FileName)
-// 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer file.Close()
-
-// 	_, err = file.Write(chunk.ChunkData)
-// 	return err
-// }
-
-// // Delete a file from the local directory
-// func (s *SyncServer) deleteFile(fileName string) error {
-// 	path := filepath.Join(s.watchDir, fileName)
-// 	return os.Remove(path)
-// }
-
-// // Rename a file in the local directory
-// func (s *SyncServer) renameFile(oldName, newName string) error {
-// 	oldPath := filepath.Join(s.watchDir, oldName)
-// 	newPath := filepath.Join(s.watchDir, newName)
-// 	return os.Rename(oldPath, newPath)
-// }

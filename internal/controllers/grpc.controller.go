@@ -40,7 +40,7 @@ func (s *FileSyncServer) SyncFiles(stream pb.FileSyncService_SyncFilesServer) er
 		}
 	}
 }
-func (s *FileSyncServer) State(req *pb.Empty, stream grpc.ServerStreamingServer[pb.StateRes]) error {
+func (s *FileSyncServer) State(req *pb.StateReq, stream grpc.ServerStreamingServer[pb.StateRes]) error {
 	log.Infof("Received file list")
 
 	localFiles, err := pkg.GetFileList()

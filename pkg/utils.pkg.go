@@ -1,11 +1,14 @@
 package pkg
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+
+	pb "go_sync/filesync"
 
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
@@ -106,4 +109,34 @@ func ContainsConn(slice []*grpc.ClientConn, conn *grpc.ClientConn) bool {
 		}
 	}
 	return false
+}
+
+func SyncStream(ip string) (grpc.BidiStreamingClient[pb.FileSyncRequest, pb.FileSyncResponse], error) {
+	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
+		return nil, err
+	}
+	client := pb.NewFileSyncServiceClient(conn)
+	stream, err := client.SyncFiles(context.Background())
+	if err != nil {
+		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+		return nil, err
+	}
+	return stream, nil
+}
+
+func StateStream(ip string) (grpc.ServerStreamingClient[pb.StateRes], error) {
+	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
+		return nil, err
+	}
+	client := pb.NewFileSyncServiceClient(conn)
+	stream, err := client.State(context.Background(), &pb.StateReq{})
+	if err != nil {
+		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+		return nil, err
+	}
+	return stream, nil
 }

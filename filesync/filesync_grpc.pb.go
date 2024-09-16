@@ -28,7 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FileSyncServiceClient interface {
 	SyncFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse], error)
-	State(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateRes], error)
+	State(ctx context.Context, in *StateReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateRes], error)
 }
 
 type fileSyncServiceClient struct {
@@ -52,13 +52,13 @@ func (c *fileSyncServiceClient) SyncFiles(ctx context.Context, opts ...grpc.Call
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_SyncFilesClient = grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse]
 
-func (c *fileSyncServiceClient) State(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateRes], error) {
+func (c *fileSyncServiceClient) State(ctx context.Context, in *StateReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateRes], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[1], FileSyncService_State_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[Empty, StateRes]{ClientStream: stream}
+	x := &grpc.GenericClientStream[StateReq, StateRes]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ type FileSyncService_StateClient = grpc.ServerStreamingClient[StateRes]
 // for forward compatibility.
 type FileSyncServiceServer interface {
 	SyncFiles(grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]) error
-	State(*Empty, grpc.ServerStreamingServer[StateRes]) error
+	State(*StateReq, grpc.ServerStreamingServer[StateRes]) error
 	mustEmbedUnimplementedFileSyncServiceServer()
 }
 
@@ -90,7 +90,7 @@ type UnimplementedFileSyncServiceServer struct{}
 func (UnimplementedFileSyncServiceServer) SyncFiles(grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method SyncFiles not implemented")
 }
-func (UnimplementedFileSyncServiceServer) State(*Empty, grpc.ServerStreamingServer[StateRes]) error {
+func (UnimplementedFileSyncServiceServer) State(*StateReq, grpc.ServerStreamingServer[StateRes]) error {
 	return status.Errorf(codes.Unimplemented, "method State not implemented")
 }
 func (UnimplementedFileSyncServiceServer) mustEmbedUnimplementedFileSyncServiceServer() {}
@@ -122,11 +122,11 @@ func _FileSyncService_SyncFiles_Handler(srv interface{}, stream grpc.ServerStrea
 type FileSyncService_SyncFilesServer = grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]
 
 func _FileSyncService_State_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Empty)
+	m := new(StateReq)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(FileSyncServiceServer).State(m, &grpc.GenericServerStream[Empty, StateRes]{ServerStream: stream})
+	return srv.(FileSyncServiceServer).State(m, &grpc.GenericServerStream[StateReq, StateRes]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
