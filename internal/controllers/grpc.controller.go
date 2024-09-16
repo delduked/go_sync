@@ -66,10 +66,25 @@ func (s *FileSyncServer) State(req *pb.StateReq, stream grpc.ServerStreamingServ
 // save saves a file chunk to disk
 func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
 	filePath := filepath.Clean(req.FileName)
-	log.Printf("Saving file chunk: %s", filePath)
+	log.Printf("Receiving file chunk: %s, Chunk %d of %d", filePath, req.ChunkNumber, req.TotalChunks)
 
-	// Add the file to SyncedFiles
+	// Add the file to SyncedFiles (mark as in progress)
 	s.PeerData.markFileAsInProgress(filePath)
+
+	// If this is the last chunk, mark the file as complete and don't write further
+	if req.ChunkNumber == req.TotalChunks {
+		log.Printf("Final chunk received. File %s transfer complete.", filePath)
+		s.PeerData.markFileAsComplete(filePath)
+
+		// Send acknowledgment back to the client
+		err := stream.SendMsg(&pb.FileSyncResponse{
+			Message: fmt.Sprintf("File %s fully transferred", filePath),
+		})
+		if err != nil {
+			log.Errorf("Error sending final acknowledgment: %v", err)
+		}
+		return // Don't write the chunk since the transfer is complete
+	}
 
 	// Open the file in append mode
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -88,15 +103,9 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 		return
 	}
 
-	// Check if the transfer is complete
-	if req.ChunkNumber == req.TotalChunks {
-		log.Printf("File %s transfer complete", filePath)
-		s.PeerData.markFileAsComplete(filePath)
-	}
-
-	// Send an acknowledgment back to the client
+	// Send acknowledgment for the current chunk
 	err = stream.SendMsg(&pb.FileSyncResponse{
-		Message: "File chunk saved successfully",
+		Message: fmt.Sprintf("Chunk %d/%d saved for file %s", req.ChunkNumber, req.TotalChunks, filePath),
 	})
 	if err != nil {
 		log.Errorf("Error sending acknowledgment: %v", err)
