@@ -2,7 +2,8 @@ syntax = "proto3";
 option go_package = "filesync/;filesync";
 
 service FileSyncService {
-  rpc SyncFiles (stream FileSyncRequest) returns (stream FileSyncResponse);
+  rpc SyncFiles(stream FileSyncRequest) returns (stream FileSyncResponse);
+  rpc State(StateReq) returns (stream StateRes);
 }
 
 message FileSyncRequest {
@@ -17,6 +18,10 @@ message FileSyncRequest {
   }
 }
 
+message StateReq {}
+message StateRes {
+  repeated string message = 1;
+}
 message FileChunk {
     string file_name = 1;
     bytes chunk_data = 2;

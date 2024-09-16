@@ -8,12 +8,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
-	"google.golang.org/grpc"
 )
 
 // validateService checks if the discovered service contains the required TXT records
 func ValidateService(txtRecords []string) bool {
-	// Iterate over the TXT records to find the expected service identifier
 	for _, txt := range txtRecords {
 		if strings.Contains(txt, "service_id=go_sync") {
 			return true
@@ -51,8 +49,8 @@ func GetLocalIPAndSubnet() (string, string, error) {
 		for _, addr := range addrs {
 			ip, netIPNet := parseIPNet(addr)
 			if ip != nil && ip.IsGlobalUnicast() && ip.To4() != nil {
-				ones, _ := netIPNet.Mask.Size()                            // Get the ones (mask size)
-				subnet := fmt.Sprintf("%s/%d", netIPNet.IP.String(), ones) // Use only the ones value
+				ones, _ := netIPNet.Mask.Size()                            
+				subnet := fmt.Sprintf("%s/%d", netIPNet.IP.String(), ones) 
 				return ip.String(), subnet, nil
 			}
 		}
@@ -70,6 +68,7 @@ func parseIPNet(addr net.Addr) (net.IP, *net.IPNet) {
 	}
 	return nil, nil
 }
+
 func GetFileList() ([]string, error) {
 	var files []string
 	err := filepath.Walk("./sync_folder", func(path string, info os.FileInfo, err error) error {
@@ -89,7 +88,7 @@ func GetFileList() ([]string, error) {
 	return files, nil
 }
 
-func ContainsString[T *grpc.ClientConn | string](slice []T, conn T) bool {
+func ContainsString[T string](slice []T, conn T) bool {
 	for _, item := range slice {
 		if item == conn {
 			return true
@@ -98,12 +97,25 @@ func ContainsString[T *grpc.ClientConn | string](slice []T, conn T) bool {
 	return false
 }
 
-func ContainsConn(slice []*grpc.ClientConn, conn *grpc.ClientConn) bool {
-	for _, item := range slice {
-		log.Infof("Checking connection %s against %s", item.Target(), conn.Target())
-		if item.Target() == conn.Target() {
-			return true
+// SubtractValues subtracts the values at each index of the first array from the second array and returns the difference as an array of strings
+//
+// Example: SubtractValues([]string{"a", "b", "c"}, []string{"a", "c"}) -> []string{"b"}
+func SubtractValues(firstParam []string, secondParam []string) []string {
+	first := make(map[string]struct{})
+	for _, file := range firstParam {
+		first[file] = struct{}{}
+	}
+
+	second := make(map[string]struct{})
+	for _, file := range secondParam {
+		second[file] = struct{}{}
+	}
+
+	var result []string
+	for file := range second {
+		if _, ok := first[file]; !ok {
+			result = append(result, file)
 		}
 	}
-	return false
+	return result
 }
