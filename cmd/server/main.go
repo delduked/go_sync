@@ -39,7 +39,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Start(&wg, ctx); err != nil {
+		if err := server.Start(&wg, ctx, sharedData); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()

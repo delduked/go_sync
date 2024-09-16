@@ -117,10 +117,7 @@ func (sd *SharedData) PeriodicCheck(ctx context.Context, wg *sync.WaitGroup) {
 							Poll: &pb.Poll{
 								Message: poll,
 							}}})
-					if err != nil {
-						log.Errorf("Error sending poll to %s: %v", conn.Target(), err)
-						return
-					}
+
 					log.Infof("Sent periodic poll to %s: %s", conn.Target(), poll)
 				}(ip)
 			}

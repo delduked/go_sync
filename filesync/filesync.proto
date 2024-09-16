@@ -18,8 +18,10 @@ message FileSyncRequest {
 }
 
 message FileChunk {
-  string file_name = 1;
-  bytes chunk_data = 2;
+    string file_name = 1;
+    bytes chunk_data = 2;
+    int32 chunk_number = 3;
+    int32 total_chunks = 4;
 }
 
 message FileDelete {
