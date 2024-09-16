@@ -124,7 +124,7 @@ func (s *State) EventHandler(event fsnotify.Event) {
 		// delete file on peer
 		log.Printf("File deleted: %s", event.Name)
 		s.sharedData.markFileAsInProgress(event.Name)
-		go s.streamDelete(event.Name)
+		s.streamDelete(event.Name)
 	}
 
 	s.sharedData.markFileAsComplete(event.Name)
