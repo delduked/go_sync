@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "go_sync/filesync"
+	"go_sync/internal/clients"
 	"go_sync/pkg"
 
 	"github.com/charmbracelet/log" // Bubble Tea log package for colorful logs
@@ -266,7 +267,7 @@ func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
 					go func(ip string) {
 						log.Infof("Checking missing files with %s", ip)
 
-						stream, err := pkg.SyncStream(ip)
+						stream, err := clients.SyncStream(ip)
 						if err != nil {
 							log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
 							return
@@ -339,7 +340,7 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 		case <-ticker.C:
 			for peer, conn := range s.sharedData.Clients {
 
-				stream, err := pkg.StateStream(conn)
+				stream, err := clients.StateStream(conn)
 				if err != nil {
 					log.Printf("Error starting stream to peer %v: %v", peer, err)
 					continue
@@ -368,7 +369,7 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 					localFileSet[file] = struct{}{}
 				}
 
-				go func(){
+				go func() {
 					for file := range localFileSet {
 						if _, ok := peerFileMap[file]; !ok {
 							s.startStreamingFile(file)
@@ -385,7 +386,7 @@ func (s *SyncServer) streamDelete(fileName string) {
 
 	for peer, conn := range s.sharedData.Clients {
 
-		stream, err := pkg.SyncStream(conn)
+		stream, err := clients.SyncStream(conn)
 		if err != nil {
 			log.Printf("Error starting stream to peer %v: %v", peer, err)
 			continue
