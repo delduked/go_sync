@@ -192,20 +192,13 @@ func (s *State) sendChunkToPeers(fileName string, chunk []byte, offset, fileSize
 	log.Printf("Sending chunk of file %s at offset %d", fileName, offset)
 
 	s.sharedData.mu.RLock()
-	clients := make([]string, len(s.sharedData.Clients))
-	copy(clients, s.sharedData.Clients)
+	peers := make([]string, len(s.sharedData.Clients))
+	copy(peers, s.sharedData.Clients)
 	s.sharedData.mu.RUnlock()
 
-	for _, ip := range clients {
-		conn, err := grpc.Dial(ip, grpc.WithInsecure())
-		if err != nil {
-			log.Printf("Failed to connect to gRPC server at %s: %v", ip, err)
-			continue
-		}
-		defer conn.Close()
+	for _, ip := range peers {
 
-		client := pb.NewFileSyncServiceClient(conn)
-		stream, err := client.SyncFiles(context.Background())
+		stream, err := clients.SyncStream(ip)
 		if err != nil {
 			log.Printf("Error starting stream to peer %s: %v", ip, err)
 			continue
