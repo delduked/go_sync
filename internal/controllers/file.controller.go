@@ -119,7 +119,7 @@ func (s *State) EventHandler(event fsnotify.Event) {
 	// 	// If file has been modified, start streaming new chunks file on peer
 	// 	log.Printf("File modified: %s", event.Name)
 	// 	s.startStreamingFileInChunks(event.Name)
-		// s.startStreamingFile(event.Name)
+	// s.startStreamingFile(event.Name)
 	case event.Has(fsnotify.Remove):
 		// delete file on peer
 		log.Printf("File deleted: %s", event.Name)
@@ -168,6 +168,7 @@ func (s *State) startStreamingFileInChunks(filePath string) {
 
 			if newFileInfo.Size() == fileInfo.Size() {
 				// File size has not changed, likely done
+				s.sharedData.markFileAsComplete(filePath)
 				log.Printf("File %s fully streamed", filePath)
 				break
 			} else {
