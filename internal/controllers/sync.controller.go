@@ -350,7 +350,31 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 					log.Printf("Error receiving response from %v: %v", peer, err)
 					continue
 				}
-				log.Printf("Received response from %v: %v", peer, res.Message)
+				filesFromPeer := res.Message
+				log.Printf("Received response from %v: %v", peer, filesFromPeer)
+
+				localFiles, err := pkg.GetFileList()
+				if err != nil {
+					log.Errorf("Error getting file list: %v", err)
+				}
+
+				peerFileMap := make(map[string]struct{})
+				for _, file := range filesFromPeer {
+					peerFileMap[file] = struct{}{}
+				}
+
+				localFileSet := make(map[string]struct{})
+				for _, file := range localFiles {
+					localFileSet[file] = struct{}{}
+				}
+
+				go func(){
+					for file := range localFileSet {
+						if _, ok := peerFileMap[file]; !ok {
+							s.startStreamingFile(file)
+						}
+					}
+				}()
 			}
 		}
 	}
