@@ -115,10 +115,10 @@ func (s *State) EventHandler(event fsnotify.Event) {
 		log.Printf("File created: %s", event.Name)
 		s.startStreamingFileInChunks(event.Name)
 		// s.startStreamingFile(event.Name)
-	case event.Has(fsnotify.Write):
-		// If file has been modified, start streaming new chunks file on peer
-		log.Printf("File modified: %s", event.Name)
-		s.startStreamingFileInChunks(event.Name)
+	// case event.Has(fsnotify.Write):
+	// 	// If file has been modified, start streaming new chunks file on peer
+	// 	log.Printf("File modified: %s", event.Name)
+	// 	s.startStreamingFileInChunks(event.Name)
 		// s.startStreamingFile(event.Name)
 	case event.Has(fsnotify.Remove):
 		// delete file on peer
