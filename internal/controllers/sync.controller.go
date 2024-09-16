@@ -364,7 +364,7 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 					}
 
 					for _, file := range peerMissingFiles {
-						s.startStreamingFile(file)
+						go s.startStreamingFile(file)
 					}
 				}()
 			}
