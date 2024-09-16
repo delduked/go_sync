@@ -216,7 +216,6 @@ func (s *State) sendChunkToPeers(fileName string, chunk []byte, chunkNumber, tot
 			log.Printf("Failed to connect to gRPC server at %s: %v", ip, err)
 			continue
 		}
-		defer conn.Close()
 
 		client := pb.NewFileSyncServiceClient(conn)
 		stream, err := client.SyncFiles(context.Background())
