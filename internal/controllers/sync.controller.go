@@ -70,8 +70,8 @@ func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context, sd *SharedDa
 		return fmt.Errorf("failed to start directory watcher: %v", err)
 	}
 
-	wg.Add(1)
-	go s.syncMissingFiles(ctx, wg)
+	// wg.Add(1)
+	// go s.syncMissingFiles(ctx, wg)
 
 	wg.Add(1)
 	go s.List(ctx, wg)
@@ -224,108 +224,102 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunks [][]byte, tota
 				break
 			}
 		}
-
-		// Close the stream after sending all chunks
-		// err = stream.CloseSend()
-		// if err != nil {
-		// 	log.Printf("Error closing stream to peer %s: %v", ip, err)
-		// }
 	}
 }
 
-func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
+// func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
+// 	defer wg.Done()
 
-	ticker := time.NewTicker(20 * time.Second)
-	defer ticker.Stop()
+// 	ticker := time.NewTicker(20 * time.Second)
+// 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Warn("Shutting down list check...")
-			return
-		case <-ticker.C:
-			log.Info("Starting syncMissingFiles routine...")
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			log.Warn("Shutting down list check...")
+// 			return
+// 		case <-ticker.C:
+// 			log.Info("Starting syncMissingFiles routine...")
 
-			localFiles, err := pkg.GetFileList()
-			if err != nil {
-				log.Errorf("Failed to get local file list: %v", err)
-				return
-			}
+// 			localFiles, err := pkg.GetFileList()
+// 			if err != nil {
+// 				log.Errorf("Failed to get local file list: %v", err)
+// 				return
+// 			}
 
-			log.Infof("Local files found: %v", localFiles)
+// 			log.Infof("Local files found: %v", localFiles)
 
-			// Check if there are any clients connected
-			log.Infof("Number of connected clients: %d", len(s.sharedData.Clients))
-			for _, conn := range s.sharedData.Clients {
-				log.Infof("Client found: %s", conn)
-			}
+// 			// Check if there are any clients connected
+// 			log.Infof("Number of connected clients: %d", len(s.sharedData.Clients))
+// 			for _, conn := range s.sharedData.Clients {
+// 				log.Infof("Client found: %s", conn)
+// 			}
 
-			if len(s.sharedData.Clients) != 0 {
-				log.Info("Starting list check with peers...")
-				for _, ip := range s.sharedData.Clients {
-					go func(ip string) {
-						log.Infof("Checking missing files with %s", ip)
+// 			if len(s.sharedData.Clients) != 0 {
+// 				log.Info("Starting list check with peers...")
+// 				for _, ip := range s.sharedData.Clients {
+// 					go func(ip string) {
+// 						log.Infof("Checking missing files with %s", ip)
 
-						stream, err := clients.SyncStream(ip)
-						if err != nil {
-							log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
-							return
-						}
+// 						stream, err := clients.SyncStream(ip)
+// 						if err != nil {
+// 							log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
+// 							return
+// 						}
 
-						log.Infof("Opened stream with %s to check missing files", ip)
+// 						log.Infof("Opened stream with %s to check missing files", ip)
 
-						go func() {
-							for {
-								response, err := stream.Recv()
-								if err == io.EOF {
-									log.Warnf("Stream closed by %s", ip)
-									break
-								}
-								if err != nil {
-									log.Errorf("Error receiving response from %s: %v", ip, err)
-									break
-								}
+// 						go func() {
+// 							for {
+// 								response, err := stream.Recv()
+// 								if err == io.EOF {
+// 									log.Warnf("Stream closed by %s", ip)
+// 									break
+// 								}
+// 								if err != nil {
+// 									log.Errorf("Error receiving response from %s: %v", ip, err)
+// 									break
+// 								}
 
-								if len(response.Filestosend) != 0 {
-									log.Infof("Peer %s is missing files: %v", ip, response.Filestosend)
+// 								if len(response.Filestosend) != 0 {
+// 									log.Infof("Peer %s is missing files: %v", ip, response.Filestosend)
 
-									for _, file := range response.Filestosend {
-										s.sharedData.markFileAsInProgress(file)
+// 									for _, file := range response.Filestosend {
+// 										s.sharedData.markFileAsInProgress(file)
 
-										log.Infof("Sending file %s to peer %s", file, ip)
-										go s.startStreamingFile(file)
+// 										log.Infof("Sending file %s to peer %s", file, ip)
+// 										go s.startStreamingFile(file)
 
-										s.sharedData.markFileAsComplete(file)
-									}
-								} else {
-									log.Infof("Peer %s is currently in sync. No files to sync", ip)
-								}
-							}
-						}()
+// 										s.sharedData.markFileAsComplete(file)
+// 									}
+// 								} else {
+// 									log.Infof("Peer %s is currently in sync. No files to sync", ip)
+// 								}
+// 							}
+// 						}()
 
-						// Send local files to peer
-						err = stream.Send(&pb.FileSyncRequest{
-							Request: &pb.FileSyncRequest_FileList{
-								FileList: &pb.FileList{
-									Files: localFiles,
-								},
-							},
-						})
-						if err != nil {
-							log.Errorf("Error sending list to %s: %v", ip, err)
-							return
-						}
-						log.Infof("Sent list to %s: %v", ip, localFiles)
+// 						// Send local files to peer
+// 						err = stream.Send(&pb.FileSyncRequest{
+// 							Request: &pb.FileSyncRequest_FileList{
+// 								FileList: &pb.FileList{
+// 									Files: localFiles,
+// 								},
+// 							},
+// 						})
+// 						if err != nil {
+// 							log.Errorf("Error sending list to %s: %v", ip, err)
+// 							return
+// 						}
+// 						log.Infof("Sent list to %s: %v", ip, localFiles)
 
-					}(ip)
-				}
-			} else {
-				log.Warn("No connected clients to sync with")
-			}
-		}
-	}
-}
+//						}(ip)
+//					}
+//				} else {
+//					log.Warn("No connected clients to sync with")
+//				}
+//			}
+//		}
+//	}
 func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -338,42 +332,39 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 			log.Warn("Shutting down list check...")
 			return
 		case <-ticker.C:
+
+			localFiles, err := pkg.GetFileList()
+			if err != nil {
+				log.Errorf("Error getting file list: %v", err)
+				return
+			}
+
 			for peer, conn := range s.sharedData.Clients {
-
-				stream, err := clients.StateStream(conn)
-				if err != nil {
-					log.Printf("Error starting stream to peer %v: %v", peer, err)
-					continue
-				}
-
-				res, err := stream.Recv()
-				if err != nil {
-					log.Printf("Error receiving response from %v: %v", peer, err)
-					continue
-				}
-				filesFromPeer := res.Message
-				log.Printf("Received response from %v: %v", peer, filesFromPeer)
-
-				localFiles, err := pkg.GetFileList()
-				if err != nil {
-					log.Errorf("Error getting file list: %v", err)
-				}
-
-				peerFileMap := make(map[string]struct{})
-				for _, file := range filesFromPeer {
-					peerFileMap[file] = struct{}{}
-				}
-
-				localFileSet := make(map[string]struct{})
-				for _, file := range localFiles {
-					localFileSet[file] = struct{}{}
-				}
-
 				go func() {
-					for file := range localFileSet {
-						if _, ok := peerFileMap[file]; !ok {
-							s.startStreamingFile(file)
-						}
+					stream, err := clients.StateStream(conn)
+					if err != nil {
+						log.Printf("Error starting stream to peer %v: %v", peer, err)
+						return
+					}
+
+					res, err := stream.Recv()
+					if err != nil {
+						log.Printf("Error receiving response from %v: %v", peer, err)
+						return
+					}
+
+					filesFromPeer := res.Message
+					log.Printf("Files on peer: %v: %v", peer, filesFromPeer)
+					log.Printf("Files on host: %v", localFiles)
+
+					peerMissingFiles := pkg.SubtractValues(filesFromPeer, localFiles)
+
+					for _, file := range peerMissingFiles {
+						s.sharedData.markFileAsInProgress(file)
+					}
+
+					for _, file := range peerMissingFiles {
+						s.startStreamingFile(file)
 					}
 				}()
 			}
@@ -381,7 +372,6 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-// Handle file delete event
 func (s *SyncServer) streamDelete(fileName string) {
 
 	for peer, conn := range s.sharedData.Clients {
@@ -412,7 +402,8 @@ func (s *SyncServer) streamDelete(fileName string) {
 		err = stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileDelete{
 				FileDelete: &pb.FileDelete{
-					FileName: fileName},
+					FileName: fileName,
+				},
 			},
 		})
 		if err != nil {
