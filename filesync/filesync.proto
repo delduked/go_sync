@@ -41,6 +41,7 @@ message FileRename {
 message FileSyncResponse {
   string message = 1;
   repeated string filestosend = 2;
+  string filedeleted = 3;
 }
 
 message Acknowledgment { 

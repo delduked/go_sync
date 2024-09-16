@@ -293,9 +293,11 @@ func (s *State) streamDelete(fileName string) {
 					log.Printf("Stream closed by %v", peer)
 					break
 				}
-
-				s.sharedData.markFileAsComplete(fileName)
 				log.Printf("Received response from %v: %v", peer, recv.Message)
+				if recv.Filedeleted != fileName {
+					s.sharedData.markFileAsComplete(fileName)
+					break
+				}
 			}
 		}()
 

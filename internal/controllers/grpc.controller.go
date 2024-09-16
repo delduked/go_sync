@@ -129,6 +129,7 @@ func (s *FileSyncServer) delete(req *pb.FileDelete, stream grpc.BidiStreamingSer
 	// Send an acknowledgment back to the client
 	err = stream.Send(&pb.FileSyncResponse{
 		Message: fmt.Sprintf("File %s deleted successfully", req.FileName),
+		Filedeleted: filePath,
 	})
 	if err != nil {
 		log.Errorf("Error sending acknowledgment: %v", err)
