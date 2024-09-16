@@ -123,7 +123,6 @@ func (s *State) EventHandler(event fsnotify.Event) {
 	case event.Has(fsnotify.Remove):
 		// delete file on peer
 		log.Printf("File deleted: %s", event.Name)
-		s.sharedData.markFileAsInProgress(event.Name)
 		s.streamDelete(event.Name)
 	}
 
