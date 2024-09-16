@@ -135,87 +135,110 @@ func (s *State) EventHandler(event fsnotify.Event) {
 func (s *State) startStreamingFileInChunks(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		log.Printf("Error opening file %s: %v", filePath, err)
+		log.Print("Error opening file:", err)
+		s.sharedData.markFileAsComplete(filePath)
 		return
 	}
 	defer file.Close()
 
-	fileInfo, err := file.Stat()
-	if err != nil {
-		log.Printf("Error getting file info for %s: %v", filePath, err)
-		return
-	}
-
-	var offset int64 = 0
 	chunkSize := int64(32 * 1024) // 32KB chunks
+	currentOffset := int64(0)
+	idleTimeout := 2 * time.Second // Time to wait without new data before considering the transfer complete
+	lastSize := int64(0)
+	lastChangeTime := time.Now()
 
-	// Stream file in chunks
 	for {
-		buffer := make([]byte, chunkSize)
-		bytesRead, err := file.ReadAt(buffer, offset)
+		// Check the current file size
+		fileInfo, err := file.Stat()
+		if err != nil {
+			log.Print("Error getting file info:", err)
+			break
+		}
+		fileSize := fileInfo.Size()
 
-		if err != nil && err != io.EOF {
-			log.Printf("Error reading chunk from file %s: %v", filePath, err)
-			return
+		if fileSize == lastSize {
+			// If file size has not changed for `idleTimeout`, consider it complete
+			if time.Since(lastChangeTime) > idleTimeout {
+				log.Printf("File size has stabilized, transfer is complete")
+				s.sharedData.markFileAsComplete(filePath)
+				break
+			}
+		} else {
+			lastSize = fileSize
+			lastChangeTime = time.Now()
 		}
 
-		if bytesRead == 0 {
-			// File is not growing, check if writing is done
-			newFileInfo, err := file.Stat()
-			if err != nil {
-				log.Printf("Error getting updated file info for %s: %v", filePath, err)
-				return
-			}
-
-			if newFileInfo.Size() == fileInfo.Size() {
-				// File size has not changed, likely done
-				log.Printf("File %s fully streamed", filePath)
-				break
-			} else {
-				// File is still growing, update file size info and continue
-				fileInfo = newFileInfo
-			}
-
-			time.Sleep(1 * time.Second) // Wait before checking for more chunks
+		if currentOffset >= fileSize {
+			// No more data to read yet, wait for more data to be written
+			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 
-		// Send the chunk to peers
-		s.sendChunkToPeers(filePath, buffer[:bytesRead], offset, fileInfo.Size())
+		// Read and send the next chunk
+		buffer := make([]byte, chunkSize)
+		file.Seek(currentOffset, 0)
+		n, err := file.Read(buffer)
+		if err != nil && err != io.EOF {
+			log.Print("Error reading file:", err)
+			break
+		}
+		if n == 0 {
+			// Reached the end of the file, wait for more data
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
 
-		// Update offset for next chunk
-		offset += int64(bytesRead)
+		chunkData := make([]byte, n)
+		copy(chunkData, buffer[:n])
+
+		currentChunk := int(currentOffset/chunkSize) + 1
+		totalChunks := int((fileSize + chunkSize - 1) / chunkSize)
+
+		// Send the chunk to peers
+		s.sendChunkToPeers(filePath, chunkData, currentChunk, totalChunks)
+
+		// Update the current offset to the next chunk
+		currentOffset += int64(n)
 	}
 }
 
-func (s *State) sendChunkToPeers(fileName string, chunk []byte, offset, fileSize int64) {
-	log.Printf("Sending chunk of file %s at offset %d", fileName, offset)
+func (s *State) sendChunkToPeers(fileName string, chunk []byte, chunkNumber, totalChunks int) {
+	log.Printf("Sending chunk %d/%d of file %s", chunkNumber, totalChunks, fileName)
 
 	s.sharedData.mu.RLock()
-	peers := make([]string, len(s.sharedData.Clients))
-	copy(peers, s.sharedData.Clients)
+	clients := make([]string, len(s.sharedData.Clients))
+	copy(clients, s.sharedData.Clients)
 	s.sharedData.mu.RUnlock()
 
-	for _, ip := range peers {
+	for _, ip := range clients {
+		conn, err := grpc.Dial(ip, grpc.WithInsecure())
+		if err != nil {
+			log.Printf("Failed to connect to gRPC server at %s: %v", ip, err)
+			continue
+		}
+		defer conn.Close()
 
-		stream, err := clients.SyncStream(ip)
+		client := pb.NewFileSyncServiceClient(conn)
+		stream, err := client.SyncFiles(context.Background())
 		if err != nil {
 			log.Printf("Error starting stream to peer %s: %v", ip, err)
 			continue
 		}
 
+		// Send the chunk with current chunk number and total chunks
 		err = stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileChunk{
 				FileChunk: &pb.FileChunk{
 					FileName:    fileName,
 					ChunkData:   chunk,
-					ChunkNumber: int32(offset / int64(len(chunk))),
-					TotalChunks: int32((fileSize + int64(len(chunk)) - 1) / int64(len(chunk))),
+					ChunkNumber: int32(chunkNumber),
+					TotalChunks: int32(totalChunks),
 				},
 			},
 		})
 		if err != nil {
 			log.Printf("Error sending chunk to peer %s: %v", ip, err)
+			break
 		}
 	}
 }
