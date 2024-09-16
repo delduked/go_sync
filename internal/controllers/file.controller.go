@@ -135,100 +135,87 @@ func (s *State) EventHandler(event fsnotify.Event) {
 func (s *State) startStreamingFileInChunks(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		log.Print("Error opening file:", err)
-		s.sharedData.markFileAsComplete(filePath)
+		log.Printf("Error opening file %s: %v", filePath, err)
 		return
 	}
 	defer file.Close()
 
-	// Dynamically track file size and chunk size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("Error getting file info for %s: %v", filePath, err)
+		return
+	}
+
+	var offset int64 = 0
 	chunkSize := int64(32 * 1024) // 32KB chunks
-	currentOffset := int64(0)
 
+	// Stream file in chunks
 	for {
-		fileInfo, err := file.Stat()
-		if err != nil {
-			log.Print("Error getting file info:", err)
-			break
-		}
-
-		fileSize := fileInfo.Size()
-
-		// Calculate the total chunks based on the current size
-		totalChunks := int((fileSize + chunkSize - 1) / chunkSize)
-		log.Printf("Current file size: %d bytes, Total chunks (so far): %d", fileSize, totalChunks)
-
 		buffer := make([]byte, chunkSize)
-		file.Seek(currentOffset, 0)
+		bytesRead, err := file.ReadAt(buffer, offset)
 
-		// Read a chunk at a time
-		n, err := file.Read(buffer)
 		if err != nil && err != io.EOF {
-			log.Print("Error reading file:", err)
-			break
-		}
-		if n == 0 {
-			// If EOF, stop the loop
-			log.Printf("Finished reading all chunks")
-			break
+			log.Printf("Error reading chunk from file %s: %v", filePath, err)
+			return
 		}
 
-		chunkData := make([]byte, n)
-		copy(chunkData, buffer[:n])
+		if bytesRead == 0 {
+			// File is not growing, check if writing is done
+			newFileInfo, err := file.Stat()
+			if err != nil {
+				log.Printf("Error getting updated file info for %s: %v", filePath, err)
+				return
+			}
 
-		// Send the chunk to peers with current chunk number and total chunks
-		currentChunk := int(currentOffset/chunkSize) + 1
-		s.sendChunkToPeers(filePath, chunkData, currentChunk, totalChunks)
+			if newFileInfo.Size() == fileInfo.Size() {
+				// File size has not changed, likely done
+				log.Printf("File %s fully streamed", filePath)
+				break
+			} else {
+				// File is still growing, update file size info and continue
+				fileInfo = newFileInfo
+			}
 
-		currentOffset += int64(n)
-
-		// Sleep a bit to allow the file to grow (if it's still being written)
-		time.Sleep(500 * time.Millisecond)
-
-		// Check if the file size has stabilized (i.e., the file writing has completed)
-		newFileInfo, err := file.Stat()
-		if err != nil {
-			log.Print("Error getting file info:", err)
-			break
+			time.Sleep(1 * time.Second) // Wait before checking for more chunks
+			continue
 		}
 
-		if newFileInfo.Size() == fileSize {
-			log.Printf("File size has stabilized at %d bytes, finishing transfer", fileSize)
-			s.sharedData.markFileAsComplete(filePath)
-			break
-		}
+		// Send the chunk to peers
+		s.sendChunkToPeers(filePath, buffer[:bytesRead], offset, fileInfo.Size())
+
+		// Update offset for next chunk
+		offset += int64(bytesRead)
 	}
 }
 
-func (s *State) sendChunkToPeers(fileName string, chunk []byte, chunkNumber, totalChunks int) {
-	log.Printf("Sending chunk %d/%d of file %s", chunkNumber, totalChunks, fileName)
+func (s *State) sendChunkToPeers(fileName string, chunk []byte, offset, fileSize int64) {
+	log.Printf("Sending chunk of file %s at offset %d", fileName, offset)
 
 	s.sharedData.mu.RLock()
-	peer := make([]string, len(s.sharedData.Clients))
-	copy(peer, s.sharedData.Clients)
+	peers := make([]string, len(s.sharedData.Clients))
+	copy(peers, s.sharedData.Clients)
 	s.sharedData.mu.RUnlock()
 
-	for _, ip := range peer {
+	for _, ip := range peers {
+
 		stream, err := clients.SyncStream(ip)
 		if err != nil {
 			log.Printf("Error starting stream to peer %s: %v", ip, err)
 			continue
 		}
 
-		// Send the chunk along with the chunk number and totalChunks
 		err = stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileChunk{
 				FileChunk: &pb.FileChunk{
 					FileName:    fileName,
 					ChunkData:   chunk,
-					ChunkNumber: int32(chunkNumber),
-					TotalChunks: int32(totalChunks),
+					ChunkNumber: int32(offset / int64(len(chunk))),
+					TotalChunks: int32((fileSize + int64(len(chunk)) - 1) / int64(len(chunk))),
 				},
 			},
 		})
 		if err != nil {
 			log.Printf("Error sending chunk to peer %s: %v", ip, err)
-			break
 		}
 	}
 }
