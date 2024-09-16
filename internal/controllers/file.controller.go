@@ -18,9 +18,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-var debounceMap = make(map[string]time.Time)
-var debounceDuration = 2 * time.Second // Adjust as needed
-
 type State struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
@@ -110,46 +107,28 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 
 // Handle file events such as create, modify, delete, rename
 func (s *State) EventHandler(event fsnotify.Event) {
-    fileName := event.Name
+	s.sharedData.markFileAsInProgress(event.Name)
 
-    // Check if file is already being synced and in progress
-    if s.sharedData.isFileInProgress(fileName) {
-        log.Printf("File %s is still being synced. Ignoring further modifications.", fileName)
-        return
-    }
+	switch {
+	case event.Has(fsnotify.Create):
+		// instant file creation on peer
+		log.Printf("File created: %s", event.Name)
+		s.startStreamingFileInChunks(event.Name)
+		// s.startStreamingFile(event.Name)
+	case event.Has(fsnotify.Write):
+		// If file has been modified, start streaming new chunks file on peer
+		log.Printf("File modified: %s", event.Name)
+		s.startStreamingFileInChunks(event.Name)
+		// s.startStreamingFile(event.Name)
+	case event.Has(fsnotify.Remove):
+		// delete file on peer
+		log.Printf("File deleted: %s", event.Name)
+		s.sharedData.markFileAsInProgress(event.Name)
+		s.streamDelete(event.Name)
+	}
 
-    // Debouncing logic
-    now := time.Now()
-    if lastModified, ok := debounceMap[fileName]; ok && now.Sub(lastModified) < debounceDuration {
-        log.Printf("Debouncing event for file: %s", fileName)
-        return
-    }
-    debounceMap[fileName] = now
-
-    // Mark the file as in progress
-    s.sharedData.markFileAsInProgress(fileName)
-
-    switch {
-    case event.Has(fsnotify.Create):
-        log.Printf("File created: %s", fileName)
-        s.startStreamingFileInChunks(fileName)
-    case event.Has(fsnotify.Write):
-        log.Printf("File modified: %s", fileName)
-        s.startStreamingFileInChunks(fileName)
-    case event.Has(fsnotify.Remove):
-        log.Printf("File deleted: %s", fileName)
-        s.streamDelete(fileName)
-    }
+	s.sharedData.markFileAsComplete(event.Name)
 }
-
-func (pd *PeerData) isFileInProgress(fileName string) bool {
-    pd.mu.RLock()
-    defer pd.mu.RUnlock()
-
-    // Check if the file is already marked as in progress
-    return pkg.ContainsString(pd.SyncedFiles, fileName)
-}
-
 
 // Start streaming a file to all peers
 // Stream the file as it's being written

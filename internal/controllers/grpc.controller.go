@@ -65,47 +65,52 @@ func (s *FileSyncServer) State(req *pb.StateReq, stream grpc.ServerStreamingServ
 // service method
 // save saves a file chunk to disk
 func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
-    filePath := filepath.Clean(req.FileName)
-    log.Printf("Saving file chunk: %s", filePath)
+	filePath := filepath.Clean(req.FileName)
+	log.Printf("Receiving file chunk: %s, Chunk %d of %d", filePath, req.ChunkNumber, req.TotalChunks)
 
-    // Ensure the file is marked as in-progress
-    if !s.PeerData.isFileInProgress(filePath) {
-        log.Errorf("File %s is not marked as in-progress. Ignoring save.", filePath)
-        return
-    }
+	// Add the file to SyncedFiles (mark as in progress)
+	s.PeerData.markFileAsInProgress(filePath)
 
-    // Open the file in append mode
-    file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        log.Errorf("Error opening file: %v", err)
-        s.PeerData.markFileAsComplete(filePath)
-        return
-    }
-    defer file.Close()
+	// If this is the last chunk, mark the file as complete and don't write further
+	if req.ChunkNumber == req.TotalChunks {
+		log.Printf("Final chunk received. File %s transfer complete.", filePath)
+		s.PeerData.markFileAsComplete(filePath)
 
-    // Write the chunk to the file
-    _, err = file.Write(req.ChunkData)
-    if err != nil {
-        log.Errorf("Error writing file: %v", err)
-        s.PeerData.markFileAsComplete(filePath)
-        return
-    }
+		// Send acknowledgment back to the client
+		err := stream.SendMsg(&pb.FileSyncResponse{
+			Message: fmt.Sprintf("File %s fully transferred", filePath),
+		})
+		if err != nil {
+			log.Errorf("Error sending final acknowledgment: %v", err)
+		}
+		return // Don't write the chunk since the transfer is complete
+	}
 
-    // Check if the transfer is complete
-    if req.ChunkNumber >= req.TotalChunks {
-        log.Printf("File %s transfer complete", filePath)
-        s.PeerData.markFileAsComplete(filePath)
-    }
+	// Open the file in append mode
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Errorf("Error opening file: %v", err)
+		s.PeerData.markFileAsComplete(filePath)
+		return
+	}
+	defer file.Close()
 
-    // Send an acknowledgment back to the client
-    err = stream.SendMsg(&pb.FileSyncResponse{
-        Message: "File chunk saved successfully",
-    })
-    if err != nil {
-        log.Errorf("Error sending acknowledgment: %v", err)
-    }
+	// Write the chunk to the file
+	_, err = file.Write(req.ChunkData)
+	if err != nil {
+		log.Errorf("Error writing file: %v", err)
+		s.PeerData.markFileAsComplete(filePath)
+		return
+	}
+
+	// Send acknowledgment for the current chunk
+	err = stream.SendMsg(&pb.FileSyncResponse{
+		Message: fmt.Sprintf("Chunk %d/%d saved for file %s", req.ChunkNumber, req.TotalChunks, filePath),
+	})
+	if err != nil {
+		log.Errorf("Error sending acknowledgment: %v", err)
+	}
 }
-
 
 // service method
 // delete deletes a file from disk
