@@ -212,7 +212,7 @@ func (s *State) sendChunkToPeers(fileName string, chunk []byte, chunkNumber, tot
 		stream, err := clients.SyncStream(ip)
 		if err != nil {
 			log.Printf("Error starting stream to peer %s: %v", ip, err)
-			break
+			continue
 		}
 
 		// Send the chunk along with the chunk number and totalChunks
