@@ -13,34 +13,29 @@ import (
 	"go_sync/internal/clients"
 	"go_sync/pkg"
 
-	"github.com/charmbracelet/log" // Bubble Tea log package for colorful logs
+	"github.com/charmbracelet/log"
 	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
 )
 
-// SyncServer holds the configuration for the synchronization server
-type SyncServer struct {
+type State struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 	watchDir   string
 	port       string
-	sharedData *SharedData
+	sharedData *PeerData
 }
 
-// Configuration
-// 32 KB buffer size for file chunks
-const chunkSize = 32 * 1024
-
-// NewSyncServer creates a new SyncServer with default settings
-func NewSyncServer(sharedData *SharedData, watchDir, port string) (*SyncServer, error) {
+// NewState creates a new State with default settings
+func StateServer(sharedData *PeerData, watchDir, port string) (*State, error) {
 	// Create TCP listener
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on port %s: %v", port, err)
 	}
 
-	// Initialize SyncServer
-	server := &SyncServer{
+	// Initialize State
+	server := &State{
 		grpcServer: grpc.NewServer(),
 		listener:   listener,
 		watchDir:   watchDir,
@@ -51,36 +46,30 @@ func NewSyncServer(sharedData *SharedData, watchDir, port string) (*SyncServer, 
 	return server, nil
 }
 
-// Start starts the gRPC server and file watcher
-func (s *SyncServer) Start(wg *sync.WaitGroup, ctx context.Context, sd *SharedData) error {
+// Start starts the gRPC server and file state listener
+func (s *State) Start(wg *sync.WaitGroup, ctx context.Context, sd *PeerData) error {
 	defer wg.Done()
 
-	// Start gRPC server in a goroutine
 	go func() {
 		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{SharedData: sd})
+		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{PeerData: sd})
 		if err := s.grpcServer.Serve(s.listener); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
 		}
 	}()
 
-	// Start file watcher
-	_, err := s.watchDirectory()
+	_, err := s.listen()
 	if err != nil {
 		return fmt.Errorf("failed to start directory watcher: %v", err)
 	}
 
-	// wg.Add(1)
-	// go s.syncMissingFiles(ctx, wg)
-
 	wg.Add(1)
-	go s.List(ctx, wg)
+	go s.State(ctx, wg)
 
 	return nil
 }
 
-// WatchDirectory monitors the directory for file system events (create, modify, delete, rename)
-func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
+func (s *State) listen() (*fsnotify.Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -99,9 +88,8 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 				if !ok {
 					return
 				}
-				// Ignore events for files in SyncedFiles
 				if !pkg.ContainsString(s.sharedData.SyncedFiles, event.Name) {
-					s.handleFileEvent(event)
+					s.EventHandler(event)
 				} else {
 					log.Printf("Ignoring event for %s; file is currently being synchronized", event.Name)
 				}
@@ -118,7 +106,7 @@ func (s *SyncServer) watchDirectory() (*fsnotify.Watcher, error) {
 }
 
 // Handle file events such as create, modify, delete, rename
-func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
+func (s *State) EventHandler(event fsnotify.Event) {
 	s.sharedData.markFileAsInProgress(event.Name)
 
 	switch {
@@ -137,12 +125,11 @@ func (s *SyncServer) handleFileEvent(event fsnotify.Event) {
 		s.streamDelete(event.Name)
 	}
 
-	// After processing, remove the file from SyncedFiles
 	s.sharedData.markFileAsComplete(event.Name)
 }
 
 // Start streaming a file to all peers
-func (s *SyncServer) startStreamingFile(filePath string) {
+func (s *State) startStreamingFile(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Print("Error opening file:", err)
@@ -185,8 +172,7 @@ func (s *SyncServer) startStreamingFile(filePath string) {
 	s.sharedData.markFileAsComplete(filePath)
 }
 
-// Send file chunk to peers using gRPC stream
-func (s *SyncServer) sendFileChunkToPeers(fileName string, chunks [][]byte, totalChunks int) {
+func (s *State) sendFileChunkToPeers(fileName string, chunks [][]byte, totalChunks int) {
 	s.sharedData.mu.RLock()
 	clients := make([]string, len(s.sharedData.Clients))
 	copy(clients, s.sharedData.Clients)
@@ -227,100 +213,7 @@ func (s *SyncServer) sendFileChunkToPeers(fileName string, chunks [][]byte, tota
 	}
 }
 
-// func (s *SyncServer) syncMissingFiles(ctx context.Context, wg *sync.WaitGroup) {
-// 	defer wg.Done()
-
-// 	ticker := time.NewTicker(20 * time.Second)
-// 	defer ticker.Stop()
-
-// 	for {
-// 		select {
-// 		case <-ctx.Done():
-// 			log.Warn("Shutting down list check...")
-// 			return
-// 		case <-ticker.C:
-// 			log.Info("Starting syncMissingFiles routine...")
-
-// 			localFiles, err := pkg.GetFileList()
-// 			if err != nil {
-// 				log.Errorf("Failed to get local file list: %v", err)
-// 				return
-// 			}
-
-// 			log.Infof("Local files found: %v", localFiles)
-
-// 			// Check if there are any clients connected
-// 			log.Infof("Number of connected clients: %d", len(s.sharedData.Clients))
-// 			for _, conn := range s.sharedData.Clients {
-// 				log.Infof("Client found: %s", conn)
-// 			}
-
-// 			if len(s.sharedData.Clients) != 0 {
-// 				log.Info("Starting list check with peers...")
-// 				for _, ip := range s.sharedData.Clients {
-// 					go func(ip string) {
-// 						log.Infof("Checking missing files with %s", ip)
-
-// 						stream, err := clients.SyncStream(ip)
-// 						if err != nil {
-// 							log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
-// 							return
-// 						}
-
-// 						log.Infof("Opened stream with %s to check missing files", ip)
-
-// 						go func() {
-// 							for {
-// 								response, err := stream.Recv()
-// 								if err == io.EOF {
-// 									log.Warnf("Stream closed by %s", ip)
-// 									break
-// 								}
-// 								if err != nil {
-// 									log.Errorf("Error receiving response from %s: %v", ip, err)
-// 									break
-// 								}
-
-// 								if len(response.Filestosend) != 0 {
-// 									log.Infof("Peer %s is missing files: %v", ip, response.Filestosend)
-
-// 									for _, file := range response.Filestosend {
-// 										s.sharedData.markFileAsInProgress(file)
-
-// 										log.Infof("Sending file %s to peer %s", file, ip)
-// 										go s.startStreamingFile(file)
-
-// 										s.sharedData.markFileAsComplete(file)
-// 									}
-// 								} else {
-// 									log.Infof("Peer %s is currently in sync. No files to sync", ip)
-// 								}
-// 							}
-// 						}()
-
-// 						// Send local files to peer
-// 						err = stream.Send(&pb.FileSyncRequest{
-// 							Request: &pb.FileSyncRequest_FileList{
-// 								FileList: &pb.FileList{
-// 									Files: localFiles,
-// 								},
-// 							},
-// 						})
-// 						if err != nil {
-// 							log.Errorf("Error sending list to %s: %v", ip, err)
-// 							return
-// 						}
-// 						log.Infof("Sent list to %s: %v", ip, localFiles)
-
-//						}(ip)
-//					}
-//				} else {
-//					log.Warn("No connected clients to sync with")
-//				}
-//			}
-//		}
-//	}
-func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
+func (s *State) State(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	ticker := time.NewTicker(20 * time.Second)
@@ -354,7 +247,7 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 					}
 
 					filesFromPeer := res.Message
-					log.Printf("Files on peer: %v: %v", peer, filesFromPeer)
+					log.Printf("Files on peer: %v: %v", conn, filesFromPeer)
 					log.Printf("Files on host: %v", localFiles)
 
 					peerMissingFiles := pkg.SubtractValues(filesFromPeer, localFiles)
@@ -372,7 +265,7 @@ func (s *SyncServer) List(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-func (s *SyncServer) streamDelete(fileName string) {
+func (s *State) streamDelete(fileName string) {
 
 	for peer, conn := range s.sharedData.Clients {
 
