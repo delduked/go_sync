@@ -14,7 +14,8 @@ import (
 
 type FileSyncServer struct {
 	pb.UnimplementedFileSyncServiceServer
-	PeerData *PeerData
+	PeerData      *PeerData
+	LocalMetaData *Meta
 }
 
 // GRPC Route
@@ -59,6 +60,38 @@ func (s *FileSyncServer) State(req *pb.StateReq, stream grpc.ServerStreamingServ
 		log.Errorf("Error sending state response: %v", err)
 		return err
 	}
+	return nil
+}
+
+func (s *FileSyncServer) MetaData(stream pb.FileSyncService_MetaDataServer) error {
+
+	req, err := stream.Recv()
+	if err == io.EOF {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Meta data request for file: %s", req.FileName)
+
+	if _, ok := s.LocalMetaData.MetaData[req.FileName]; !ok {
+		return nil
+	}
+
+	for pos, hash := range s.LocalMetaData.MetaData[req.FileName].Chunks {
+		err := stream.Send(&pb.FileMetaData{
+			FileName:    req.FileName,
+			ChunkNumber: pos,
+			ChunkHash:   hash,
+			ChunkSize:   s.LocalMetaData.MetaData[req.FileName].ChunkSize,
+		})
+		if err != nil {
+			log.Errorf("Error sending state response: %v", err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -128,7 +161,7 @@ func (s *FileSyncServer) delete(req *pb.FileDelete, stream grpc.BidiStreamingSer
 
 	// Send an acknowledgment back to the client
 	err = stream.Send(&pb.FileSyncResponse{
-		Message: fmt.Sprintf("File %s deleted successfully", req.FileName),
+		Message:     fmt.Sprintf("File %s deleted successfully", req.FileName),
 		Filedeleted: filePath,
 	})
 	if err != nil {

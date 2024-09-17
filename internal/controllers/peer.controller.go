@@ -70,7 +70,9 @@ func (pd *PeerData) PeriodicCheck(ctx context.Context, wg *sync.WaitGroup) {
 						Request: &pb.FileSyncRequest_Poll{
 							Poll: &pb.Poll{
 								Message: poll,
-							}}})
+							},
+						},
+					})
 
 					log.Infof("Sent periodic poll to %s: %s", conn.Target(), poll)
 				}(ip)

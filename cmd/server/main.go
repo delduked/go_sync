@@ -35,10 +35,12 @@ func main() {
 		log.Fatalf("Failed to create sync server: %v", err)
 	}
 
+	metaData := controllers.NewMeta(peerData)
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Start(&wg, ctx, peerData); err != nil {
+		if err := server.Start(&wg, ctx, peerData, metaData); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()

@@ -42,3 +42,32 @@ func StateStream(ip string) (grpc.ServerStreamingClient[pb.StateRes], error) {
 	}
 	return stream, nil
 }
+
+func ModifyStream(ip string) (grpc.BidiStreamingClient[pb.FileChunk, pb.FileSyncResponse], error) {
+	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
+		return nil, err
+	}
+	client := pb.NewFileSyncServiceClient(conn)
+	stream, err := client.ModifyFiles(context.Background())
+	if err != nil {
+		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+		return nil, err
+	}
+	return stream, nil
+}
+func MetaDataStream(ip string) (grpc.BidiStreamingClient[pb.MetaDataReq, pb.FileMetaData], error) {
+	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
+		return nil, err
+	}
+	client := pb.NewFileSyncServiceClient(conn)
+	stream, err := client.MetaData(context.Background())
+	if err != nil {
+		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+		return nil, err
+	}
+	return stream, nil
+}

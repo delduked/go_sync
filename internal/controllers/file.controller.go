@@ -47,12 +47,12 @@ func StateServer(sharedData *PeerData, watchDir, port string) (*State, error) {
 }
 
 // Start starts the gRPC server and file state listener
-func (s *State) Start(wg *sync.WaitGroup, ctx context.Context, sd *PeerData) error {
+func (s *State) Start(wg *sync.WaitGroup, ctx context.Context, sd *PeerData, md *Meta) error {
 	defer wg.Done()
 
 	go func() {
 		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{PeerData: sd})
+		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{PeerData: sd, LocalMetaData: md})
 		if err := s.grpcServer.Serve(s.listener); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
 		}
@@ -107,7 +107,6 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 	return watcher, nil
 }
 
-
 // Handle file events such as create, modify, delete, rename
 func (s *State) EventHandler(event fsnotify.Event) {
 	fileName := event.Name
@@ -134,15 +133,15 @@ func (s *State) EventHandler(event fsnotify.Event) {
 		log.Printf("File created: %s", event.Name)
 		s.startStreamingFileInChunks(event.Name)
 		// s.startStreamingFile(event.Name)
-	// case event.Has(fsnotify.Write):
-	// 	// If file has been modified, start streaming new chunks file on peer
-	// 	log.Printf("File modified: %s", event.Name)
-	// 	s.startStreamingFileInChunks(event.Name)
-	// s.startStreamingFile(event.Name)
-	// case event.Has(fsnotify.Remove):
-	// 	// delete file on peer
-	// 	log.Printf("File deleted: %s", event.Name)
-	// 	s.streamDelete(event.Name)
+		// case event.Has(fsnotify.Write):
+		// 	// If file has been modified, start streaming new chunks file on peer
+		// 	log.Printf("File modified: %s", event.Name)
+		// 	s.startStreamingFileInChunks(event.Name)
+		// s.startStreamingFile(event.Name)
+		// case event.Has(fsnotify.Remove):
+		// 	// delete file on peer
+		// 	log.Printf("File deleted: %s", event.Name)
+		// 	s.streamDelete(event.Name)
 	}
 
 	s.sharedData.markFileAsComplete(event.Name)
