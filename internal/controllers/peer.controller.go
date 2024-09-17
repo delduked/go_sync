@@ -172,8 +172,10 @@ func (pd *PeerData) IsFileInProgress(fileName string) bool {
 
 	for _, file := range pd.SyncedFiles {
 		if file == fileName {
+			log.Infof("File %s is in progress", fileName)
 			return true
 		}
 	}
+	log.Infof("File %s is not in progress", fileName)
 	return false
 }

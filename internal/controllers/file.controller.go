@@ -185,6 +185,8 @@ func (s *State) startStreamingFileInChunks(filePath string) {
 			if newFileInfo.Size() == fileInfo.Size() {
 				// File size has not changed, likely done
 				log.Printf("File %s fully streamed", filePath)
+				s.sharedData.markFileAsComplete(filePath)
+				s.sharedData.IsFileInProgress(filePath)
 				break
 			} else {
 				// File is still growing, update file size info and continue
@@ -288,44 +290,44 @@ func (s *State) State(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (s *State) streamDelete(fileName string) {
-    log.Printf("Processing delete for file: %s", fileName)
+	log.Printf("Processing delete for file: %s", fileName)
 
-    // Ensure we mark the file as completed, to stop any further transfers
-    s.sharedData.markFileAsComplete(fileName)
+	// Ensure we mark the file as completed, to stop any further transfers
+	s.sharedData.markFileAsComplete(fileName)
 
-    for peer, ip := range s.sharedData.Clients {
-        stream, err := clients.SyncStream(ip)
-        if err != nil {
-            log.Printf("Error starting stream to peer %v: %v", peer, err)
-            continue
-        }
+	for peer, ip := range s.sharedData.Clients {
+		stream, err := clients.SyncStream(ip)
+		if err != nil {
+			log.Printf("Error starting stream to peer %v: %v", peer, err)
+			continue
+		}
 
-        go func() {
-            for {
-                recv, err := stream.Recv()
-                if err != nil {
-                    log.Printf("Error receiving response from %v: %v", peer, err)
-                    break
-                }
-                if err == io.EOF {
-                    log.Printf("Stream closed by %v", peer)
-                    break
-                }
+		go func() {
+			for {
+				recv, err := stream.Recv()
+				if err != nil {
+					log.Printf("Error receiving response from %v: %v", peer, err)
+					break
+				}
+				if err == io.EOF {
+					log.Printf("Stream closed by %v", peer)
+					break
+				}
 
-                log.Printf("Received response from %v: %v", peer, recv.Message)
-            }
-        }()
+				log.Printf("Received response from %v: %v", peer, recv.Message)
+			}
+		}()
 
-        // Send delete request to peer
-        err = stream.Send(&pb.FileSyncRequest{
-            Request: &pb.FileSyncRequest_FileDelete{
-                FileDelete: &pb.FileDelete{
-                    FileName: fileName,
-                },
-            },
-        })
-        if err != nil {
-            log.Printf("Error sending delete request to peer %v: %v", peer, err)
-        }
-    }
+		// Send delete request to peer
+		err = stream.Send(&pb.FileSyncRequest{
+			Request: &pb.FileSyncRequest_FileDelete{
+				FileDelete: &pb.FileDelete{
+					FileName: fileName,
+				},
+			},
+		})
+		if err != nil {
+			log.Printf("Error sending delete request to peer %v: %v", peer, err)
+		}
+	}
 }
