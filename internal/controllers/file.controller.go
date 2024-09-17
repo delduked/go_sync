@@ -107,6 +107,7 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 	return watcher, nil
 }
 
+
 // Handle file events such as create, modify, delete, rename
 func (s *State) EventHandler(event fsnotify.Event) {
 	fileName := event.Name
