@@ -303,7 +303,7 @@ func (s *State) streamDelete(fileName string) {
 
 		stream, err := clients.SyncStream(ip)
 		if err != nil {
-			log.Printf("Error starting stream to peer %v: %v", peer, err)
+			log.Printf("Error starting stream to peer %v: %v", ip, err)
 			continue
 		}
 
@@ -311,15 +311,15 @@ func (s *State) streamDelete(fileName string) {
 			for {
 				recv, err := stream.Recv()
 				if err != nil {
-					log.Printf("Error receiving response from %v: %v", peer, err)
+					log.Printf("Error receiving response from %v: %v", ip, err)
 					break
 				}
 				if err == io.EOF {
-					log.Printf("Stream closed by %v", peer)
+					log.Printf("Stream closed by %v", ip)
 					break
 				}
 
-				log.Printf("Received response from %v: %v", peer, recv.Message)
+				log.Printf("Received response from %v: %v", ip, recv.Message)
 			}
 		}()
 
