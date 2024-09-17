@@ -90,6 +90,8 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 				}
 				if !pkg.ContainsString(s.sharedData.SyncedFiles, event.Name) {
 					s.EventHandler(event)
+				} else if event.Has(fsnotify.Remove) {
+					s.streamDelete(event.Name)
 				} else {
 					log.Printf("Ignoring event for %s; file is currently being synchronized", event.Name)
 				}
@@ -136,10 +138,10 @@ func (s *State) EventHandler(event fsnotify.Event) {
 	// 	log.Printf("File modified: %s", event.Name)
 	// 	s.startStreamingFileInChunks(event.Name)
 	// s.startStreamingFile(event.Name)
-	case event.Has(fsnotify.Remove):
-		// delete file on peer
-		log.Printf("File deleted: %s", event.Name)
-		s.streamDelete(event.Name)
+	// case event.Has(fsnotify.Remove):
+	// 	// delete file on peer
+	// 	log.Printf("File deleted: %s", event.Name)
+	// 	s.streamDelete(event.Name)
 	}
 
 	s.sharedData.markFileAsComplete(event.Name)
