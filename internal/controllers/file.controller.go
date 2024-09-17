@@ -188,6 +188,8 @@ func (s *State) startStreamingFileInChunks(filePath string) {
 			if newFileInfo.Size() == fileInfo.Size() {
 				// File size has not changed, likely done
 				log.Printf("File %s fully streamed", filePath)
+				s.sharedData.markFileAsComplete(filePath)
+				s.sharedData.IsFileInProgress(filePath)
 				break
 			} else {
 				// File is still growing, update file size info and continue
