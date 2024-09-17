@@ -111,8 +111,7 @@ func (s *State) EventHandler(event fsnotify.Event) {
 
 	// Check if the file is being deleted first
 	if event.Has(fsnotify.Remove) {
-		log.Printf("File deleted: %s", fileName)
-		s.sharedData.markFileAsComplete(fileName) // Mark it complete to ensure no further actions
+		log.Printf("Delete event for file: %s", fileName)
 		s.streamDelete(fileName)
 		return
 	}
@@ -290,12 +289,14 @@ func (s *State) State(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (s *State) streamDelete(fileName string) {
-	log.Printf("Processing delete for file: %s", fileName)
 
-	// Ensure we mark the file as completed, to stop any further transfers
-	s.sharedData.markFileAsComplete(fileName)
+	peers := make([]string, 0)
+	s.sharedData.mu.RLock()
+	copy(peers, s.sharedData.Clients)
+	s.sharedData.mu.RUnlock()
 
-	for peer, ip := range s.sharedData.Clients {
+	for peer, ip := range peers {
+		log.Printf("Deleting file %v on peer %v", fileName, ip)
 		stream, err := clients.SyncStream(ip)
 		if err != nil {
 			log.Printf("Error starting stream to peer %v: %v", peer, err)
