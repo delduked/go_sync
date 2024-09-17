@@ -107,6 +107,22 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 
 // Handle file events such as create, modify, delete, rename
 func (s *State) EventHandler(event fsnotify.Event) {
+	fileName := event.Name
+
+	// Check if the file is being deleted first
+	if event.Has(fsnotify.Remove) {
+		log.Printf("File deleted: %s", fileName)
+		s.sharedData.markFileAsComplete(fileName) // Mark it complete to ensure no further actions
+		s.streamDelete(fileName)
+		return
+	}
+
+	// Handle other events like create and modify
+	if s.sharedData.IsFileInProgress(fileName) {
+		log.Printf("File %s is still being synced. Ignoring further modifications.", fileName)
+		return
+	}
+
 	s.sharedData.markFileAsInProgress(event.Name)
 
 	switch {
@@ -272,43 +288,44 @@ func (s *State) State(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (s *State) streamDelete(fileName string) {
+    log.Printf("Processing delete for file: %s", fileName)
 
-	for peer, conn := range s.sharedData.Clients {
+    // Ensure we mark the file as completed, to stop any further transfers
+    s.sharedData.markFileAsComplete(fileName)
 
-		stream, err := clients.SyncStream(conn)
-		if err != nil {
-			log.Printf("Error starting stream to peer %v: %v", peer, err)
-			continue
-		}
+    for peer, ip := range s.sharedData.Clients {
+        stream, err := clients.SyncStream(ip)
+        if err != nil {
+            log.Printf("Error starting stream to peer %v: %v", peer, err)
+            continue
+        }
 
-		go func() {
-			for {
-				recv, err := stream.Recv()
-				if err != nil {
-					log.Printf("Error receiving response from %v: %v", peer, err)
-					break
-				}
-				if err == io.EOF {
-					log.Printf("Stream closed by %v", peer)
-					break
-				}
-				log.Printf("Received response from %v: %v", peer, recv.Message)
-				if recv.Filedeleted != fileName {
-					s.sharedData.markFileAsComplete(fileName)
-					break
-				}
-			}
-		}()
+        go func() {
+            for {
+                recv, err := stream.Recv()
+                if err != nil {
+                    log.Printf("Error receiving response from %v: %v", peer, err)
+                    break
+                }
+                if err == io.EOF {
+                    log.Printf("Stream closed by %v", peer)
+                    break
+                }
 
-		err = stream.Send(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileDelete{
-				FileDelete: &pb.FileDelete{
-					FileName: fileName,
-				},
-			},
-		})
-		if err != nil {
-			log.Printf("Error sending delete request to peer %v: %v", peer, err)
-		}
-	}
+                log.Printf("Received response from %v: %v", peer, recv.Message)
+            }
+        }()
+
+        // Send delete request to peer
+        err = stream.Send(&pb.FileSyncRequest{
+            Request: &pb.FileSyncRequest_FileDelete{
+                FileDelete: &pb.FileDelete{
+                    FileName: fileName,
+                },
+            },
+        })
+        if err != nil {
+            log.Printf("Error sending delete request to peer %v: %v", peer, err)
+        }
+    }
 }

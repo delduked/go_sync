@@ -16,13 +16,13 @@ import (
 
 type PeerData struct {
 	mu          sync.RWMutex
-	Clients     []string 
-	SyncedFiles []string 
-	WatchDir    string   
+	Clients     []string
+	SyncedFiles []string
+	WatchDir    string
 }
 
 func (pd *PeerData) AddClientConnection(ip string, port string) error {
-	pd.mu.Lock() 
+	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
 	conn, err := grpc.NewClient(ip+":"+port, grpc.WithInsecure(), grpc.WithBlock())
@@ -165,4 +165,15 @@ func (pd *PeerData) markFileAsComplete(fileName string) {
 			break
 		}
 	}
+}
+func (pd *PeerData) IsFileInProgress(fileName string) bool {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+
+	for _, file := range pd.SyncedFiles {
+		if file == fileName {
+			return true
+		}
+	}
+	return false
 }
