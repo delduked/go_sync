@@ -170,33 +170,26 @@ func (m *Meta) PeerMetaData(wg *sync.WaitGroup, ctx context.Context) {
 
 func (m *Meta) getPeerFileMetaData(file string) map[string]MetaData {
 	var peerFileMetaData []*pb.FileMetaData
+	metas := make(map[string]MetaData)
 	var wg sync.WaitGroup
-	metas := make(map[string]MetaData, 0)
+
 	for _, ip := range m.PeerData.Clients {
-
-		stream, err := clients.MetaDataStream(ip)
-		if err != nil {
-			log.Errorf("failed to open stream for metadata request on %s: %v", ip, err)
-			continue
-		}
-
-		wg.Add(1)
-
-
-		// i messed this up
-		// this needs to send a request first and then receiv ethe message
-		// because this is a bidi stream
-
+		wg.Add(1) // Add to the waitgroup before starting the goroutine
 
 		go func(ip string) {
-			defer wg.Done()
+			defer wg.Done() // Ensure Done is called when the goroutine finishes
+
+			stream, err := clients.MetaDataStream(ip)
+			if err != nil {
+				log.Errorf("failed to open stream for metadata request on %s: %v", ip, err)
+				return
+			}
+
 			for {
-				recv := stream.Send(&pb.MetaDataReq{
-					FileName: file,
-				})
+				recv, err := stream.Recv()
 				if err != nil {
 					if err == io.EOF {
-						log.Printf("Stream closed by peer %s", ip)
+						break
 					} else {
 						log.Errorf("Failed to receive metadata from peer %s: %v", ip, err)
 					}
@@ -205,23 +198,42 @@ func (m *Meta) getPeerFileMetaData(file string) map[string]MetaData {
 
 				log.Printf("Received metadata from peer %s: %v", ip, recv)
 
-				m.mu.Lock()
+				m.mu.Lock() // Locking here ensures thread safety
 				peerFileMetaData = append(peerFileMetaData, recv)
+
+				// Retrieve the MetaData from the map, update it, and put it back
+				metaData := metas[ip]
+
+				// Initialize Chunks map if it's not initialized
+				if metaData.Chunks == nil {
+					metaData.Chunks = make(map[int32]string)
+				}
+
+				// Update Chunks and ChunkSize
+				metaData.Chunks[recv.ChunkNumber] = recv.ChunkHash
+				metaData.ChunkSize = recv.ChunkSize
+
+				// Store updated MetaData back in the map
+				metas[ip] = metaData
+
 				m.mu.Unlock()
-				metas[ip] = MetaData{}
+			}
+
+			// Send the metadata request after receiving
+			err = stream.Send(&pb.MetaDataReq{
+				FileName: file,
+			})
+
+			if err != nil {
+				log.Errorf("failed to send metadata request to peer %s: %v", ip, err)
+				return
 			}
 		}(ip)
 	}
 
+	// Wait for all goroutines to finish
 	wg.Wait()
 
-	for _, value := range metas {
-		for _, v := range peerFileMetaData {
-			value.Chunks[v.ChunkNumber] = v.ChunkHash
-			value.ChunkSize = v.ChunkSize
-		}
-	}
-	
 	return metas
 }
 
