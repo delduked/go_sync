@@ -326,7 +326,7 @@ type StateRes struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Message []string `protobuf:"bytes,1,rep,name=message,proto3" json:"message,omitempty"` // this is only for a list of files if State is supplied in the StateReq
+	Message []string `protobuf:"bytes,1,rep,name=message,proto3" json:"message,omitempty"` // For file listing if needed
 }
 
 func (x *StateRes) Reset() {
