@@ -51,7 +51,7 @@ func (m *Meta) AddFileMetaData(file string, chunk []byte, offset int64) {
 	}
 }
 
-func (m *Meta) UpdateFile(file string, chunkData []byte, offset int32, chunkSize int64) {
+func (m *Meta) UpdateFileChunks(file string, chunkData []byte, offset int32, chunkSize int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -152,42 +152,77 @@ func (m *Meta) PeerMetaData(wg *sync.WaitGroup, ctx context.Context) {
 			}
 
 			for _, file := range localFiles {
-				m.getPeerFileMetaData(file)
+
+				peerChunks := m.getPeerFileMetaData(file)
+				missingChunks := m.missingChunks(file, peerChunks)
+
+				if len(missingChunks) > 0 {
+					err := m.ModifyPeerFile(file, missingChunks)
+					if err != nil {
+						log.Errorf("failed to modify peer file: %v", err)
+					}
+				}
 			}
 
 		}
 	}
 }
 
-func (m *Meta) getPeerFileMetaData(file string) {
+func (m *Meta) getPeerFileMetaData(file string) map[string]MetaData {
+	var peerFileMetaData []*pb.FileMetaData
+	var wg sync.WaitGroup
+	metas := make(map[string]MetaData, 0)
 	for _, ip := range m.PeerData.Clients {
 
 		stream, err := clients.MetaDataStream(ip)
 		if err != nil {
 			log.Errorf("failed to open stream for metadata request on %s: %v", ip, err)
-			return
+			continue
 		}
-		go func() {
-			for {
-				recv, err := stream.Recv()
-				if err != nil {
-					log.Errorf("failed to receive metadata from peer %s: %v", ip, err)
-					return
-				}
-	
-				if err == io.EOF {
-					log.Printf("stream closed by peer %s", ip)
-					return
-				}
-	
-				log.Printf("received metadata from peer %s: %v", ip, recv)
-			}
-		}()
 
-		err = stream.Send(&pb.MetaDataReq{
-			FileName: file,
-		})
+		wg.Add(1)
+
+
+		// i messed this up
+		// this needs to send a request first and then receiv ethe message
+		// because this is a bidi stream
+
+
+		go func(ip string) {
+			defer wg.Done()
+			for {
+				recv := stream.Send(&pb.MetaDataReq{
+					FileName: file,
+				})
+				if err != nil {
+					if err == io.EOF {
+						log.Printf("Stream closed by peer %s", ip)
+					} else {
+						log.Errorf("Failed to receive metadata from peer %s: %v", ip, err)
+					}
+					return
+				}
+
+				log.Printf("Received metadata from peer %s: %v", ip, recv)
+
+				m.mu.Lock()
+				peerFileMetaData = append(peerFileMetaData, recv)
+				m.mu.Unlock()
+				metas[ip] = MetaData{}
+			}
+		}(ip)
 	}
+
+	wg.Wait()
+
+	for _, value := range metas {
+		for _, v := range peerFileMetaData {
+			value.Chunks[v.ChunkNumber] = v.ChunkHash
+			value.ChunkSize = v.ChunkSize
+		}
+	}
+	
+	return metas
 }
 
 func (m *Meta) sendChunkToPeer(chunk []byte, chunkPos int32, chunkSize int64) {
