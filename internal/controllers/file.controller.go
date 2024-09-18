@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"go_sync/conf"
 	pb "go_sync/filesync"
 	"go_sync/internal/clients"
 	"go_sync/pkg"
@@ -164,11 +165,11 @@ func (s *State) startStreamingFileInChunks(filePath string) {
 	}
 
 	var offset int64 = 0
-	chunkSize := int64(32 * 1024) // 32KB chunks
+	
 
 	// Stream file in chunks
 	for {
-		buffer := make([]byte, chunkSize)
+		buffer := make([]byte, conf.ChunkSize)
 		bytesRead, err := file.ReadAt(buffer, offset)
 
 		if err != nil && err != io.EOF {
