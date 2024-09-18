@@ -31,7 +31,7 @@ const (
 type FileSyncServiceClient interface {
 	SyncFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileSyncRequest, FileSyncResponse], error)
 	State(ctx context.Context, in *StateReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateRes], error)
-	ModifyFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileChunk, FileSyncResponse], error)
+	ModifyFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MetaDataChunk, FileSyncResponse], error)
 	MetaData(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MetaDataReq, FileMetaData], error)
 }
 
@@ -75,18 +75,18 @@ func (c *fileSyncServiceClient) State(ctx context.Context, in *StateReq, opts ..
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_StateClient = grpc.ServerStreamingClient[StateRes]
 
-func (c *fileSyncServiceClient) ModifyFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileChunk, FileSyncResponse], error) {
+func (c *fileSyncServiceClient) ModifyFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MetaDataChunk, FileSyncResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[2], FileSyncService_ModifyFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[FileChunk, FileSyncResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[MetaDataChunk, FileSyncResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type FileSyncService_ModifyFilesClient = grpc.BidiStreamingClient[FileChunk, FileSyncResponse]
+type FileSyncService_ModifyFilesClient = grpc.BidiStreamingClient[MetaDataChunk, FileSyncResponse]
 
 func (c *fileSyncServiceClient) MetaData(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MetaDataReq, FileMetaData], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -107,7 +107,7 @@ type FileSyncService_MetaDataClient = grpc.BidiStreamingClient[MetaDataReq, File
 type FileSyncServiceServer interface {
 	SyncFiles(grpc.BidiStreamingServer[FileSyncRequest, FileSyncResponse]) error
 	State(*StateReq, grpc.ServerStreamingServer[StateRes]) error
-	ModifyFiles(grpc.BidiStreamingServer[FileChunk, FileSyncResponse]) error
+	ModifyFiles(grpc.BidiStreamingServer[MetaDataChunk, FileSyncResponse]) error
 	MetaData(grpc.BidiStreamingServer[MetaDataReq, FileMetaData]) error
 	mustEmbedUnimplementedFileSyncServiceServer()
 }
@@ -125,7 +125,7 @@ func (UnimplementedFileSyncServiceServer) SyncFiles(grpc.BidiStreamingServer[Fil
 func (UnimplementedFileSyncServiceServer) State(*StateReq, grpc.ServerStreamingServer[StateRes]) error {
 	return status.Errorf(codes.Unimplemented, "method State not implemented")
 }
-func (UnimplementedFileSyncServiceServer) ModifyFiles(grpc.BidiStreamingServer[FileChunk, FileSyncResponse]) error {
+func (UnimplementedFileSyncServiceServer) ModifyFiles(grpc.BidiStreamingServer[MetaDataChunk, FileSyncResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method ModifyFiles not implemented")
 }
 func (UnimplementedFileSyncServiceServer) MetaData(grpc.BidiStreamingServer[MetaDataReq, FileMetaData]) error {
@@ -171,11 +171,11 @@ func _FileSyncService_State_Handler(srv interface{}, stream grpc.ServerStream) e
 type FileSyncService_StateServer = grpc.ServerStreamingServer[StateRes]
 
 func _FileSyncService_ModifyFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(FileSyncServiceServer).ModifyFiles(&grpc.GenericServerStream[FileChunk, FileSyncResponse]{ServerStream: stream})
+	return srv.(FileSyncServiceServer).ModifyFiles(&grpc.GenericServerStream[MetaDataChunk, FileSyncResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type FileSyncService_ModifyFilesServer = grpc.BidiStreamingServer[FileChunk, FileSyncResponse]
+type FileSyncService_ModifyFilesServer = grpc.BidiStreamingServer[MetaDataChunk, FileSyncResponse]
 
 func _FileSyncService_MetaData_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(FileSyncServiceServer).MetaData(&grpc.GenericServerStream[MetaDataReq, FileMetaData]{ServerStream: stream})

@@ -43,7 +43,7 @@ func StateStream(ip string) (grpc.ServerStreamingClient[pb.StateRes], error) {
 	return stream, nil
 }
 
-func ModifyStream(ip string) (grpc.BidiStreamingClient[pb.FileChunk, pb.FileSyncResponse], error) {
+func ModifyStream(ip string) (grpc.BidiStreamingClient[pb.MetaDataChunk, pb.FileSyncResponse], error) {
 	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
