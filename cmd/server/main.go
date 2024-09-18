@@ -7,7 +7,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/TypeTerrors/filesync/go_sync/internal/controllers"
+	"github.com/TypeTerrors/go_sync/internal/controllers"
 
 	"github.com/charmbracelet/log"
 )

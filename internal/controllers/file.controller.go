@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TypeTerrors/filesync/go_sync/conf"
-	pb "github.com/TypeTerrors/filesync/go_sync/proto"
-	"github.com/TypeTerrors/filesync/go_sync/internal/clients"
-	"github.com/TypeTerrors/filesync/go_sync/pkg"
+	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/internal/clients"
+	"github.com/TypeTerrors/go_sync/pkg"
+	pb "github.com/TypeTerrors/go_sync/proto"
 
 	"github.com/charmbracelet/log"
 	"github.com/fsnotify/fsnotify"

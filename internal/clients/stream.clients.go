@@ -3,7 +3,7 @@ package clients
 import (
 	"context"
 
-	pb "github.com/TypeTerrors/filesync/go_sync/proto"
+	pb "github.com/TypeTerrors/go_sync/proto"
 
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
