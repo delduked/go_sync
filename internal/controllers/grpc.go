@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"fmt"
 	"io"
+	"os"
 
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
@@ -91,4 +93,58 @@ func (s *FileSyncServer) MetaData(stream pb.FileSyncService_MetaDataServer) erro
 	}
 
 	return nil
+}
+
+func (s *FileSyncServer) ModifyFiles(stream pb.FileSyncService_ModifyFilesServer) error {
+
+	fileBuffers := make(map[string]*os.File) // A map to track open file handles
+	defer func() {
+		// Close all file handles when done
+		for _, file := range fileBuffers {
+			file.Close()
+		}
+	}()
+
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			s.PeerData.markFileAsComplete(req.FileName)
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		s.PeerData.markFileAsInProgress(req.FileName)
+		fileName := req.FileName
+		chunkData := req.ChunkData
+		chunkNumber := req.ChunkNumber
+		chunkSize := req.ChunkSize
+		totalChunks := req.TotalChunks
+
+		file, exists := fileBuffers[fileName]
+		if !exists {
+			var err error
+			file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to open file %s: %v", fileName, err)
+			}
+			fileBuffers[fileName] = file
+		}
+
+		offset := chunkNumber * chunkSize
+
+		_, err = file.WriteAt(chunkData, offset)
+		if err != nil {
+			return fmt.Errorf("failed to write chunk at offset %d for file %s: %v", offset, fileName, err)
+		}
+
+		// Optionally, check if all chunks have been received
+		if int(chunkNumber+1) == int(totalChunks) {
+			log.Printf("File %s has been fully received (%d chunks)", fileName, totalChunks)
+			file.Close()
+			delete(fileBuffers, fileName) // Remove the file from the open file map
+		}
+
+	}
 }

@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -56,21 +55,21 @@ func (m *Meta) AddFileMetaData(file string, chunk []byte, offset int64) {
 }
 
 // saveToBadger saves the updated metadata to BadgerDB.
-func (m *Meta) saveToBadger(file string) error {
-	err := m.db.Update(func(txn *badger.Txn) error {
-		meta := m.MetaData[file]
+// func (m *Meta) saveToBadger(file string) error {
+// 	err := m.db.Update(func(txn *badger.Txn) error {
+// 		meta := m.MetaData[file]
 
-		// Serialize the MetaData into JSON format (or another format if necessary)
-		val, err := json.Marshal(meta)
-		if err != nil {
-			return err
-		}
+// 		// Serialize the MetaData into JSON format (or another format if necessary)
+// 		val, err := json.Marshal(meta)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		// Store the metadata in BadgerDB using the file name as the key
-		return txn.Set([]byte(file), val)
-	})
-	return err
-}
-func (m *Meta) Close() error {
-	return m.db.Close()
-}
+// 		// Store the metadata in BadgerDB using the file name as the key
+// 		return txn.Set([]byte(file), val)
+// 	})
+// 	return err
+// }
+// func (m *Meta) Close() error {
+// 	return m.db.Close()
+// }

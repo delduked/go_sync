@@ -34,14 +34,20 @@ func (m *Meta) UpdateLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 				if m.PeerData.IsFileInProgress(file) {
 					continue
 				}
-				asdf, err := m.getLocalFileMetadata(file, conf.ChunkSize)
-				if err != nil || len(asdf.Chunks) == 0 || asdf.ChunkSize == 0 {
+				fileMetaData, err := m.getLocalFileMetadata(file, conf.ChunkSize)
+				if err != nil || len(fileMetaData.Chunks) == 0 || fileMetaData.ChunkSize == 0 {
 					continue
 				}
 
 				m.mu.Lock()
-				m.MetaData[file] = asdf
+				m.MetaData[file] = fileMetaData
 				m.mu.Unlock()
+
+				go func() {
+					if err := m.saveMetaDataToDB(file, fileMetaData); err != nil {
+						log.Errorf("failed to store metadata in BadgerDB for file %s: %v", file, err)
+					}
+				}()
 			}
 		}
 	}
@@ -83,14 +89,13 @@ func (m *Meta) UpdateFileMetaData(file string, chunkData []byte, offset int64, c
 }
 
 func (m *Meta) writeChunkToFile(file string, chunkData []byte, chunkPosition int64, chunkSize int64) error {
-	m.PeerData.markFileAsInProgress(file)
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	offset := int64(chunkPosition) * chunkSize
+	offset := chunkPosition * chunkSize
 
 	_, err = f.Seek(offset, 0)
 	if err != nil {
@@ -102,6 +107,5 @@ func (m *Meta) writeChunkToFile(file string, chunkData []byte, chunkPosition int
 		return err
 	}
 
-	m.PeerData.markFileAsComplete(file)
 	return nil
 }

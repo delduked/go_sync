@@ -2,10 +2,10 @@ syntax = "proto3";
 option go_package = "proto/;proto";
 
 service FileSyncService {
-  rpc SyncFiles(stream FileSyncRequest) returns (stream FileSyncResponse);
   rpc State(StateReq) returns (stream StateRes);
-  rpc ModifyFiles(stream MetaDataChunk) returns (stream FileSyncResponse);
   rpc MetaData(stream MetaDataReq) returns (stream FileMetaData);
+  rpc SyncFiles(stream FileSyncRequest) returns (stream FileSyncResponse);
+  rpc ModifyFiles(stream MetaDataChunk) returns (stream FileSyncResponse);
 }
 
 message FileSyncRequest {

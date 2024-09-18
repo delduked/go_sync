@@ -1,14 +1,14 @@
 package controllers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"io"
+	"context"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	"github.com/charmbracelet/log"
 )
 
@@ -39,40 +39,41 @@ func (m *Meta) PreScanAndStoreMetaData(dir string) error {
 	return err
 }
 
-// getLocalFileMetadata retrieves metadata for a local file by reading it chunk by chunk.
-func (m *Meta) getLocalFileMetadata(fileName string, chunkSize int64) (MetaData, error) {
-	var res MetaData
-	file, err := os.Open(fileName)
-	if err != nil {
-		return res, fmt.Errorf("failed to open file %s: %w", fileName, err)
-	}
-	defer file.Close()
+// PeerMetaData periodically scan for metadata from peers and compares it with local files to identify and handle missing chunks.
+func (m *Meta) PeerMetaData(wg *sync.WaitGroup, ctx context.Context) {
+	defer wg.Done()
 
-	fileMeta := MetaData{
-		Chunks:    make(map[int64]string),
-		ChunkSize: chunkSize,
-	}
-
-	buffer := make([]byte, chunkSize)
-	var chunkIndex int64 = 0
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
 
 	for {
-		bytesRead, err := file.Read(buffer)
-		if err != nil && err != io.EOF {
-			return res, fmt.Errorf("error reading file: %w", err)
-		}
-		if bytesRead == 0 {
-			break // End of file
-		}
+		select {
+		case <-ctx.Done():
+			log.Warn("Shutting down list check...")
+			return
+		case <-ticker.C:
+			localFiles, err := pkg.GetFileList()
+			if err != nil {
+				log.Errorf("Error getting file list: %v", err)
+				return
+			}
 
-		hasher := sha256.New()
-		hasher.Write(buffer[:bytesRead])
-		hash := hex.EncodeToString(hasher.Sum(nil))
+			for _, file := range localFiles {
+				if m.PeerData.IsFileInProgress(file) {
+					continue
+				}
+				peerChunks := m.getPeerFileMetaData(file)
+				missingChunks := m.missingChunks(file, peerChunks)
 
-		// Store the chunk hash in the metadata
-		fileMeta.Chunks[chunkIndex] = hash
-		chunkIndex++
+				if len(missingChunks) > 0 {
+					go func() {
+						err := m.ModifyPeerFile(file, missingChunks)
+						if err != nil {
+							log.Errorf("failed to modify peer file: %v", err)
+						}
+					}()
+				}
+			}
+		}
 	}
-
-	return fileMeta, nil
 }
