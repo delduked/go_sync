@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"fmt"
-	pb "go_sync/filesync"
-	"go_sync/pkg"
 	"io"
 	"os"
 	"path/filepath"
+
+	pb "github.com/TypeTerrors/filesync/go_sync/proto"
+	"github.com/TypeTerrors/filesync/go_sync/pkg"
 
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"

@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"go_sync/conf"
-	pb "go_sync/filesync"
-	"go_sync/internal/clients"
-	"go_sync/pkg"
+	"github.com/TypeTerrors/filesync/go_sync/conf"
+	pb "github.com/TypeTerrors/filesync/go_sync/proto"
+	"github.com/TypeTerrors/filesync/go_sync/internal/clients"
+	"github.com/TypeTerrors/filesync/go_sync/pkg"
 
 	"github.com/charmbracelet/log"
 	"github.com/fsnotify/fsnotify"
@@ -165,7 +165,6 @@ func (s *State) startStreamingFileInChunks(filePath string) {
 	}
 
 	var offset int64 = 0
-	
 
 	// Stream file in chunks
 	for {

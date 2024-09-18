@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.27.3
-// source: filesync/filesync.proto
+// source: proto/filesync.proto
 
-package filesync
+package proto
 
 import (
 	context "context"
@@ -216,5 +216,5 @@ var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "filesync/filesync.proto",
+	Metadata: "proto/filesync.proto",
 }

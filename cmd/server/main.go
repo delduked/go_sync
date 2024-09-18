@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"go_sync/internal/controllers"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/TypeTerrors/filesync/go_sync/internal/controllers"
 
 	"github.com/charmbracelet/log"
 )

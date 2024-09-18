@@ -5,14 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"go_sync/conf"
-	pb "go_sync/filesync"
-	"go_sync/internal/clients"
-	"go_sync/pkg"
 	"io"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/TypeTerrors/filesync/go_sync/conf"
+	"github.com/TypeTerrors/filesync/go_sync/internal/clients"
+	"github.com/TypeTerrors/filesync/go_sync/pkg"
+	pb "github.com/TypeTerrors/filesync/go_sync/proto"
 
 	"github.com/charmbracelet/log"
 )

@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	pb "go_sync/filesync"
-	"go_sync/pkg"
+	pb "github.com/TypeTerrors/filesync/go_sync/proto"
+	"github.com/TypeTerrors/filesync/go_sync/pkg"
 
 	"github.com/charmbracelet/log"
 	"github.com/grandcat/zeroconf"

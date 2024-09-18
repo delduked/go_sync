@@ -1,4 +1,4 @@
-module go_sync
+module github.com/TypeTerrors/filesync/go_sync
 
 go 1.22.1
 

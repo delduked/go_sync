@@ -1,5 +1,5 @@
 syntax = "proto3";
-option go_package = "filesync/;filesync";
+option go_package = "proto/;proto";
 
 service FileSyncService {
   rpc SyncFiles(stream FileSyncRequest) returns (stream FileSyncResponse);
