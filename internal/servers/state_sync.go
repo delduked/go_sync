@@ -65,6 +65,9 @@ func (s *State) startStreamingFileInChunks(filePath string) {
 		// Send the chunk to peers
 		s.sendChunkToPeers(filePath, buffer[:bytesRead], offset, fileInfo.Size())
 
+		// need to add this to the metadata
+		s.MetaData.AddFileMetaData(filePath, buffer[:bytesRead], offset)
+
 		// Update offset for next chunk
 		offset += int64(bytesRead)
 	}
@@ -91,8 +94,8 @@ func (s *State) sendChunkToPeers(fileName string, chunk []byte, offset, fileSize
 				FileChunk: &pb.FileChunk{
 					FileName:    fileName,
 					ChunkData:   chunk,
-					ChunkNumber: int32(offset / int64(len(chunk))),
-					TotalChunks: int32((fileSize + int64(len(chunk)) - 1) / int64(len(chunk))),
+					ChunkNumber: int64(offset / int64(len(chunk))),
+					TotalChunks: int64((fileSize + int64(len(chunk)) - 1) / int64(len(chunk))),
 				},
 			},
 		})

@@ -36,7 +36,6 @@ func main() {
 	}
 
 	// Step 2: After metadata is loaded and stored, continue with the rest of the application
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wg.Add(1)
@@ -54,7 +53,7 @@ func main() {
 	// go peerData.PeriodicCheck(ctx, &wg)
 
 	// Create a new SyncServer
-	server, err := servers.StateServer(peerData, "./sync_folder", "50051")
+	server, err := servers.StateServer(metaData, peerData, "./sync_folder", "50051")
 	if err != nil {
 		log.Fatalf("Failed to create sync server: %v", err)
 	}

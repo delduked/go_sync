@@ -31,22 +31,6 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 			log.Errorf("Error sending final acknowledgment: %v", err)
 		}
 
-		// Update local metadata
-		go func() {
-			md, err := s.LocalMetaData.getLocalFileMetadata(filePath, req.ChunkSize)
-			if err != nil {
-				log.Errorf("Error getting local file metadata: %v", err)
-				return
-			}
-
-			s.LocalMetaData.mu.Lock()
-			s.LocalMetaData.MetaData[filePath] = md
-			s.LocalMetaData.mu.Unlock()
-
-			s.LocalMetaData.saveMetaDataToDB(filePath, md)
-
-		}()
-
 		return
 	}
 
@@ -66,6 +50,9 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 		s.PeerData.markFileAsComplete(filePath)
 		return
 	}
+
+	// Update local metadata
+	go s.LocalMetaData.AddFileMetaData(filePath, req.ChunkData, req.ChunkNumber)
 
 	// Send acknowledgment for the current chunk
 	err = stream.SendMsg(&pb.FileSyncResponse{

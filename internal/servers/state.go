@@ -22,10 +22,11 @@ type State struct {
 	watchDir   string
 	port       string
 	sharedData *PeerData
+	MetaData   *Meta
 }
 
 // NewState creates a new State with default settings
-func StateServer(sharedData *PeerData, watchDir, port string) (*State, error) {
+func StateServer(metaData *Meta, sharedData *PeerData, watchDir, port string) (*State, error) {
 	// Create TCP listener
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -39,6 +40,7 @@ func StateServer(sharedData *PeerData, watchDir, port string) (*State, error) {
 		watchDir:   watchDir,
 		port:       port,
 		sharedData: sharedData,
+		MetaData:   metaData,
 	}
 
 	return server, nil

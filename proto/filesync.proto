@@ -40,9 +40,9 @@ message StateRes {
 message FileChunk {
     string file_name = 1;
     bytes chunk_data = 2;
-    int32 chunk_number = 3;
+    int64 chunk_number = 3;
     int64 chunk_size = 4;
-    int32 total_chunks = 5;
+    int64 total_chunks = 5;
 }
 
 message MetaDataChunk {

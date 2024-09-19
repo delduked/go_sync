@@ -48,6 +48,20 @@ func (m *Meta) saveMetaDataToDB(file string, metadata MetaData) error {
 	return err
 }
 
+func (m *Meta) saveMetaDataToRam(file string, metadata MetaData) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.MetaData[file] = metadata
+}
+
+func (m *Meta) saveMetaData(file string, metadata MetaData) {
+	err := m.saveMetaDataToDB(file, metadata)
+	if err != nil {
+		log.Errorf("failed to save metadata to DB: %v", err)
+	}
+	m.saveMetaDataToRam(file, metadata)
+}
+
 // DeleteFileMetaData removes the metadata of a file from both in-memory and BadgerDB.
 func (m *Meta) DeleteFileMetaData(file string) {
 	m.mu.Lock()
