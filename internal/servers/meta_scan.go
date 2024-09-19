@@ -31,14 +31,7 @@ func (m *Meta) PreScanAndStoreMetaData(dir string) error {
 				log.Errorf("Failed to get metadata for file %s: %v", path, err)
 				return nil // Continue scanning even if one file fails
 			}
-			m.mu.Lock()
-			m.MetaData[path] = metaData
-			m.mu.Unlock()
-
-			// Store in BadgerDB
-			if err := m.saveMetaDataToDB(path, metaData); err != nil {
-				log.Errorf("Failed to store metadata in BadgerDB for file %s: %v", path, err)
-			}
+			m.saveMetaData(path, metaData)
 		}
 		return nil
 	})
