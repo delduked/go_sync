@@ -1,4 +1,4 @@
-package controllers
+package servers
 
 import (
 	"fmt"
@@ -30,6 +30,23 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 		if err != nil {
 			log.Errorf("Error sending final acknowledgment: %v", err)
 		}
+
+		// Update local metadata
+		go func() {
+			md, err := s.LocalMetaData.getLocalFileMetadata(filePath, req.ChunkSize)
+			if err != nil {
+				log.Errorf("Error getting local file metadata: %v", err)
+				return
+			}
+
+			s.LocalMetaData.mu.Lock()
+			s.LocalMetaData.MetaData[filePath] = md
+			s.LocalMetaData.mu.Unlock()
+
+			s.LocalMetaData.saveMetaDataToDB(filePath, md)
+
+		}()
+
 		return
 	}
 
@@ -72,6 +89,11 @@ func (s *FileSyncServer) delete(req *pb.FileDelete, stream grpc.BidiStreamingSer
 		return
 	}
 	s.PeerData.markFileAsComplete(filePath)
+	s.LocalMetaData.DeleteFileMetaData(filePath)
+
+	s.LocalMetaData.mu.Lock()
+	delete(s.LocalMetaData.MetaData, filePath)
+	s.LocalMetaData.mu.Unlock()
 
 	// Send an acknowledgment back to the client
 	err = stream.Send(&pb.FileSyncResponse{
@@ -123,7 +145,6 @@ func (s *FileSyncServer) list(req *pb.FileList, stream grpc.BidiStreamingServer[
 	if err != nil {
 		log.Errorf("Error sending list response: %v", err)
 	}
-
 }
 
 // service method

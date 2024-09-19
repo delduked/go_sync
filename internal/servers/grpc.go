@@ -1,4 +1,4 @@
-package controllers
+package servers
 
 import (
 	"fmt"
@@ -65,34 +65,34 @@ func (s *FileSyncServer) State(req *pb.StateReq, stream grpc.ServerStreamingServ
 
 func (s *FileSyncServer) MetaData(stream pb.FileSyncService_MetaDataServer) error {
 
-	req, err := stream.Recv()
-	if err == io.EOF {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	log.Infof("Meta data request for file: %s", req.FileName)
-
-	if _, ok := s.LocalMetaData.MetaData[req.FileName]; !ok {
-		return nil
-	}
-
-	for pos, hash := range s.LocalMetaData.MetaData[req.FileName].Chunks {
-		err := stream.Send(&pb.FileMetaData{
-			FileName:    req.FileName,
-			ChunkNumber: pos,
-			ChunkHash:   hash,
-			ChunkSize:   s.LocalMetaData.MetaData[req.FileName].ChunkSize,
-		})
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
 		if err != nil {
-			log.Errorf("Error sending state response: %v", err)
 			return err
 		}
-	}
 
-	return nil
+		log.Infof("Meta data request for file: %s", req.FileName)
+
+		if _, ok := s.LocalMetaData.MetaData[req.FileName]; !ok {
+			return nil
+		}
+
+		for pos, hash := range s.LocalMetaData.MetaData[req.FileName].Chunks {
+			err := stream.Send(&pb.FileMetaData{
+				FileName:    req.FileName,
+				ChunkNumber: pos,
+				ChunkHash:   hash,
+				ChunkSize:   s.LocalMetaData.MetaData[req.FileName].ChunkSize,
+			})
+			if err != nil {
+				log.Errorf("Error sending state response: %v", err)
+				return err
+			}
+		}
+	}
 }
 
 func (s *FileSyncServer) ModifyFiles(stream pb.FileSyncService_ModifyFilesServer) error {
@@ -144,7 +144,7 @@ func (s *FileSyncServer) ModifyFiles(stream pb.FileSyncService_ModifyFilesServer
 			log.Printf("File %s has been fully received (%d chunks)", fileName, totalChunks)
 			file.Close()
 			delete(fileBuffers, fileName) // Remove the file from the open file map
+			s.PeerData.markFileAsComplete(req.FileName)
 		}
-
 	}
 }

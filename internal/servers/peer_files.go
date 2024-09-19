@@ -1,4 +1,4 @@
-package controllers
+package servers
 
 import (
 	"github.com/TypeTerrors/go_sync/pkg"

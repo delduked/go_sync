@@ -7,7 +7,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/TypeTerrors/go_sync/internal/controllers"
+	"github.com/TypeTerrors/go_sync/internal/servers"
 	"github.com/charmbracelet/log"
 	badger "github.com/dgraph-io/badger/v3"
 )
@@ -23,34 +23,38 @@ func main() {
 	}
 	defer db.Close() // Ensure BadgerDB is closed when the application shuts down
 
-	peerData := &controllers.PeerData{
+	peerData := &servers.PeerData{
 		Clients: make([]string, 0),
 	}
 
 	// Create a new Meta instance with BadgerDB
-	metaData := controllers.NewMeta(peerData, db)
+	metaData := servers.NewMeta(peerData, db)
 
 	// Step 1: Pre-scan all files, load into memory, and write to BadgerDB
-	err = metaData.PreScanAndStoreMetaData("./sync_folder")
-	if err != nil {
+	if err = metaData.PreScanAndStoreMetaData("./sync_folder"); err != nil {
 		log.Fatalf("Failed to perform pre-scan and store metadata: %v", err)
 	}
 
 	// Step 2: After metadata is loaded and stored, continue with the rest of the application
 
-	// Create a context that can be canceled
 	ctx, cancel := context.WithCancel(context.Background())
+
+	wg.Add(1)
+	go metaData.ScanPeerMetaData(&wg, ctx)
+
+	wg.Add(1)
+	go metaData.ScanLocalMetaData(&wg, ctx)
 
 	// Start the mDNS discovery in a separate goroutine
 	wg.Add(1)
-	go peerData.StartMDNSDiscovery(ctx, &wg)
+	go peerData.ScanMdns(ctx, &wg)
 
 	// Start the periodic check in a separate goroutine
-	wg.Add(1)
-	go peerData.PeriodicCheck(ctx, &wg)
+	// wg.Add(1)
+	// go peerData.PeriodicCheck(ctx, &wg)
 
 	// Create a new SyncServer
-	server, err := controllers.StateServer(peerData, "./sync_folder", "50051")
+	server, err := servers.StateServer(peerData, "./sync_folder", "50051")
 	if err != nil {
 		log.Fatalf("Failed to create sync server: %v", err)
 	}

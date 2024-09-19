@@ -1,4 +1,4 @@
-package controllers
+package servers
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
-func (pd *PeerData) StartMDNSDiscovery(ctx context.Context, wg *sync.WaitGroup) {
+func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	localIP, localSubnet, err := pkg.GetLocalIPAndSubnet()

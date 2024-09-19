@@ -1,7 +1,8 @@
-package controllers
+package servers
 
 import (
 	"fmt"
+
 	"github.com/zeebo/xxh3"
 )
 

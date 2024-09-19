@@ -1,8 +1,7 @@
-package controllers
+package servers
 
 import (
 	"context"
-	"os"
 	"sync"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 )
 
 // UpdateLocalMetaData periodically updates the metadata of all local files by reading each file and calculating the hash of its chunks.
-func (m *Meta) UpdateLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
+func (m *Meta) ScanLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -88,24 +87,24 @@ func (m *Meta) UpdateFileMetaData(file string, chunkData []byte, offset int64, c
 	}
 }
 
-func (m *Meta) writeChunkToFile(file string, chunkData []byte, chunkPosition int64, chunkSize int64) error {
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+// func (m *Meta) writeChunkToFile(file string, chunkData []byte, chunkPosition int64, chunkSize int64) error {
+// 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer f.Close()
 
-	offset := chunkPosition * chunkSize
+// 	offset := chunkPosition * chunkSize
 
-	_, err = f.Seek(offset, 0)
-	if err != nil {
-		return err
-	}
+// 	_, err = f.Seek(offset, 0)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	_, err = f.Write(chunkData)
-	if err != nil {
-		return err
-	}
+// 	_, err = f.Write(chunkData)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }

@@ -1,4 +1,4 @@
-package controllers
+package servers
 
 import (
 	"crypto/sha256"

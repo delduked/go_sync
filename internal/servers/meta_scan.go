@@ -1,4 +1,4 @@
-package controllers
+package servers
 
 import (
 	"context"
@@ -14,6 +14,12 @@ import (
 
 // PreScanAndStoreMetaData scans all files in a directory and stores metadata in memory and BadgerDB.
 func (m *Meta) PreScanAndStoreMetaData(dir string) error {
+
+	// check if the metadata map is empty before loading metadata from sst backup file
+	if len(m.MetaData) != 0 {
+		return nil
+	}
+
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -40,7 +46,7 @@ func (m *Meta) PreScanAndStoreMetaData(dir string) error {
 }
 
 // PeerMetaData periodically scan for metadata from peers and compares it with local files to identify and handle missing chunks.
-func (m *Meta) PeerMetaData(wg *sync.WaitGroup, ctx context.Context) {
+func (m *Meta) ScanPeerMetaData(wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
 
 	ticker := time.NewTicker(20 * time.Second)
