@@ -29,7 +29,7 @@ message MetaDataReq {
 
 message FileMetaData {
   string file_name = 1;
-  int64 chunk_number = 2;
+  int64 offset = 2;
   int64 chunk_size = 3;
   string chunk_hash = 4;
   string message = 5;
@@ -42,7 +42,7 @@ message StateRes {
 message FileChunk {
     string file_name = 1;
     bytes chunk_data = 2;
-    int64 chunk_number = 3;
+    int64 offset = 3;
     int64 chunk_size = 4;
     int64 total_chunks = 5;
 }
@@ -50,7 +50,7 @@ message FileChunk {
 message MetaDataChunk {
     string file_name = 1;
     bytes chunk_data = 2;
-    int64 chunk_number = 3;
+    int64 offset = 3;
     int64 chunk_size = 4;
     int32 total_chunks = 5;
 }
@@ -68,7 +68,7 @@ message FileSyncResponse {
   string message = 1;
   repeated string filestosend = 2;
   string filedeleted = 3;
-  int64 chunk_number = 4;
+  int64 offset = 4;
 }
 
 message Acknowledgment { 

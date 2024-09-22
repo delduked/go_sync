@@ -16,18 +16,18 @@ import (
 // save saves a file chunk to disk
 func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer[pb.FileSyncRequest, pb.FileSyncResponse]) {
 	filePath := filepath.Clean(req.FileName)
-	log.Printf("Receiving file chunk: %s, Chunk %d of %d", filePath, req.ChunkNumber, req.TotalChunks)
+	log.Printf("Receiving file chunk: %s, Chunk %d of %d", filePath, req.Offset, req.TotalChunks)
 
 	s.PeerData.markFileAsInProgress(filePath)
 
-	if req.ChunkNumber == req.TotalChunks {
+	if req.Offset == req.TotalChunks {
 		log.Printf("Final chunk received. File %s transfer complete.", filePath)
 		s.PeerData.markFileAsComplete(filePath)
 
 		// Send acknowledgment back to the client
 		err := stream.Send(&pb.FileSyncResponse{
-			Message:     fmt.Sprintf("File %s fully transferred", filePath),
-			ChunkNumber: req.ChunkNumber,
+			Message: fmt.Sprintf("File %s fully transferred", filePath),
+			Offset:  req.Offset,
 		})
 		if err != nil {
 			log.Errorf("Error sending final acknowledgment: %v", err)
@@ -54,29 +54,35 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 	}
 
 	// Update local metadata
-	s.LocalMetaData.AddFileMetaData(filePath, req.ChunkData, req.ChunkNumber)
+	s.LocalMetaData.AddFileMetaData(filePath, req.ChunkData, req.Offset)
+
+	ip, err := pkg.GetClientIP(stream.Context())
+	if err != nil {
+		log.Errorf("Error getting client IP: %v", err)
+		return
+	}
 
 	go func() {
-		streamCompare, err := clients.CompareStream(stream.Context().Value("ip").(string))
+		streamCompare, err := clients.CompareStream(ip)
 		if err != nil {
-			log.Errorf("Failed to open stream for list check on %s: %v", stream.Context().Value("ip").(string), err)
+			log.Errorf("Failed to open stream for list check on %s: %v", ip, err)
 			return
 		}
 		for {
 
-			go func(){
+			go func() {
 				recv, err := streamCompare.Recv()
 				if err != nil {
-					log.Errorf("Error receiving response from %v: %v", stream.Context().Value("ip").(string), err)
+					log.Errorf("Error receiving response from %v: %v",ip, err)
 					return
 				}
 				// write received chunks to file
-				s.LocalMetaData.WriteChunkToFile(recv.FileName, recv.ChunkData, recv.ChunkNumber, recv.ChunkSize)
-				s.LocalMetaData.UpdateFileMetaData(recv.FileName, recv.ChunkData, recv.ChunkNumber, recv.ChunkSize)
+				s.LocalMetaData.WriteChunkToFile(recv.FileName, recv.ChunkData, recv.Offset, recv.ChunkSize)
+				s.LocalMetaData.UpdateFileMetaData(recv.FileName, recv.ChunkData, recv.Offset, recv.ChunkSize)
 
 			}()
 
-			chunkHash, err := s.LocalMetaData.GetMetaData(filePath, req.ChunkNumber)
+			chunkHash, err := s.LocalMetaData.GetMetaData(filePath, req.Offset)
 			if err != nil {
 				log.Errorf("Error getting metadata: %v", err)
 				return
@@ -84,10 +90,10 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 
 			// Send the chunk to peers
 			err = streamCompare.Send(&pb.FileMetaData{
-				FileName:    req.FileName,
-				ChunkNumber: req.ChunkNumber,
-				ChunkHash:   chunkHash,
-				ChunkSize:  req.ChunkSize,
+				FileName:  req.FileName,
+				Offset:    req.Offset,
+				ChunkHash: chunkHash,
+				ChunkSize: req.ChunkSize,
 			})
 			if err != nil {
 				log.Errorf("Error sending state response: %v", err)

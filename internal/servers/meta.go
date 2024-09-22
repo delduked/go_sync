@@ -8,7 +8,7 @@ import (
 )
 
 type MetaData struct {
-	Chunks    map[int64]string // map[chunk position]hash
+	Chunks    map[int64]string // map[offset]hash
 	ChunkSize int64
 }
 

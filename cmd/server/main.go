@@ -39,14 +39,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wg.Add(1)
+	go peerData.ScanMdns(ctx, &wg)
+	
+	wg.Add(1)
 	go metaData.ScanPeerMetaData(&wg, ctx)
-
+	
 	wg.Add(1)
 	go metaData.ScanLocalMetaData(&wg, ctx)
-
-	// Start the mDNS discovery in a separate goroutine
-	wg.Add(1)
-	go peerData.ScanMdns(ctx, &wg)
 
 	// Start the periodic check in a separate goroutine
 	// wg.Add(1)

@@ -28,7 +28,6 @@ func (cr *ChunkReader) ReadChunk(offset, chunkSize int64) ([]byte, error) {
 	if err != nil && err.Error() != "EOF" {
 		return nil, fmt.Errorf("failed to read chunk at offset %d: %v", offset, err)
 	}
-
 	return buffer, nil
 }
 

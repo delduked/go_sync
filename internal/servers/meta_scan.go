@@ -42,7 +42,7 @@ func (m *Meta) PreScanAndStoreMetaData(dir string) error {
 func (m *Meta) ScanPeerMetaData(wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
 
-	ticker := time.NewTicker(20 * time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
 	for {

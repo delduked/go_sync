@@ -80,12 +80,12 @@ func (s *FileSyncServer) MetaData(stream pb.FileSyncService_MetaDataServer) erro
 			return nil
 		}
 
-		for pos, hash := range s.LocalMetaData.MetaData[req.FileName].Chunks {
+		for offset, hash := range s.LocalMetaData.MetaData[req.FileName].Chunks {
 			err := stream.Send(&pb.FileMetaData{
-				FileName:    req.FileName,
-				ChunkNumber: pos,
-				ChunkHash:   hash,
-				ChunkSize:   s.LocalMetaData.MetaData[req.FileName].ChunkSize,
+				FileName:  req.FileName,
+				Offset:    offset,
+				ChunkHash: hash,
+				ChunkSize: s.LocalMetaData.MetaData[req.FileName].ChunkSize,
 			})
 			if err != nil {
 				log.Errorf("Error sending state response: %v", err)
@@ -118,7 +118,7 @@ func (s *FileSyncServer) ModifyFiles(stream pb.FileSyncService_ModifyFilesServer
 		s.PeerData.markFileAsInProgress(req.FileName)
 		fileName := req.FileName
 		chunkData := req.ChunkData
-		chunkNumber := req.ChunkNumber
+		offset := req.Offset
 		chunkSize := req.ChunkSize
 		totalChunks := req.TotalChunks
 
@@ -132,28 +132,26 @@ func (s *FileSyncServer) ModifyFiles(stream pb.FileSyncService_ModifyFilesServer
 			fileBuffers[fileName] = file
 		}
 
-		offset := chunkNumber * chunkSize
-
 		_, err = file.WriteAt(chunkData, offset)
 		if err != nil {
 			return fmt.Errorf("failed to write chunk at offset %d for file %s: %v", offset, fileName, err)
 		}
 
 		// Optionally, check if all chunks have been received
-		if int(chunkNumber+1) == int(totalChunks) {
+		if int(offset) == int(totalChunks) {
 			log.Printf("File %s has been fully received (%d chunks)", fileName, totalChunks)
 			file.Close()
 			delete(fileBuffers, fileName) // Remove the file from the open file map
 			s.PeerData.markFileAsComplete(req.FileName)
-			s.LocalMetaData.UpdateFileMetaData(fileName, chunkData, chunkNumber, chunkSize)
+			s.LocalMetaData.UpdateFileMetaData(fileName, chunkData, offset, chunkSize)
 			return nil
 		}
 
 		stream.Send(&pb.FileMetaData{
-			FileName:    fileName,
-			ChunkNumber: chunkNumber,
-			ChunkHash:   s.LocalMetaData.MetaData[fileName].Chunks[chunkNumber],
-			ChunkSize:   chunkSize,
+			FileName:  fileName,
+			Offset:    offset,
+			ChunkHash: s.LocalMetaData.MetaData[fileName].Chunks[offset],
+			ChunkSize: chunkSize,
 		})
 	}
 }
@@ -168,29 +166,25 @@ func (s *FileSyncServer) CompareFiles(stream pb.FileSyncService_CompareFilesServ
 			return err
 		}
 
-		fileName := req.FileName
-		hash := req.ChunkHash
-		pos := req.ChunkNumber
-
 		// need to find the bytes of the file with the chunks size and position
-		reader, err := pkg.NewChunkReader(fileName)
+		reader, err := pkg.NewChunkReader(req.FileName)
 		if err != nil {
 			reader.Close()
 			return err
 		}
 
-		if s.LocalMetaData.MetaData[fileName].Chunks[pos] != hash {
-			chunk, err := reader.ReadChunk(pos, req.ChunkSize)
+		if s.LocalMetaData.MetaData[req.FileName].Chunks[req.Offset] != req.ChunkHash {
+			chunk, err := reader.ReadChunk(req.Offset, req.ChunkSize)
 			if err != nil {
 				reader.Close()
 				return err
 			}
 
 			err = stream.Send(&pb.FileChunk{
-				FileName:    fileName,
-				ChunkNumber: pos,
-				ChunkSize:   s.LocalMetaData.MetaData[fileName].ChunkSize,
-				ChunkData:   chunk,
+				FileName:  req.FileName,
+				Offset:    req.Offset,
+				ChunkSize: s.LocalMetaData.MetaData[req.FileName].ChunkSize,
+				ChunkData: chunk,
 			})
 			if err != nil {
 				reader.Close()

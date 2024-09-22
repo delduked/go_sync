@@ -55,10 +55,6 @@ func (m *Meta) ScanLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 
 // UpdateFileMetaData updates a specific file's metadata and persists it to BadgerDB.
 func (m *Meta) UpdateFileMetaData(file string, chunkData []byte, offset int64, chunkSize int64) {
-	// if m.PeerData.IsFileInProgress(file) {
-	// 	return
-	// }
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -88,14 +84,12 @@ func (m *Meta) UpdateFileMetaData(file string, chunkData []byte, offset int64, c
 	}
 }
 
-func (m *Meta) WriteChunkToFile(file string, chunkData []byte, chunkPosition int64, chunkSize int64) error {
+func (m *Meta) WriteChunkToFile(file string, chunkData []byte, offset int64, chunkSize int64) error {
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-
-	offset := chunkPosition * chunkSize
 
 	_, err = f.Seek(offset, 0)
 	if err != nil {
@@ -106,8 +100,6 @@ func (m *Meta) WriteChunkToFile(file string, chunkData []byte, chunkPosition int
 	if err != nil {
 		return err
 	}
-
-
 
 	return nil
 }

@@ -14,7 +14,7 @@ import (
 )
 
 // ModifyPeerFile retrieves missing chunks for a peer's file and sends the missing chunks to the peer.
-func (m *Meta) ModifyPeerFile(filename string, missingChunks []int64) error {
+func (m *Meta) ModifyPeerFile(filename string, missingOffsets []int64) error {
 	fileMeta, ok := m.MetaData[filename]
 	if !ok {
 		return fmt.Errorf("file metadata not found for file: %s", filename)
@@ -27,26 +27,26 @@ func (m *Meta) ModifyPeerFile(filename string, missingChunks []int64) error {
 	defer file.Close()
 
 	go func() {
-		for _, chunkPos := range missingChunks {
-			if _, exists := fileMeta.Chunks[chunkPos]; !exists {
-				log.Errorf("chunk at position %d not found in metadata", chunkPos)
+		for _, offset := range missingOffsets {
+			if _, exists := fileMeta.Chunks[offset]; !exists {
+				log.Errorf("chunk at offset %d not found in metadata", offset)
 				return
 			}
 			chunkSize := fileMeta.ChunkSize
 			chunkData := make([]byte, chunkSize)
-			_, err := file.ReadAt(chunkData, chunkPos)
+			_, err := file.ReadAt(chunkData, offset)
 			if err != nil {
-				log.Errorf("failed to read chunk at offset %d: %v", chunkPos, err)
+				log.Errorf("failed to read chunk at offset %d: %v", offset, err)
 				return
 			}
-			m.sendChunkToPeer(chunkData, chunkPos, chunkSize)
+			m.sendChunkToPeer(chunkData, offset, chunkSize)
 		}
 	}()
 	return nil
 }
 
 // sendChunkToPeer sends a specific chunk of data to all peers.
-func (m *Meta) sendChunkToPeer(chunk []byte, chunkPos int64, chunkSize int64) {
+func (m *Meta) sendChunkToPeer(chunk []byte, offset int64, chunkSize int64) {
 	for _, ip := range m.PeerData.Clients {
 		stream, err := clients.ModifyStream(ip)
 		if err != nil {
@@ -67,7 +67,7 @@ func (m *Meta) sendChunkToPeer(chunk []byte, chunkPos int64, chunkSize int64) {
 
 			log.Printf("Received message from peer %s: %v", ip, recv.Message)
 
-			peerChunkPos := recv.ChunkNumber
+			peerChunkPos := recv.Offset
 			peerChunkHash := recv.ChunkHash
 
 			if m.MetaData[recv.FileName].Chunks[peerChunkPos] == peerChunkHash {
@@ -79,9 +79,9 @@ func (m *Meta) sendChunkToPeer(chunk []byte, chunkPos int64, chunkSize int64) {
 		}()
 
 		err = stream.Send(&pb.MetaDataChunk{
-			ChunkData:   chunk,
-			ChunkNumber: chunkPos,
-			ChunkSize:   chunkSize,
+			ChunkData: chunk,
+			Offset:    offset,
+			ChunkSize: chunkSize,
 		})
 		if err != nil {
 			log.Printf("Error sending chunk to peer %s: %v", ip, err)
@@ -130,7 +130,7 @@ func (m *Meta) getPeerFileMetaData(file string) map[string]MetaData {
 						metaData.Chunks = make(map[int64]string)
 					}
 
-					metaData.Chunks[recv.ChunkNumber] = recv.ChunkHash
+					metaData.Chunks[recv.Offset] = recv.ChunkHash
 					metaData.ChunkSize = recv.ChunkSize
 
 					metas[ip] = metaData

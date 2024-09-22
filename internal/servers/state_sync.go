@@ -94,7 +94,7 @@ func (s *State) sendChunkToPeers(fileName string, chunk []byte, offset, fileSize
 				FileChunk: &pb.FileChunk{
 					FileName:    fileName,
 					ChunkData:   chunk,
-					ChunkNumber: int64(offset / int64(len(chunk))),
+					Offset:      offset,
 					TotalChunks: int64((fileSize + int64(len(chunk)) - 1) / int64(len(chunk))),
 				},
 			},
