@@ -1,11 +1,12 @@
 syntax = "proto3";
-option go_package = "proto/;proto";
+option go_package = "proto/;filesync";
 
 service FileSyncService {
   rpc State(StateReq) returns (stream StateRes);
   rpc MetaData(stream MetaDataReq) returns (stream FileMetaData);
   rpc SyncFiles(stream FileSyncRequest) returns (stream FileSyncResponse);
-  rpc ModifyFiles(stream MetaDataChunk) returns (stream FileSyncResponse);
+  rpc ModifyFiles(stream MetaDataChunk) returns (stream FileMetaData);
+  rpc CompareFiles(stream FileMetaData) returns (stream FileChunk);
 }
 
 message FileSyncRequest {
@@ -23,6 +24,7 @@ message StateReq {}
 
 message MetaDataReq {
   string file_name = 1;
+  int64 file_size = 2;
 }
 
 message FileMetaData {
@@ -66,6 +68,7 @@ message FileSyncResponse {
   string message = 1;
   repeated string filestosend = 2;
   string filedeleted = 3;
+  int64 chunk_number = 4;
 }
 
 message Acknowledgment { 

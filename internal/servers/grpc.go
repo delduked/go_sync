@@ -145,6 +145,57 @@ func (s *FileSyncServer) ModifyFiles(stream pb.FileSyncService_ModifyFilesServer
 			file.Close()
 			delete(fileBuffers, fileName) // Remove the file from the open file map
 			s.PeerData.markFileAsComplete(req.FileName)
+			s.LocalMetaData.UpdateFileMetaData(fileName, chunkData, chunkNumber, chunkSize)
+			return nil
+		}
+
+		stream.Send(&pb.FileMetaData{
+			FileName:    fileName,
+			ChunkNumber: chunkNumber,
+			ChunkHash:   s.LocalMetaData.MetaData[fileName].Chunks[chunkNumber],
+			ChunkSize:   chunkSize,
+		})
+	}
+}
+
+func (s *FileSyncServer) CompareFiles(stream pb.FileSyncService_CompareFilesServer) error {
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		fileName := req.FileName
+		hash := req.ChunkHash
+		pos := req.ChunkNumber
+
+		// need to find the bytes of the file with the chunks size and position
+		reader, err := pkg.NewChunkReader(fileName)
+		if err != nil {
+			reader.Close()
+			return err
+		}
+
+		if s.LocalMetaData.MetaData[fileName].Chunks[pos] != hash {
+			chunk, err := reader.ReadChunk(pos, req.ChunkSize)
+			if err != nil {
+				reader.Close()
+				return err
+			}
+
+			err = stream.Send(&pb.FileChunk{
+				FileName:    fileName,
+				ChunkNumber: pos,
+				ChunkSize:   s.LocalMetaData.MetaData[fileName].ChunkSize,
+				ChunkData:   chunk,
+			})
+			if err != nil {
+				reader.Close()
+				return err
+			}
 		}
 	}
 }

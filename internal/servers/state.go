@@ -46,13 +46,15 @@ func StateServer(metaData *Meta, sharedData *PeerData, watchDir, port string) (*
 	return server, nil
 }
 
-// Start starts the gRPC server and file state listener
 func (s *State) Start(wg *sync.WaitGroup, ctx context.Context, sd *PeerData, md *Meta) error {
 	defer wg.Done()
 
 	go func() {
 		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{PeerData: sd, LocalMetaData: md})
+		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{
+			PeerData:      sd,
+			LocalMetaData: md,
+		})
 		if err := s.grpcServer.Serve(s.listener); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
 		}

@@ -66,6 +66,16 @@ func (m *Meta) sendChunkToPeer(chunk []byte, chunkPos int64, chunkSize int64) {
 			}
 
 			log.Printf("Received message from peer %s: %v", ip, recv.Message)
+
+			peerChunkPos := recv.ChunkNumber
+			peerChunkHash := recv.ChunkHash
+
+			if m.MetaData[recv.FileName].Chunks[peerChunkPos] == peerChunkHash {
+				log.Printf("Chunk %d matches on peer %s", peerChunkPos, ip)
+				return
+			} else {
+				log.Printf("Chunk %d does not match on peer %s", peerChunkPos, ip)
+			}
 		}()
 
 		err = stream.Send(&pb.MetaDataChunk{

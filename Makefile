@@ -14,7 +14,7 @@ install:
 # Define the generate_proto target
 generate_proto:
 	@echo "Generating proto files..."
-	protoc --proto_path=. --go_out=. $(PROTO_FILES)
+	protoc --proto_path=. --go_out=. --go-grpc_out=. $(PROTO_FILES)
 
 # Define a clean target to remove generated files
 clean:

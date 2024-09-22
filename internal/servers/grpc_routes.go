@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
@@ -24,8 +25,9 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 		s.PeerData.markFileAsComplete(filePath)
 
 		// Send acknowledgment back to the client
-		err := stream.SendMsg(&pb.FileSyncResponse{
-			Message: fmt.Sprintf("File %s fully transferred", filePath),
+		err := stream.Send(&pb.FileSyncResponse{
+			Message:     fmt.Sprintf("File %s fully transferred", filePath),
+			ChunkNumber: req.ChunkNumber,
 		})
 		if err != nil {
 			log.Errorf("Error sending final acknowledgment: %v", err)
@@ -52,15 +54,47 @@ func (s *FileSyncServer) save(req *pb.FileChunk, stream grpc.BidiStreamingServer
 	}
 
 	// Update local metadata
-	go s.LocalMetaData.AddFileMetaData(filePath, req.ChunkData, req.ChunkNumber)
+	s.LocalMetaData.AddFileMetaData(filePath, req.ChunkData, req.ChunkNumber)
 
-	// Send acknowledgment for the current chunk
-	err = stream.SendMsg(&pb.FileSyncResponse{
-		Message: fmt.Sprintf("Chunk %d/%d saved for file %s", req.ChunkNumber, req.TotalChunks, filePath),
-	})
-	if err != nil {
-		log.Errorf("Error sending acknowledgment: %v", err)
-	}
+	go func() {
+		streamCompare, err := clients.CompareStream(stream.Context().Value("ip").(string))
+		if err != nil {
+			log.Errorf("Failed to open stream for list check on %s: %v", stream.Context().Value("ip").(string), err)
+			return
+		}
+		for {
+
+			go func(){
+				recv, err := streamCompare.Recv()
+				if err != nil {
+					log.Errorf("Error receiving response from %v: %v", stream.Context().Value("ip").(string), err)
+					return
+				}
+				// write received chunks to file
+				s.LocalMetaData.WriteChunkToFile(recv.FileName, recv.ChunkData, recv.ChunkNumber, recv.ChunkSize)
+				s.LocalMetaData.UpdateFileMetaData(recv.FileName, recv.ChunkData, recv.ChunkNumber, recv.ChunkSize)
+
+			}()
+
+			chunkHash, err := s.LocalMetaData.GetMetaData(filePath, req.ChunkNumber)
+			if err != nil {
+				log.Errorf("Error getting metadata: %v", err)
+				return
+			}
+
+			// Send the chunk to peers
+			err = streamCompare.Send(&pb.FileMetaData{
+				FileName:    req.FileName,
+				ChunkNumber: req.ChunkNumber,
+				ChunkHash:   chunkHash,
+				ChunkSize:  req.ChunkSize,
+			})
+			if err != nil {
+				log.Errorf("Error sending state response: %v", err)
+				return
+			}
+		}
+	}()
 }
 
 // service method

@@ -53,6 +53,15 @@ func (m *Meta) AddFileMetaData(file string, chunk []byte, offset int64) {
 		}
 	}
 }
+func (m *Meta) GetMetaData(file string, offset int64) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.MetaData[file]; !ok {
+		return "", fmt.Errorf("file not found in metadata")
+	}
+	return m.MetaData[file].Chunks[offset], nil
+}
 
 // saveToBadger saves the updated metadata to BadgerDB.
 // func (m *Meta) saveToBadger(file string) error {
