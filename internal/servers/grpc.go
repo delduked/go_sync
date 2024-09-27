@@ -16,13 +16,15 @@ type FileSyncServer struct {
 	syncDir       string
 	PeerData      *PeerData
 	LocalMetaData *Meta
+	fw            *FileWatcher
 }
 
-func NewFileSyncServer(syncDir string, peerData *PeerData, localMetaData *Meta) *FileSyncServer {
+func NewFileSyncServer(syncDir string, peerData *PeerData, localMetaData *Meta, fw *FileWatcher) *FileSyncServer {
 	return &FileSyncServer{
 		syncDir:       syncDir,
 		PeerData:      peerData,
 		LocalMetaData: localMetaData,
+		fw:            fw,
 	}
 }
 
@@ -158,6 +160,11 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 
 // Handler for FileChunk messages
 func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
+
+	s.fw.mu.Lock()
+	s.fw.inProgress[chunk.FileName] = true
+	s.fw.mu.Unlock()
+
 	// Directly write to the sync directory
 	filePath := filepath.Join(s.syncDir, chunk.FileName)
 
@@ -187,6 +194,12 @@ func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
 	if err != nil {
 		log.Printf("Error writing to file %s: %v", filePath, err)
 		return err
+	}
+
+	if chunk.Offset+int64(len(chunk.ChunkData)) >= chunk.TotalSize {
+		s.fw.mu.Lock()
+		delete(s.fw.inProgress, chunk.FileName)
+		s.fw.mu.Unlock()
 	}
 
 	log.Printf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)

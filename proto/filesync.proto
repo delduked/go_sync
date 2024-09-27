@@ -25,6 +25,7 @@ message FileChunk {
     int64 offset = 3;
     bool is_new_file = 4;
     int64 total_chunks = 5;
+    int64 total_size = 6;
 }
 
 message FileDelete {

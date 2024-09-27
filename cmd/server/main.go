@@ -24,8 +24,7 @@ func main() {
 	defer db.Close()
 
 	peerData := servers.NewPeerData()
-
-	// Create a new Meta instance with BadgerDB
+	fw := servers.NewFileWatcher(peerData)
 	metaData := servers.NewMeta(peerData, db)
 
 	// Step 1: Pre-scan all files, load into memory, and write to BadgerDB
@@ -58,7 +57,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Start(&wg, ctx, peerData, metaData); err != nil {
+		if err := server.Start(&wg, ctx, peerData, metaData, fw); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()

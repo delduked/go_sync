@@ -232,6 +232,10 @@ func (fm *FileMonitor) Stop() {
 
 // transferFile initiates the real-time transfer of a file to peers.
 func (fw *FileWatcher) transferFile(filePath string, isNewFile bool) {
+	fw.mu.Lock()
+	fw.inProgress[filePath] = true
+	fw.mu.Unlock()
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Printf("Error opening file %s for transfer: %v", filePath, err)
@@ -272,36 +276,39 @@ func (fw *FileWatcher) transferFile(filePath string, isNewFile bool) {
 		}
 	}
 
+	fw.mu.Lock()
+	delete(fw.inProgress, filePath)
+	fw.mu.Unlock()
 	log.Printf("File %s transfer complete", filePath)
 }
 
 // sendBytesToPeer sends file data to peers using persistent streams.
 func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int64, isNewFile bool, totalChunks int64) error {
-    fw.pd.mu.Lock()
-    defer fw.pd.mu.Unlock()
+	fw.pd.mu.Lock()
+	defer fw.pd.mu.Unlock()
 
-    for _, target := range fw.pd.Clients {
-        host, _, err := net.SplitHostPort(target)
-        if err != nil {
-            log.Errorf("Invalid client target %s: %v", target, err)
-            continue
-        }
-        if host == fw.pd.LocalIP {
-            continue // Skip self
-        }
+	for _, target := range fw.pd.Clients {
+		host, _, err := net.SplitHostPort(target)
+		if err != nil {
+			log.Errorf("Invalid client target %s: %v", target, err)
+			continue
+		}
+		if host == fw.pd.LocalIP {
+			continue // Skip self
+		}
 
-        stream, exists := fw.pd.Streams[target]
-        if !exists {
-            log.Printf("No persistent stream found for peer %s. Attempting to initialize.", target)
-            newStream, err := clients.SyncStream(target)
-            if err != nil {
-                log.Printf("Failed to initialize stream with peer %s: %v", target, err)
-                continue
-            }
-            fw.pd.Streams[target] = newStream
-            stream = newStream
-            log.Printf("Initialized new stream with peer %s", target)
-        }
+		stream, exists := fw.pd.Streams[target]
+		if !exists {
+			log.Printf("No persistent stream found for peer %s. Attempting to initialize.", target)
+			newStream, err := clients.SyncStream(target)
+			if err != nil {
+				log.Printf("Failed to initialize stream with peer %s: %v", target, err)
+				continue
+			}
+			fw.pd.Streams[target] = newStream
+			stream = newStream
+			log.Printf("Initialized new stream with peer %s", target)
+		}
 
 		// Attempt to send the chunk with retries
 		const maxRetries = 3
@@ -340,6 +347,13 @@ func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int6
 func (fw *FileWatcher) HandleFileModification(filePath string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
+
+	fw.mu.Lock()
+	if fw.inProgress[filePath] {
+		fw.mu.Unlock()
+		return
+	}
+	fw.mu.Unlock()
 
 	// Get previous size
 	prevSize, exists := fw.fileSizes[filePath]
