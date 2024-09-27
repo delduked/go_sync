@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
@@ -15,41 +16,54 @@ import (
 type PeerData struct {
 	Clients     []string
 	LocalIP     string
+	Subnet      string
 	Streams     map[string]pb.FileSyncService_SyncFileClient // Map of IP to stream
 	mu          sync.Mutex
-	SyncedFiles map[string]struct{} // Set to track files being synchronized
+	SyncedFiles map[string]bool // Set to track files being synchronized
+}
+
+func NewPeerData() *PeerData {
+
+	localIP, subnet, err := pkg.GetLocalIPAndSubnet()
+	if err != nil {
+		log.Fatalf("Failed to get local IP and subnet: %v", err)
+	}
+
+	return &PeerData{
+		Clients:     make([]string, 0),
+		SyncedFiles: make(map[string]bool),
+		LocalIP:     localIP,
+		Subnet:      subnet,
+	}
 }
 
 func (pd *PeerData) InitializeStreams() {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+
 	pd.Streams = make(map[string]pb.FileSyncService_SyncFileClient)
 	for _, ip := range pd.Clients {
-		conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+		if ip == pd.LocalIP {
+			continue // Skip self
+		}
+
+		stream, err := clients.SyncStream(ip)
 		if err != nil {
-			log.Printf("Failed to connect to peer %s: %v", ip, err)
+			log.Printf("Error initializing stream with peer %s: %v", ip, err)
 			continue
 		}
-		client := pb.NewFileSyncServiceClient(conn)
-		stream, err := client.SyncFile(context.Background())
-		if err != nil {
-			log.Printf("Failed to create stream to peer %s: %v", ip, err)
-			continue
-		}
+
 		pd.Streams[ip] = stream
-		log.Printf("Initialized stream to peer %s", ip)
+		log.Printf("Initialized persistent stream with peer %s", ip)
 	}
 }
 
 func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	localIP, localSubnet, err := pkg.GetLocalIPAndSubnet()
-	if err != nil {
-		log.Fatalf("Failed to get local IP and subnet: %v", err)
-	}
+	log.Infof("Local IP: %s, Subnet: %s", pd.LocalIP, pd.Subnet)
 
-	log.Infof("Local IP: %s, Subnet: %s", localIP, localSubnet)
-
-	instance := fmt.Sprintf("filesync-%s", localIP)
+	instance := fmt.Sprintf("filesync-%s", pd.LocalIP)
 	serviceType := "_myapp_filesync._tcp"
 	domain := "local."
 	txtRecords := []string{"version=1.0", "service_id=go_sync"}
@@ -71,11 +85,11 @@ func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		for entry := range results {
 			for _, ip := range entry.AddrIPv4 {
-				if !pkg.IsInSameSubnet(ip.String(), localSubnet) {
+				if !pkg.IsInSameSubnet(ip.String(), pd.Subnet) {
 					continue
 				}
 
-				if ip.String() == localIP || entry.TTL == 0 {
+				if ip.String() == pd.LocalIP || entry.TTL == 0 {
 					continue
 				}
 

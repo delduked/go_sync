@@ -158,11 +158,15 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 
 // Handler for FileChunk messages
 func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
-	// Define a separate directory for incoming files to avoid overwriting originals
-	incomingDir := filepath.Join(s.syncDir, "incoming")
-	os.MkdirAll(incomingDir, os.ModePerm)
+	// Directly write to the sync directory
+	filePath := filepath.Join(s.syncDir, chunk.FileName)
 
-	filePath := filepath.Join(incomingDir, chunk.FileName)
+	// Ensure the directory structure exists
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		log.Printf("Error creating directories for %s: %v", filePath, err)
+		return err
+	}
 
 	// Determine file flags based on whether it's a new file
 	flags := os.O_CREATE | os.O_WRONLY

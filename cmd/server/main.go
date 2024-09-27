@@ -23,9 +23,7 @@ func main() {
 	}
 	defer db.Close()
 
-	peerData := &servers.PeerData{
-		Clients: make([]string, 0),
-	}
+	peerData := servers.NewPeerData()
 
 	// Create a new Meta instance with BadgerDB
 	metaData := servers.NewMeta(peerData, db)
