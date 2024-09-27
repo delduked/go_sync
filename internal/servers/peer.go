@@ -3,9 +3,9 @@ package servers
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 
-	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
@@ -42,19 +42,31 @@ func (pd *PeerData) InitializeStreams() {
 	defer pd.mu.Unlock()
 
 	pd.Streams = make(map[string]pb.FileSyncService_SyncFileClient)
-	for _, ip := range pd.Clients {
-		if ip == pd.LocalIP {
+	for _, target := range pd.Clients {
+		host, _, err := net.SplitHostPort(target)
+		if err != nil {
+			log.Errorf("Invalid client target %s: %v", target, err)
+			continue
+		}
+		if host == pd.LocalIP {
 			continue // Skip self
 		}
 
-		stream, err := clients.SyncStream(ip)
+		// Use grpc.NewClient or grpc.Dial based on your gRPC version
+		conn, err := grpc.NewClient(target, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
-			log.Printf("Error initializing stream with peer %s: %v", ip, err)
+			log.Printf("Error initializing connection with peer %s: %v", target, err)
+			continue
+		}
+		client := pb.NewFileSyncServiceClient(conn)
+		stream, err := client.SyncFile(context.Background())
+		if err != nil {
+			log.Printf("Error creating stream with peer %s: %v", target, err)
 			continue
 		}
 
-		pd.Streams[ip] = stream
-		log.Printf("Initialized persistent stream with peer %s", ip)
+		pd.Streams[target] = stream
+		log.Printf("Initialized persistent stream with peer %s", target)
 	}
 }
 

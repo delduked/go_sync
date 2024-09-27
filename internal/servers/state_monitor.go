@@ -3,6 +3,7 @@ package servers
 import (
 	"encoding/hex"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -276,26 +277,31 @@ func (fw *FileWatcher) transferFile(filePath string, isNewFile bool) {
 
 // sendBytesToPeer sends file data to peers using persistent streams.
 func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int64, isNewFile bool, totalChunks int64) error {
-	fw.pd.mu.Lock()
-	defer fw.pd.mu.Unlock()
+    fw.pd.mu.Lock()
+    defer fw.pd.mu.Unlock()
 
-	for _, ip := range fw.pd.Clients {
-		if ip == fw.pd.LocalIP { // Skip sending to self
-			continue
-		}
+    for _, target := range fw.pd.Clients {
+        host, _, err := net.SplitHostPort(target)
+        if err != nil {
+            log.Errorf("Invalid client target %s: %v", target, err)
+            continue
+        }
+        if host == fw.pd.LocalIP {
+            continue // Skip self
+        }
 
-		stream, exists := fw.pd.Streams[ip]
-		if !exists {
-			log.Printf("No persistent stream found for peer %s. Attempting to initialize.", ip)
-			newStream, err := clients.SyncStream(ip)
-			if err != nil {
-				log.Printf("Failed to initialize stream with peer %s: %v", ip, err)
-				continue
-			}
-			fw.pd.Streams[ip] = newStream
-			stream = newStream
-			log.Printf("Initialized new stream with peer %s", ip)
-		}
+        stream, exists := fw.pd.Streams[target]
+        if !exists {
+            log.Printf("No persistent stream found for peer %s. Attempting to initialize.", target)
+            newStream, err := clients.SyncStream(target)
+            if err != nil {
+                log.Printf("Failed to initialize stream with peer %s: %v", target, err)
+                continue
+            }
+            fw.pd.Streams[target] = newStream
+            stream = newStream
+            log.Printf("Initialized new stream with peer %s", target)
+        }
 
 		// Attempt to send the chunk with retries
 		const maxRetries = 3
@@ -312,16 +318,16 @@ func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int6
 				},
 			})
 			if err != nil {
-				log.Printf("Attempt %d: Failed to send chunk to peer %s: %v", attempt, ip, err)
+				log.Printf("Attempt %d: Failed to send chunk to peer %s: %v", attempt, target, err)
 				if attempt < maxRetries {
-					log.Printf("Retrying to send chunk to peer %s...", ip)
+					log.Printf("Retrying to send chunk to peer %s...", target)
 					time.Sleep(2 * time.Second) // Wait before retrying
 					continue
 				} else {
-					log.Printf("Exceeded max retries for peer %s. Skipping chunk.", ip)
+					log.Printf("Exceeded max retries for peer %s. Skipping chunk.", target)
 				}
 			} else {
-				log.Printf("Successfully sent chunk to peer %s for file %s at offset %d", ip, fileName, offset)
+				log.Printf("Successfully sent chunk to peer %s for file %s at offset %d", target, fileName, offset)
 				break
 			}
 		}
