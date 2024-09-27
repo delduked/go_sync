@@ -6,15 +6,37 @@ import (
 	"sync"
 
 	"github.com/TypeTerrors/go_sync/pkg"
+	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"github.com/grandcat/zeroconf"
 	"google.golang.org/grpc"
 )
 
 type PeerData struct {
-	mu          sync.RWMutex
 	Clients     []string
-	SyncedFiles []string
+	LocalIP     string
+	Streams     map[string]pb.FileSyncService_SyncFileClient // Map of IP to stream
+	mu          sync.Mutex
+	SyncedFiles map[string]struct{} // Set to track files being synchronized
+}
+
+func (pd *PeerData) InitializeStreams() {
+	pd.Streams = make(map[string]pb.FileSyncService_SyncFileClient)
+	for _, ip := range pd.Clients {
+		conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Printf("Failed to connect to peer %s: %v", ip, err)
+			continue
+		}
+		client := pb.NewFileSyncServiceClient(conn)
+		stream, err := client.SyncFile(context.Background())
+		if err != nil {
+			log.Printf("Failed to create stream to peer %s: %v", ip, err)
+			continue
+		}
+		pd.Streams[ip] = stream
+		log.Printf("Initialized stream to peer %s", ip)
+	}
 }
 
 func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {

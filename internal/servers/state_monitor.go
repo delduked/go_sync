@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
-	"github.com/TypeTerrors/go_sync/internal/clients"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/cespare/xxhash"
 	"github.com/charmbracelet/log"
@@ -17,14 +16,11 @@ import (
 
 // FileMonitor represents a monitor for a single file.
 type FileMonitor struct {
-	filePath            string
-	pipeReader          *io.PipeReader
-	pipeWriter          *io.PipeWriter
-	done                chan struct{}
-	isNewFile           bool
-	lastSent            time.Time     // Tracks the last time data was sent
-	modRate             time.Duration // Minimum time between sending updates
-	modificationPending bool          // Tracks if a modification is pending
+	filePath   string
+	pipeReader *io.PipeReader
+	pipeWriter *io.PipeWriter
+	done       chan struct{}
+	isNewFile  bool
 }
 
 // FileWatcher monitors files in a directory for changes.
@@ -77,15 +73,17 @@ func (fw *FileWatcher) HandleFileDeletion(filePath string) {
 
 	// Notify peers about the file deletion
 	for _, ip := range fw.pd.Clients {
-		log.Printf("Deleting file %v on peer %v", filePath, ip)
+		if ip == fw.pd.LocalIP {
+			continue // Skip self
+		}
 
-		stream, err := clients.SyncStream(ip)
-		if err != nil {
-			log.Printf("Error starting stream to peer %v: %v", ip, err)
+		stream, exists := fw.pd.Streams[ip]
+		if !exists {
+			log.Printf("No stream found for peer %s to send delete request", ip)
 			continue
 		}
 
-		err = stream.Send(&pb.FileSyncRequest{
+		err := stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileDelete{
 				FileDelete: &pb.FileDelete{
 					FileName: filePath,
@@ -93,7 +91,9 @@ func (fw *FileWatcher) HandleFileDeletion(filePath string) {
 			},
 		})
 		if err != nil {
-			log.Printf("Error sending delete request to peer %v: %v", ip, err)
+			log.Printf("Error sending delete request to peer %s: %v", ip, err)
+		} else {
+			log.Printf("Sent delete request to peer %s for file %s", ip, filePath)
 		}
 	}
 }
@@ -104,7 +104,7 @@ func (fw *FileWatcher) monitorFile(filePath string, isNewFile bool) {
 		return
 	}
 
-	// Create a new FileMonitor with rate-limiting for modifications
+	// Create a new FileMonitor
 	pipeReader, pipeWriter := io.Pipe()
 	monitor := &FileMonitor{
 		filePath:   filePath,
@@ -112,13 +112,11 @@ func (fw *FileWatcher) monitorFile(filePath string, isNewFile bool) {
 		pipeWriter: pipeWriter,
 		done:       make(chan struct{}),
 		isNewFile:  isNewFile,
-		lastSent:   time.Now(),
-		modRate:    1 * time.Second, // Minimum 1 second between updates
 	}
 	fw.monitoredFiles[filePath] = monitor
 
 	// Mark the file as in-progress
-	fw.inProgress[filePath] = true
+	fw.pd.markFileAsInProgress(filePath)
 
 	go monitor.captureFileWrites()
 	go monitor.processCapturedData(fw)
@@ -187,45 +185,39 @@ func (fm *FileMonitor) processCapturedData(fw *FileWatcher) {
 		select {
 		case <-fm.done:
 			// Mark the file as no longer in-progress
-			fw.mu.Lock()
-			delete(fw.inProgress, fm.filePath)
-			fw.mu.Unlock()
+			fw.pd.markFileAsComplete(fm.filePath)
 			return
 		default:
 			n, err := fm.pipeReader.Read(buf)
 			if err != nil {
 				if err == io.EOF {
 					// Mark the file as no longer in-progress
-					fw.mu.Lock()
-					delete(fw.inProgress, fm.filePath)
-					fw.mu.Unlock()
+					fw.pd.markFileAsComplete(fm.filePath)
 					return
 				}
 				log.Printf("Error reading from pipe for file %s: %v", fm.filePath, err)
+				fw.pd.markFileAsComplete(fm.filePath)
 				return
 			}
 
-			// Rate-limit file modifications
-			now := time.Now()
-			if now.Sub(fm.lastSent) >= fm.modRate {
-				fm.modificationPending = false
-				fm.lastSent = now
+			// Send the captured data to the peer with rate-limiting
+			err = fw.sendBytesToPeer(filepath.Base(fm.filePath), buf[:n], offset, fm.isNewFile, 0)
+			if err != nil {
+				log.Printf("Error sending data to peer for file %s: %v", fm.filePath, err)
+				fw.pd.markFileAsComplete(fm.filePath)
+				return
+			}
 
-				// Send the captured data to the peer
-				err = fw.sendBytesToPeer(filepath.Base(fm.filePath), buf[:n], offset, fm.isNewFile)
-				if err != nil {
-					log.Printf("Error sending data to peer for file %s: %v", fm.filePath, err)
-					return
-				}
-				offset += int64(n)
+			// Update the file size
+			fw.mu.Lock()
+			fw.fileSizes[fm.filePath] = offset + int64(n)
+			fw.mu.Unlock()
 
-				// After sending the first chunk, mark the file as not new
-				if fm.isNewFile {
-					fm.isNewFile = false
-				}
-			} else {
-				// Mark the modification as pending
-				fm.modificationPending = true
+			offset += int64(n)
+
+			// After sending the first chunk, mark the file as not new
+			if fm.isNewFile {
+				fm.isNewFile = false
 			}
 		}
 	}
@@ -234,6 +226,89 @@ func (fm *FileMonitor) processCapturedData(fw *FileWatcher) {
 // Stop signals the monitor to stop monitoring.
 func (fm *FileMonitor) Stop() {
 	close(fm.done)
+}
+
+// transferFile initiates the real-time transfer of a file to peers.
+func (fw *FileWatcher) transferFile(filePath string, isNewFile bool) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Error opening file %s for transfer: %v", filePath, err)
+		return
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("Error getting file info for %s: %v", filePath, err)
+		return
+	}
+	fileSize := fileInfo.Size()
+	totalChunks := (fileSize + conf.ChunkSize - 1) / conf.ChunkSize
+
+	buf := make([]byte, conf.ChunkSize)
+	var offset int64 = 0
+
+	for {
+		n, err := file.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			log.Printf("Error reading file %s: %v", filePath, err)
+			return
+		}
+		if n == 0 {
+			break
+		}
+
+		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, isNewFile, totalChunks)
+		if err != nil {
+			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
+			return
+		}
+		offset += int64(n)
+
+		if isNewFile {
+			isNewFile = false
+		}
+	}
+
+	log.Printf("File %s transfer complete", filePath)
+}
+
+// sendBytesToPeer sends file data to peers using persistent streams.
+func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int64, isNewFile bool, totalChunks int64) error {
+	fw.pd.mu.Lock()
+	defer fw.pd.mu.Unlock()
+
+	for _, ip := range fw.pd.Clients {
+		if ip == fw.pd.LocalIP { // Skip sending to self
+			continue
+		}
+
+		stream, exists := fw.pd.Streams[ip]
+		if !exists {
+			log.Printf("No stream found for peer %s to send data", ip)
+			continue
+		}
+
+		err := stream.Send(&pb.FileSyncRequest{
+			Request: &pb.FileSyncRequest_FileChunk{
+				FileChunk: &pb.FileChunk{
+					FileName:    fileName,
+					ChunkData:   data,
+					Offset:      offset,
+					IsNewFile:   isNewFile,
+					TotalChunks: totalChunks,
+				},
+			},
+		})
+		if err != nil {
+			log.Printf("Error sending chunk to peer %s: %v", ip, err)
+			// Optionally, handle reconnection or stream reinitialization here
+		} else {
+			log.Printf("Sent chunk to peer %s for file %s at offset %d", ip, fileName, offset)
+		}
+	}
+
+	return nil
 }
 
 // HandleFileModification processes modifications to a file.
@@ -269,50 +344,16 @@ func (fw *FileWatcher) HandleFileModification(filePath string) {
 	}
 }
 
-// sendBytesToPeer sends file data to the peer.
-func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int64, isNewFile bool) error {
-	// Implement your gRPC client logic here
-	// Send fileName, data, offset, and isNewFile flag to the peer
-
-	for _, ip := range fw.pd.Clients {
-		stream, err := clients.SyncStream(ip)
-		if err != nil {
-			log.Printf("Error starting stream to peer %s: %v", ip, err)
-			continue
-		}
-
-		// No need to lock here as we are only reading the size
-		size := fw.fileSizes[fileName]
-
-		err = stream.Send(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileChunk{
-				FileChunk: &pb.FileChunk{
-					FileName:    fileName,
-					ChunkData:   data,
-					Offset:      offset,
-					IsNewFile:   isNewFile,
-					TotalChunks: int64(size+int64(len(data))-1) / int64(conf.ChunkSize),
-				},
-			},
-		})
-		if err != nil {
-			log.Printf("Error sending chunk to peer %s: %v", ip, err)
-		}
-	}
-
-	return nil
-}
-
-// handleFileShrunk handles the scenario where a file has shrunk.
+// handleFileShrunk notifies peers to truncate the file.
 func (fw *FileWatcher) handleFileShrunk(filePath string, currSize, prevSize int64) {
-	// Notify peer to truncate or delete the data beyond currSize
+	// Notify peers to truncate the file
 	err := fw.sendFileTruncateToPeer(filepath.Base(filePath), currSize)
 	if err != nil {
-		log.Printf("Error sending truncate command to peer for file %s: %v", filePath, err)
+		log.Printf("Error sending truncate command for file %s: %v", filePath, err)
 	}
 }
 
-// handleInPlaceModification handles modifications where the file size hasn't changed.
+// handleInPlaceModification detects in-place modifications and sends updated data.
 func (fw *FileWatcher) handleInPlaceModification(filePath string) {
 	// Compute current hash
 	currHash, err := computeFileHash(filePath)
@@ -345,8 +386,7 @@ func (fw *FileWatcher) handleInPlaceModification(filePath string) {
 	fw.readAndSendFileData(filePath, 0, fileInfo.Size())
 }
 
-
-// readAndSendFileData reads the specified range of data from the file and sends it to the peer.
+// readAndSendFileData reads specified data from the file and sends it to peers.
 func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length int64) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -374,7 +414,7 @@ func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length
 			break
 		}
 
-		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset+totalRead, isNewFile)
+		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset+totalRead, isNewFile, 0) // TotalChunks can be recalculated if needed
 		if err != nil {
 			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
 			return
@@ -387,17 +427,20 @@ func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length
 	}
 }
 
-
-// sendFileTruncateToPeer notifies the peer to truncate the file to a specific size.
+// sendFileTruncateToPeer notifies peers to truncate the file to a specific size.
 func (fw *FileWatcher) sendFileTruncateToPeer(fileName string, size int64) error {
 	for _, ip := range fw.pd.Clients {
-		stream, err := clients.SyncStream(ip)
-		if err != nil {
-			log.Printf("Error starting stream to peer %s: %v", ip, err)
+		if ip == fw.pd.LocalIP {
+			continue // Skip sending to self
+		}
+
+		stream, exists := fw.pd.Streams[ip]
+		if !exists {
+			log.Printf("No stream found for peer %s to send truncate command", ip)
 			continue
 		}
 
-		err = stream.Send(&pb.FileSyncRequest{
+		err := stream.Send(&pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileTruncate{
 				FileTruncate: &pb.FileTruncate{
 					FileName: fileName,
@@ -407,6 +450,8 @@ func (fw *FileWatcher) sendFileTruncateToPeer(fileName string, size int64) error
 		})
 		if err != nil {
 			log.Printf("Error sending truncate command to peer %s: %v", ip, err)
+		} else {
+			log.Printf("Sent truncate command to peer %s for file %s to size %d", ip, fileName, size)
 		}
 	}
 	return nil
@@ -426,42 +471,4 @@ func computeFileHash(filePath string) (string, error) {
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-// Implement real-time file transfer
-func (fw *FileWatcher) transferFile(filePath string, isNewFile bool) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Printf("Error opening file %s for transfer: %v", filePath, err)
-		return
-	}
-	defer file.Close()
-
-	buf := make([]byte, conf.ChunkSize)
-	var offset int64 = 0
-
-	for {
-		// Read file in chunks
-		n, err := file.ReadAt(buf, offset)
-		if err != nil && err != io.EOF {
-			log.Printf("Error reading file %s: %v", filePath, err)
-			return
-		}
-		if n == 0 {
-			break
-		}
-
-		// Send chunk to peer
-		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, isNewFile)
-		if err != nil {
-			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
-			return
-		}
-		offset += int64(n)
-
-		if isNewFile {
-			isNewFile = false
-		}
-	}
-	log.Printf("File %s transfer complete", filePath)
 }

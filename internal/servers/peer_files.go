@@ -1,33 +1,26 @@
 package servers
 
-import (
-	"github.com/TypeTerrors/go_sync/pkg"
-)
-
+// markFileAsInProgress marks a file as being synchronized.
 func (pd *PeerData) markFileAsInProgress(fileName string) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	if !pkg.ContainsString(pd.SyncedFiles, fileName) {
-		pd.SyncedFiles = append(pd.SyncedFiles, fileName)
-	}
+	pd.SyncedFiles[fileName] = struct{}{}
 }
 
+// markFileAsComplete removes a file from the synchronization tracking.
 func (pd *PeerData) markFileAsComplete(fileName string) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	for i, file := range pd.SyncedFiles {
-		if file == fileName {
-			pd.SyncedFiles = append(pd.SyncedFiles[:i], pd.SyncedFiles[i+1:]...)
-			break
-		}
-	}
+	delete(pd.SyncedFiles, fileName)
 }
 
+// IsFileInProgress checks if a file is currently being synchronized.
 func (pd *PeerData) IsFileInProgress(fileName string) bool {
-	pd.mu.RLock()
-	defer pd.mu.RUnlock()
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 
-	return pkg.ContainsString(pd.SyncedFiles, fileName)
+	_, exists := pd.SyncedFiles[fileName]
+	return exists
 }

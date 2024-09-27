@@ -155,10 +155,10 @@ func (s *State) PeriodicMetadataExchange(ctx context.Context, wg *sync.WaitGroup
 }
 
 func (s *State) exchangeMetadataWithPeers() {
-	s.sharedData.mu.RLock()
+	s.sharedData.mu.Lock()
 	peers := make([]string, len(s.sharedData.Clients))
 	copy(peers, s.sharedData.Clients)
-	s.sharedData.mu.RUnlock()
+	s.sharedData.mu.Lock()
 
 	for _, ip := range peers {
 		go func(ip string) {

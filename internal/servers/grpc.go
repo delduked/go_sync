@@ -158,17 +158,20 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 
 // Handler for FileChunk messages
 func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
-	filePath := filepath.Join(s.syncDir, chunk.FileName)
+	// Define a separate directory for incoming files to avoid overwriting originals
+	incomingDir := filepath.Join(s.syncDir, "incoming")
+	os.MkdirAll(incomingDir, os.ModePerm)
 
-	var file *os.File
-	var err error
+	filePath := filepath.Join(incomingDir, chunk.FileName)
+
+	// Determine file flags based on whether it's a new file
+	flags := os.O_CREATE | os.O_WRONLY
 	if chunk.IsNewFile {
-		// Create or truncate the file if it's a new file
-		file, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	} else {
-		// Open the file for writing without truncating
-		file, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
+		flags |= os.O_TRUNC
 	}
+
+	// Open the file with appropriate flags
+	file, err := os.OpenFile(filePath, flags, 0644)
 	if err != nil {
 		log.Printf("Error opening file %s: %v", filePath, err)
 		return err
@@ -182,35 +185,31 @@ func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
 		return err
 	}
 
-	// Update local metadata if necessary
-	s.LocalMetaData.UpdateFileMetaData(chunk.FileName, chunk.ChunkData, chunk.Offset, int64(len(chunk.ChunkData)))
+	log.Printf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
 
 	return nil
 }
 
-// Handler for FileDelete messages
+// handleFileDelete deletes the specified file.
 func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
-
-	relativePath := filepath.Clean(fileDelete.FileName)
-
-	err := os.Remove(relativePath)
-	if err != nil && !os.IsNotExist(err) {
-		log.Printf("Error deleting file %s: %v", relativePath, err)
+	filePath := filepath.Clean(fileDelete.FileName)
+	err := os.Remove(filePath)
+	if err != nil {
+		log.Printf("Error deleting file %s: %v", filePath, err)
 		return err
 	}
-	s.LocalMetaData.DeleteFileMetaData(fileDelete.FileName)
-	log.Printf("Deleted file %s", relativePath)
+	log.Printf("Deleted file %s as per request", filePath)
 	return nil
 }
 
-// Handler for FileTruncate messages
+// handleFileTruncate truncates the specified file to the given size.
 func (s *FileSyncServer) handleFileTruncate(fileTruncate *pb.FileTruncate) error {
-	filePath := filepath.Join(s.syncDir, fileTruncate.FileName)
+	filePath := filepath.Clean(fileTruncate.FileName)
 	err := os.Truncate(filePath, fileTruncate.Size)
 	if err != nil {
-		log.Printf("Error truncating file %s: %v", filePath, err)
+		log.Printf("Error truncating file %s to size %d: %v", filePath, fileTruncate.Size, err)
 		return err
 	}
-	log.Printf("Truncated file %s to size %d", filePath, fileTruncate.Size)
+	log.Printf("Truncated file %s to size %d as per request", filePath, fileTruncate.Size)
 	return nil
 }
