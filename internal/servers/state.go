@@ -17,18 +17,17 @@ import (
 )
 
 type State struct {
-	grpcServer *grpc.Server
 	listener   net.Listener
-	watchDir   string
-	port       string
+	grpcServer *grpc.Server
 	sharedData *PeerData
 	MetaData   *Meta
 	fw         *FileWatcher
 	syncdir    string
+	port       string
 }
 
 // NewState creates a new State with default settings
-func StateServer(metaData *Meta, sharedData *PeerData, watchDir, port, syncDir string) (*State, error) {
+func StateServer(metaData *Meta, sharedData *PeerData, port, syncDir string) (*State, error) {
 	// Create TCP listener
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -42,7 +41,6 @@ func StateServer(metaData *Meta, sharedData *PeerData, watchDir, port, syncDir s
 	server := &State{
 		grpcServer: grpc.NewServer(),
 		listener:   listener,
-		watchDir:   watchDir,
 		port:       port,
 		sharedData: sharedData,
 		MetaData:   metaData,
@@ -81,8 +79,8 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 		return nil, err
 	}
 
-	log.Printf("Watching directory: %s", s.watchDir)
-	err = watcher.Add(s.watchDir)
+	log.Printf("Watching directory: %s", s.syncdir)
+	err = watcher.Add(s.syncdir)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +168,6 @@ func (s *State) exchangeMetadataWithPeers() {
 				return
 			}
 
-			// Send metadata requests for each file
 			s.MetaData.mu.Lock()
 			fileNames := make([]string, 0, len(s.MetaData.MetaData))
 			for fileName := range s.MetaData.MetaData {

@@ -183,7 +183,7 @@ func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
 	}
 
 	// Update local metadata if necessary
-	// s.LocalMetaData.UpdateFileMetaData(chunk.FileName, chunk.ChunkData, chunk.Offset, int64(len(chunk.ChunkData)))
+	s.LocalMetaData.UpdateFileMetaData(chunk.FileName, chunk.ChunkData, chunk.Offset, int64(len(chunk.ChunkData)))
 
 	return nil
 }
@@ -196,6 +196,7 @@ func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
 		log.Printf("Error deleting file %s: %v", filePath, err)
 		return err
 	}
+	s.LocalMetaData.DeleteFileMetaData(fileDelete.FileName)
 	log.Printf("Deleted file %s", filePath)
 	return nil
 }

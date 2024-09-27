@@ -15,7 +15,6 @@ type PeerData struct {
 	mu          sync.RWMutex
 	Clients     []string
 	SyncedFiles []string
-	WatchDir    string
 }
 
 func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {

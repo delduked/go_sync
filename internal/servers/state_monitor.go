@@ -21,7 +21,7 @@ type FileMonitor struct {
 	pipeReader *io.PipeReader
 	pipeWriter *io.PipeWriter
 	done       chan struct{}
-	isNewFile  bool // Indicates if the file is newly created
+	isNewFile  bool
 }
 
 // FileWatcher monitors files in a directory for changes.
@@ -29,9 +29,9 @@ type FileWatcher struct {
 	monitoredFiles map[string]*FileMonitor
 	fileSizes      map[string]int64
 	fileHashes     map[string]string
-	inProgress     map[string]bool // Tracks files currently being edited
+	inProgress     map[string]bool
 	pd             *PeerData
-	mu             sync.Mutex // Protects access to the maps
+	mu             sync.Mutex
 }
 
 func NewFileWatcher(pd *PeerData) *FileWatcher {
