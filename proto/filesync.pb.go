@@ -29,10 +29,7 @@ type FileSyncRequest struct {
 	//
 	//	*FileSyncRequest_FileChunk
 	//	*FileSyncRequest_FileDelete
-	//	*FileSyncRequest_FileRename
-	//	*FileSyncRequest_Ack
-	//	*FileSyncRequest_Poll
-	//	*FileSyncRequest_FileList
+	//	*FileSyncRequest_FileTruncate
 	Request isFileSyncRequest_Request `protobuf_oneof:"request"`
 }
 
@@ -89,30 +86,9 @@ func (x *FileSyncRequest) GetFileDelete() *FileDelete {
 	return nil
 }
 
-func (x *FileSyncRequest) GetFileRename() *FileRename {
-	if x, ok := x.GetRequest().(*FileSyncRequest_FileRename); ok {
-		return x.FileRename
-	}
-	return nil
-}
-
-func (x *FileSyncRequest) GetAck() *Acknowledgment {
-	if x, ok := x.GetRequest().(*FileSyncRequest_Ack); ok {
-		return x.Ack
-	}
-	return nil
-}
-
-func (x *FileSyncRequest) GetPoll() *Poll {
-	if x, ok := x.GetRequest().(*FileSyncRequest_Poll); ok {
-		return x.Poll
-	}
-	return nil
-}
-
-func (x *FileSyncRequest) GetFileList() *FileList {
-	if x, ok := x.GetRequest().(*FileSyncRequest_FileList); ok {
-		return x.FileList
+func (x *FileSyncRequest) GetFileTruncate() *FileTruncate {
+	if x, ok := x.GetRequest().(*FileSyncRequest_FileTruncate); ok {
+		return x.FileTruncate
 	}
 	return nil
 }
@@ -129,42 +105,26 @@ type FileSyncRequest_FileDelete struct {
 	FileDelete *FileDelete `protobuf:"bytes,2,opt,name=file_delete,json=fileDelete,proto3,oneof"`
 }
 
-type FileSyncRequest_FileRename struct {
-	FileRename *FileRename `protobuf:"bytes,3,opt,name=file_rename,json=fileRename,proto3,oneof"`
-}
-
-type FileSyncRequest_Ack struct {
-	Ack *Acknowledgment `protobuf:"bytes,4,opt,name=ack,proto3,oneof"`
-}
-
-type FileSyncRequest_Poll struct {
-	Poll *Poll `protobuf:"bytes,5,opt,name=poll,proto3,oneof"`
-}
-
-type FileSyncRequest_FileList struct {
-	FileList *FileList `protobuf:"bytes,6,opt,name=file_list,json=fileList,proto3,oneof"`
+type FileSyncRequest_FileTruncate struct {
+	FileTruncate *FileTruncate `protobuf:"bytes,3,opt,name=file_truncate,json=fileTruncate,proto3,oneof"`
 }
 
 func (*FileSyncRequest_FileChunk) isFileSyncRequest_Request() {}
 
 func (*FileSyncRequest_FileDelete) isFileSyncRequest_Request() {}
 
-func (*FileSyncRequest_FileRename) isFileSyncRequest_Request() {}
+func (*FileSyncRequest_FileTruncate) isFileSyncRequest_Request() {}
 
-func (*FileSyncRequest_Ack) isFileSyncRequest_Request() {}
-
-func (*FileSyncRequest_Poll) isFileSyncRequest_Request() {}
-
-func (*FileSyncRequest_FileList) isFileSyncRequest_Request() {}
-
-type StateReq struct {
+type FileSyncResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
+
+	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
 }
 
-func (x *StateReq) Reset() {
-	*x = StateReq{}
+func (x *FileSyncResponse) Reset() {
+	*x = FileSyncResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_proto_filesync_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -172,13 +132,13 @@ func (x *StateReq) Reset() {
 	}
 }
 
-func (x *StateReq) String() string {
+func (x *FileSyncResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StateReq) ProtoMessage() {}
+func (*FileSyncResponse) ProtoMessage() {}
 
-func (x *StateReq) ProtoReflect() protoreflect.Message {
+func (x *FileSyncResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_filesync_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -190,190 +150,16 @@ func (x *StateReq) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StateReq.ProtoReflect.Descriptor instead.
-func (*StateReq) Descriptor() ([]byte, []int) {
+// Deprecated: Use FileSyncResponse.ProtoReflect.Descriptor instead.
+func (*FileSyncResponse) Descriptor() ([]byte, []int) {
 	return file_proto_filesync_proto_rawDescGZIP(), []int{1}
 }
 
-type MetaDataReq struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	FileName string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
-	FileSize int64  `protobuf:"varint,2,opt,name=file_size,json=fileSize,proto3" json:"file_size,omitempty"`
-}
-
-func (x *MetaDataReq) Reset() {
-	*x = MetaDataReq{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[2]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *MetaDataReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MetaDataReq) ProtoMessage() {}
-
-func (x *MetaDataReq) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[2]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MetaDataReq.ProtoReflect.Descriptor instead.
-func (*MetaDataReq) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *MetaDataReq) GetFileName() string {
-	if x != nil {
-		return x.FileName
-	}
-	return ""
-}
-
-func (x *MetaDataReq) GetFileSize() int64 {
-	if x != nil {
-		return x.FileSize
-	}
-	return 0
-}
-
-type FileMetaData struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	FileName  string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
-	Offset    int64  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
-	ChunkSize int64  `protobuf:"varint,3,opt,name=chunk_size,json=chunkSize,proto3" json:"chunk_size,omitempty"`
-	ChunkHash string `protobuf:"bytes,4,opt,name=chunk_hash,json=chunkHash,proto3" json:"chunk_hash,omitempty"`
-	Message   string `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
-}
-
-func (x *FileMetaData) Reset() {
-	*x = FileMetaData{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[3]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *FileMetaData) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FileMetaData) ProtoMessage() {}
-
-func (x *FileMetaData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[3]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FileMetaData.ProtoReflect.Descriptor instead.
-func (*FileMetaData) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *FileMetaData) GetFileName() string {
-	if x != nil {
-		return x.FileName
-	}
-	return ""
-}
-
-func (x *FileMetaData) GetOffset() int64 {
-	if x != nil {
-		return x.Offset
-	}
-	return 0
-}
-
-func (x *FileMetaData) GetChunkSize() int64 {
-	if x != nil {
-		return x.ChunkSize
-	}
-	return 0
-}
-
-func (x *FileMetaData) GetChunkHash() string {
-	if x != nil {
-		return x.ChunkHash
-	}
-	return ""
-}
-
-func (x *FileMetaData) GetMessage() string {
+func (x *FileSyncResponse) GetMessage() string {
 	if x != nil {
 		return x.Message
 	}
 	return ""
-}
-
-type StateRes struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Message []string `protobuf:"bytes,1,rep,name=message,proto3" json:"message,omitempty"` // For file listing if needed
-}
-
-func (x *StateRes) Reset() {
-	*x = StateRes{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[4]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *StateRes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StateRes) ProtoMessage() {}
-
-func (x *StateRes) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[4]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StateRes.ProtoReflect.Descriptor instead.
-func (*StateRes) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *StateRes) GetMessage() []string {
-	if x != nil {
-		return x.Message
-	}
-	return nil
 }
 
 type FileChunk struct {
@@ -384,14 +170,14 @@ type FileChunk struct {
 	FileName    string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
 	ChunkData   []byte `protobuf:"bytes,2,opt,name=chunk_data,json=chunkData,proto3" json:"chunk_data,omitempty"`
 	Offset      int64  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
-	ChunkSize   int64  `protobuf:"varint,4,opt,name=chunk_size,json=chunkSize,proto3" json:"chunk_size,omitempty"`
+	IsNewFile   bool   `protobuf:"varint,4,opt,name=is_new_file,json=isNewFile,proto3" json:"is_new_file,omitempty"`
 	TotalChunks int64  `protobuf:"varint,5,opt,name=total_chunks,json=totalChunks,proto3" json:"total_chunks,omitempty"`
 }
 
 func (x *FileChunk) Reset() {
 	*x = FileChunk{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[5]
+		mi := &file_proto_filesync_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -404,7 +190,7 @@ func (x *FileChunk) String() string {
 func (*FileChunk) ProtoMessage() {}
 
 func (x *FileChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[5]
+	mi := &file_proto_filesync_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -417,7 +203,7 @@ func (x *FileChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileChunk.ProtoReflect.Descriptor instead.
 func (*FileChunk) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{5}
+	return file_proto_filesync_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *FileChunk) GetFileName() string {
@@ -441,93 +227,14 @@ func (x *FileChunk) GetOffset() int64 {
 	return 0
 }
 
-func (x *FileChunk) GetChunkSize() int64 {
+func (x *FileChunk) GetIsNewFile() bool {
 	if x != nil {
-		return x.ChunkSize
+		return x.IsNewFile
 	}
-	return 0
+	return false
 }
 
 func (x *FileChunk) GetTotalChunks() int64 {
-	if x != nil {
-		return x.TotalChunks
-	}
-	return 0
-}
-
-type MetaDataChunk struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	FileName    string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
-	ChunkData   []byte `protobuf:"bytes,2,opt,name=chunk_data,json=chunkData,proto3" json:"chunk_data,omitempty"`
-	Offset      int64  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
-	ChunkSize   int64  `protobuf:"varint,4,opt,name=chunk_size,json=chunkSize,proto3" json:"chunk_size,omitempty"`
-	TotalChunks int32  `protobuf:"varint,5,opt,name=total_chunks,json=totalChunks,proto3" json:"total_chunks,omitempty"`
-}
-
-func (x *MetaDataChunk) Reset() {
-	*x = MetaDataChunk{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[6]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *MetaDataChunk) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MetaDataChunk) ProtoMessage() {}
-
-func (x *MetaDataChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[6]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MetaDataChunk.ProtoReflect.Descriptor instead.
-func (*MetaDataChunk) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *MetaDataChunk) GetFileName() string {
-	if x != nil {
-		return x.FileName
-	}
-	return ""
-}
-
-func (x *MetaDataChunk) GetChunkData() []byte {
-	if x != nil {
-		return x.ChunkData
-	}
-	return nil
-}
-
-func (x *MetaDataChunk) GetOffset() int64 {
-	if x != nil {
-		return x.Offset
-	}
-	return 0
-}
-
-func (x *MetaDataChunk) GetChunkSize() int64 {
-	if x != nil {
-		return x.ChunkSize
-	}
-	return 0
-}
-
-func (x *MetaDataChunk) GetTotalChunks() int32 {
 	if x != nil {
 		return x.TotalChunks
 	}
@@ -545,7 +252,7 @@ type FileDelete struct {
 func (x *FileDelete) Reset() {
 	*x = FileDelete{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[7]
+		mi := &file_proto_filesync_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -558,7 +265,7 @@ func (x *FileDelete) String() string {
 func (*FileDelete) ProtoMessage() {}
 
 func (x *FileDelete) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[7]
+	mi := &file_proto_filesync_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -571,7 +278,7 @@ func (x *FileDelete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDelete.ProtoReflect.Descriptor instead.
 func (*FileDelete) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{7}
+	return file_proto_filesync_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *FileDelete) GetFileName() string {
@@ -581,17 +288,229 @@ func (x *FileDelete) GetFileName() string {
 	return ""
 }
 
-type FileRename struct {
+type FileTruncate struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	OldName string `protobuf:"bytes,1,opt,name=old_name,json=oldName,proto3" json:"old_name,omitempty"`
-	NewName string `protobuf:"bytes,2,opt,name=new_name,json=newName,proto3" json:"new_name,omitempty"`
+	FileName string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	Size     int64  `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
 }
 
-func (x *FileRename) Reset() {
-	*x = FileRename{}
+func (x *FileTruncate) Reset() {
+	*x = FileTruncate{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_filesync_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *FileTruncate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileTruncate) ProtoMessage() {}
+
+func (x *FileTruncate) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_filesync_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileTruncate.ProtoReflect.Descriptor instead.
+func (*FileTruncate) Descriptor() ([]byte, []int) {
+	return file_proto_filesync_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *FileTruncate) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *FileTruncate) GetSize() int64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+type MetadataRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	FileName string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+}
+
+func (x *MetadataRequest) Reset() {
+	*x = MetadataRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_filesync_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MetadataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetadataRequest) ProtoMessage() {}
+
+func (x *MetadataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_filesync_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetadataRequest.ProtoReflect.Descriptor instead.
+func (*MetadataRequest) Descriptor() ([]byte, []int) {
+	return file_proto_filesync_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *MetadataRequest) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+type MetadataResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	FileName string           `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	Chunks   []*ChunkMetadata `protobuf:"bytes,2,rep,name=chunks,proto3" json:"chunks,omitempty"`
+}
+
+func (x *MetadataResponse) Reset() {
+	*x = MetadataResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_filesync_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MetadataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetadataResponse) ProtoMessage() {}
+
+func (x *MetadataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_filesync_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetadataResponse.ProtoReflect.Descriptor instead.
+func (*MetadataResponse) Descriptor() ([]byte, []int) {
+	return file_proto_filesync_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MetadataResponse) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *MetadataResponse) GetChunks() []*ChunkMetadata {
+	if x != nil {
+		return x.Chunks
+	}
+	return nil
+}
+
+type ChunkMetadata struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Offset int64  `protobuf:"varint,1,opt,name=offset,proto3" json:"offset,omitempty"`
+	Hash   string `protobuf:"bytes,2,opt,name=hash,proto3" json:"hash,omitempty"`
+}
+
+func (x *ChunkMetadata) Reset() {
+	*x = ChunkMetadata{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_filesync_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ChunkMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChunkMetadata) ProtoMessage() {}
+
+func (x *ChunkMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_filesync_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChunkMetadata.ProtoReflect.Descriptor instead.
+func (*ChunkMetadata) Descriptor() ([]byte, []int) {
+	return file_proto_filesync_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ChunkMetadata) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ChunkMetadata) GetHash() string {
+	if x != nil {
+		return x.Hash
+	}
+	return ""
+}
+
+type ChunkRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	FileName string  `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	Offsets  []int64 `protobuf:"varint,2,rep,packed,name=offsets,proto3" json:"offsets,omitempty"`
+}
+
+func (x *ChunkRequest) Reset() {
+	*x = ChunkRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_proto_filesync_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -599,13 +518,13 @@ func (x *FileRename) Reset() {
 	}
 }
 
-func (x *FileRename) String() string {
+func (x *ChunkRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*FileRename) ProtoMessage() {}
+func (*ChunkRequest) ProtoMessage() {}
 
-func (x *FileRename) ProtoReflect() protoreflect.Message {
+func (x *ChunkRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_filesync_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -617,38 +536,37 @@ func (x *FileRename) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use FileRename.ProtoReflect.Descriptor instead.
-func (*FileRename) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChunkRequest.ProtoReflect.Descriptor instead.
+func (*ChunkRequest) Descriptor() ([]byte, []int) {
 	return file_proto_filesync_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *FileRename) GetOldName() string {
+func (x *ChunkRequest) GetFileName() string {
 	if x != nil {
-		return x.OldName
+		return x.FileName
 	}
 	return ""
 }
 
-func (x *FileRename) GetNewName() string {
+func (x *ChunkRequest) GetOffsets() []int64 {
 	if x != nil {
-		return x.NewName
+		return x.Offsets
 	}
-	return ""
+	return nil
 }
 
-type FileSyncResponse struct {
+type ChunkResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Message     string   `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
-	Filestosend []string `protobuf:"bytes,2,rep,name=filestosend,proto3" json:"filestosend,omitempty"`
-	Filedeleted string   `protobuf:"bytes,3,opt,name=filedeleted,proto3" json:"filedeleted,omitempty"`
-	Offset      int64    `protobuf:"varint,4,opt,name=offset,proto3" json:"offset,omitempty"`
+	FileName  string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	Offset    int64  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	ChunkData []byte `protobuf:"bytes,3,opt,name=chunk_data,json=chunkData,proto3" json:"chunk_data,omitempty"`
 }
 
-func (x *FileSyncResponse) Reset() {
-	*x = FileSyncResponse{}
+func (x *ChunkResponse) Reset() {
+	*x = ChunkResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_proto_filesync_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -656,13 +574,13 @@ func (x *FileSyncResponse) Reset() {
 	}
 }
 
-func (x *FileSyncResponse) String() string {
+func (x *ChunkResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*FileSyncResponse) ProtoMessage() {}
+func (*ChunkResponse) ProtoMessage() {}
 
-func (x *FileSyncResponse) ProtoReflect() protoreflect.Message {
+func (x *ChunkResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_filesync_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -674,176 +592,28 @@ func (x *FileSyncResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use FileSyncResponse.ProtoReflect.Descriptor instead.
-func (*FileSyncResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChunkResponse.ProtoReflect.Descriptor instead.
+func (*ChunkResponse) Descriptor() ([]byte, []int) {
 	return file_proto_filesync_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *FileSyncResponse) GetMessage() string {
+func (x *ChunkResponse) GetFileName() string {
 	if x != nil {
-		return x.Message
+		return x.FileName
 	}
 	return ""
 }
 
-func (x *FileSyncResponse) GetFilestosend() []string {
-	if x != nil {
-		return x.Filestosend
-	}
-	return nil
-}
-
-func (x *FileSyncResponse) GetFiledeleted() string {
-	if x != nil {
-		return x.Filedeleted
-	}
-	return ""
-}
-
-func (x *FileSyncResponse) GetOffset() int64 {
+func (x *ChunkResponse) GetOffset() int64 {
 	if x != nil {
 		return x.Offset
 	}
 	return 0
 }
 
-type Acknowledgment struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
-}
-
-func (x *Acknowledgment) Reset() {
-	*x = Acknowledgment{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[10]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Acknowledgment) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Acknowledgment) ProtoMessage() {}
-
-func (x *Acknowledgment) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[10]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Acknowledgment.ProtoReflect.Descriptor instead.
-func (*Acknowledgment) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *Acknowledgment) GetMessage() string {
+func (x *ChunkResponse) GetChunkData() []byte {
 	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-type Poll struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
-}
-
-func (x *Poll) Reset() {
-	*x = Poll{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[11]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Poll) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Poll) ProtoMessage() {}
-
-func (x *Poll) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[11]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Poll.ProtoReflect.Descriptor instead.
-func (*Poll) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *Poll) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-type FileList struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Files []string `protobuf:"bytes,1,rep,name=files,proto3" json:"files,omitempty"`
-}
-
-func (x *FileList) Reset() {
-	*x = FileList{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_filesync_proto_msgTypes[12]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *FileList) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FileList) ProtoMessage() {}
-
-func (x *FileList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_filesync_proto_msgTypes[12]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FileList.ProtoReflect.Descriptor instead.
-func (*FileList) Descriptor() ([]byte, []int) {
-	return file_proto_filesync_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *FileList) GetFiles() []string {
-	if x != nil {
-		return x.Files
+		return x.ChunkData
 	}
 	return nil
 }
@@ -852,103 +622,74 @@ var File_proto_filesync_proto protoreflect.FileDescriptor
 
 var file_proto_filesync_proto_rawDesc = []byte{
 	0x0a, 0x14, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x66, 0x69, 0x6c, 0x65, 0x73, 0x79, 0x6e, 0x63,
-	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x95, 0x02, 0x0a, 0x0f, 0x46, 0x69, 0x6c, 0x65, 0x53,
+	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0xaf, 0x01, 0x0a, 0x0f, 0x46, 0x69, 0x6c, 0x65, 0x53,
 	0x79, 0x6e, 0x63, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2b, 0x0a, 0x0a, 0x66, 0x69,
 	0x6c, 0x65, 0x5f, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a,
 	0x2e, 0x46, 0x69, 0x6c, 0x65, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x48, 0x00, 0x52, 0x09, 0x66, 0x69,
 	0x6c, 0x65, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x12, 0x2e, 0x0a, 0x0b, 0x66, 0x69, 0x6c, 0x65, 0x5f,
 	0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0b, 0x2e, 0x46,
 	0x69, 0x6c, 0x65, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x48, 0x00, 0x52, 0x0a, 0x66, 0x69, 0x6c,
-	0x65, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x12, 0x2e, 0x0a, 0x0b, 0x66, 0x69, 0x6c, 0x65, 0x5f,
-	0x72, 0x65, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0b, 0x2e, 0x46,
-	0x69, 0x6c, 0x65, 0x52, 0x65, 0x6e, 0x61, 0x6d, 0x65, 0x48, 0x00, 0x52, 0x0a, 0x66, 0x69, 0x6c,
-	0x65, 0x52, 0x65, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x23, 0x0a, 0x03, 0x61, 0x63, 0x6b, 0x18, 0x04,
-	0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x41, 0x63, 0x6b, 0x6e, 0x6f, 0x77, 0x6c, 0x65, 0x64,
-	0x67, 0x6d, 0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x03, 0x61, 0x63, 0x6b, 0x12, 0x1b, 0x0a, 0x04,
-	0x70, 0x6f, 0x6c, 0x6c, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x05, 0x2e, 0x50, 0x6f, 0x6c,
-	0x6c, 0x48, 0x00, 0x52, 0x04, 0x70, 0x6f, 0x6c, 0x6c, 0x12, 0x28, 0x0a, 0x09, 0x66, 0x69, 0x6c,
-	0x65, 0x5f, 0x6c, 0x69, 0x73, 0x74, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x09, 0x2e, 0x46,
-	0x69, 0x6c, 0x65, 0x4c, 0x69, 0x73, 0x74, 0x48, 0x00, 0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4c,
-	0x69, 0x73, 0x74, 0x42, 0x09, 0x0a, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x0a,
-	0x0a, 0x08, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x22, 0x47, 0x0a, 0x0b, 0x4d, 0x65,
-	0x74, 0x61, 0x44, 0x61, 0x74, 0x61, 0x52, 0x65, 0x71, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c,
-	0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66, 0x69,
-	0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x73,
-	0x69, 0x7a, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x53,
-	0x69, 0x7a, 0x65, 0x22, 0x9b, 0x01, 0x0a, 0x0c, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x65, 0x74, 0x61,
-	0x44, 0x61, 0x74, 0x61, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d,
+	0x65, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x12, 0x34, 0x0a, 0x0d, 0x66, 0x69, 0x6c, 0x65, 0x5f,
+	0x74, 0x72, 0x75, 0x6e, 0x63, 0x61, 0x74, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d,
+	0x2e, 0x46, 0x69, 0x6c, 0x65, 0x54, 0x72, 0x75, 0x6e, 0x63, 0x61, 0x74, 0x65, 0x48, 0x00, 0x52,
+	0x0c, 0x66, 0x69, 0x6c, 0x65, 0x54, 0x72, 0x75, 0x6e, 0x63, 0x61, 0x74, 0x65, 0x42, 0x09, 0x0a,
+	0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x2c, 0x0a, 0x10, 0x46, 0x69, 0x6c, 0x65,
+	0x53, 0x79, 0x6e, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07,
+	0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0xa2, 0x01, 0x0a, 0x09, 0x46, 0x69, 0x6c, 0x65, 0x43,
+	0x68, 0x75, 0x6e, 0x6b, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d,
 	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4e, 0x61, 0x6d,
-	0x65, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x03, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68, 0x75,
-	0x6e, 0x6b, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09, 0x63,
-	0x68, 0x75, 0x6e, 0x6b, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68, 0x75, 0x6e,
-	0x6b, 0x5f, 0x68, 0x61, 0x73, 0x68, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x63, 0x68,
-	0x75, 0x6e, 0x6b, 0x48, 0x61, 0x73, 0x68, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61,
-	0x67, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67,
-	0x65, 0x22, 0x24, 0x0a, 0x08, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x12, 0x18, 0x0a,
-	0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07,
-	0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0xa1, 0x01, 0x0a, 0x09, 0x46, 0x69, 0x6c, 0x65,
-	0x43, 0x68, 0x75, 0x6e, 0x6b, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6e, 0x61,
-	0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4e, 0x61,
-	0x6d, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x5f, 0x64, 0x61, 0x74, 0x61,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x09, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x44, 0x61, 0x74,
-	0x61, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28,
-	0x03, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68, 0x75,
-	0x6e, 0x6b, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09, 0x63,
-	0x68, 0x75, 0x6e, 0x6b, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x74, 0x6f, 0x74, 0x61,
+	0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x09, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x44, 0x61, 0x74, 0x61,
+	0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03,
+	0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x12, 0x1e, 0x0a, 0x0b, 0x69, 0x73, 0x5f, 0x6e,
+	0x65, 0x77, 0x5f, 0x66, 0x69, 0x6c, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x09, 0x69,
+	0x73, 0x4e, 0x65, 0x77, 0x46, 0x69, 0x6c, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x74, 0x6f, 0x74, 0x61,
 	0x6c, 0x5f, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0b,
-	0x74, 0x6f, 0x74, 0x61, 0x6c, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x73, 0x22, 0xa5, 0x01, 0x0a, 0x0d,
-	0x4d, 0x65, 0x74, 0x61, 0x44, 0x61, 0x74, 0x61, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x12, 0x1b, 0x0a,
+	0x74, 0x6f, 0x74, 0x61, 0x6c, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x73, 0x22, 0x29, 0x0a, 0x0a, 0x46,
+	0x69, 0x6c, 0x65, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c,
+	0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66, 0x69,
+	0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x22, 0x3f, 0x0a, 0x0c, 0x46, 0x69, 0x6c, 0x65, 0x54, 0x72,
+	0x75, 0x6e, 0x63, 0x61, 0x74, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6e,
+	0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4e,
+	0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x03, 0x52, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x22, 0x2e, 0x0a, 0x0f, 0x4d, 0x65, 0x74, 0x61, 0x64,
+	0x61, 0x74, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69,
+	0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66,
+	0x69, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x22, 0x57, 0x0a, 0x10, 0x4d, 0x65, 0x74, 0x61, 0x64,
+	0x61, 0x74, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x66,
+	0x69, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x66, 0x69, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x26, 0x0a, 0x06, 0x63, 0x68, 0x75, 0x6e,
+	0x6b, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x43, 0x68, 0x75, 0x6e, 0x6b,
+	0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x06, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73,
+	0x22, 0x3b, 0x0a, 0x0d, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74,
+	0x61, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x03, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x68, 0x61, 0x73,
+	0x68, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x68, 0x61, 0x73, 0x68, 0x22, 0x45, 0x0a,
+	0x0c, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a,
 	0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68,
-	0x75, 0x6e, 0x6b, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x09,
-	0x63, 0x68, 0x75, 0x6e, 0x6b, 0x44, 0x61, 0x74, 0x61, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66,
-	0x73, 0x65, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65,
-	0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18,
-	0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x53, 0x69, 0x7a, 0x65,
-	0x12, 0x21, 0x0a, 0x0c, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x5f, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73,
-	0x18, 0x05, 0x20, 0x01, 0x28, 0x05, 0x52, 0x0b, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x43, 0x68, 0x75,
-	0x6e, 0x6b, 0x73, 0x22, 0x29, 0x0a, 0x0a, 0x46, 0x69, 0x6c, 0x65, 0x44, 0x65, 0x6c, 0x65, 0x74,
-	0x65, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x22, 0x42,
-	0x0a, 0x0a, 0x46, 0x69, 0x6c, 0x65, 0x52, 0x65, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x19, 0x0a, 0x08,
-	0x6f, 0x6c, 0x64, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07,
-	0x6f, 0x6c, 0x64, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x19, 0x0a, 0x08, 0x6e, 0x65, 0x77, 0x5f, 0x6e,
-	0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6e, 0x65, 0x77, 0x4e, 0x61,
-	0x6d, 0x65, 0x22, 0x88, 0x01, 0x0a, 0x10, 0x46, 0x69, 0x6c, 0x65, 0x53, 0x79, 0x6e, 0x63, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61,
-	0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67,
-	0x65, 0x12, 0x20, 0x0a, 0x0b, 0x66, 0x69, 0x6c, 0x65, 0x73, 0x74, 0x6f, 0x73, 0x65, 0x6e, 0x64,
-	0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0b, 0x66, 0x69, 0x6c, 0x65, 0x73, 0x74, 0x6f, 0x73,
-	0x65, 0x6e, 0x64, 0x12, 0x20, 0x0a, 0x0b, 0x66, 0x69, 0x6c, 0x65, 0x64, 0x65, 0x6c, 0x65, 0x74,
-	0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x66, 0x69, 0x6c, 0x65, 0x64, 0x65,
-	0x6c, 0x65, 0x74, 0x65, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x18,
-	0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x22, 0x2a, 0x0a,
-	0x0e, 0x41, 0x63, 0x6b, 0x6e, 0x6f, 0x77, 0x6c, 0x65, 0x64, 0x67, 0x6d, 0x65, 0x6e, 0x74, 0x12,
-	0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x20, 0x0a, 0x04, 0x50, 0x6f, 0x6c,
-	0x6c, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x20, 0x0a, 0x08, 0x46,
-	0x69, 0x6c, 0x65, 0x4c, 0x69, 0x73, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x66, 0x69, 0x6c, 0x65, 0x73,
-	0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x66, 0x69, 0x6c, 0x65, 0x73, 0x32, 0xf6, 0x01,
-	0x0a, 0x0f, 0x46, 0x69, 0x6c, 0x65, 0x53, 0x79, 0x6e, 0x63, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63,
-	0x65, 0x12, 0x1f, 0x0a, 0x05, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x09, 0x2e, 0x53, 0x74, 0x61,
-	0x74, 0x65, 0x52, 0x65, 0x71, 0x1a, 0x09, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73,
-	0x30, 0x01, 0x12, 0x2b, 0x0a, 0x08, 0x4d, 0x65, 0x74, 0x61, 0x44, 0x61, 0x74, 0x61, 0x12, 0x0c,
-	0x2e, 0x4d, 0x65, 0x74, 0x61, 0x44, 0x61, 0x74, 0x61, 0x52, 0x65, 0x71, 0x1a, 0x0d, 0x2e, 0x46,
-	0x69, 0x6c, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x44, 0x61, 0x74, 0x61, 0x28, 0x01, 0x30, 0x01, 0x12,
-	0x34, 0x0a, 0x09, 0x53, 0x79, 0x6e, 0x63, 0x46, 0x69, 0x6c, 0x65, 0x73, 0x12, 0x10, 0x2e, 0x46,
-	0x69, 0x6c, 0x65, 0x53, 0x79, 0x6e, 0x63, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x11,
-	0x2e, 0x46, 0x69, 0x6c, 0x65, 0x53, 0x79, 0x6e, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x28, 0x01, 0x30, 0x01, 0x12, 0x30, 0x0a, 0x0b, 0x4d, 0x6f, 0x64, 0x69, 0x66, 0x79, 0x46,
-	0x69, 0x6c, 0x65, 0x73, 0x12, 0x0e, 0x2e, 0x4d, 0x65, 0x74, 0x61, 0x44, 0x61, 0x74, 0x61, 0x43,
-	0x68, 0x75, 0x6e, 0x6b, 0x1a, 0x0d, 0x2e, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x44,
-	0x61, 0x74, 0x61, 0x28, 0x01, 0x30, 0x01, 0x12, 0x2d, 0x0a, 0x0c, 0x43, 0x6f, 0x6d, 0x70, 0x61,
-	0x72, 0x65, 0x46, 0x69, 0x6c, 0x65, 0x73, 0x12, 0x0d, 0x2e, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x65,
-	0x74, 0x61, 0x44, 0x61, 0x74, 0x61, 0x1a, 0x0a, 0x2e, 0x46, 0x69, 0x6c, 0x65, 0x43, 0x68, 0x75,
-	0x6e, 0x6b, 0x28, 0x01, 0x30, 0x01, 0x42, 0x11, 0x5a, 0x0f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f,
-	0x3b, 0x66, 0x69, 0x6c, 0x65, 0x73, 0x79, 0x6e, 0x63, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x33,
+	0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x6f, 0x66,
+	0x66, 0x73, 0x65, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x03, 0x52, 0x07, 0x6f, 0x66, 0x66,
+	0x73, 0x65, 0x74, 0x73, 0x22, 0x63, 0x0a, 0x0d, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6e, 0x61,
+	0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x66, 0x69, 0x6c, 0x65, 0x4e, 0x61,
+	0x6d, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x03, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x68,
+	0x75, 0x6e, 0x6b, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x09,
+	0x63, 0x68, 0x75, 0x6e, 0x6b, 0x44, 0x61, 0x74, 0x61, 0x32, 0xb7, 0x01, 0x0a, 0x0f, 0x46, 0x69,
+	0x6c, 0x65, 0x53, 0x79, 0x6e, 0x63, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x12, 0x33, 0x0a,
+	0x08, 0x53, 0x79, 0x6e, 0x63, 0x46, 0x69, 0x6c, 0x65, 0x12, 0x10, 0x2e, 0x46, 0x69, 0x6c, 0x65,
+	0x53, 0x79, 0x6e, 0x63, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x11, 0x2e, 0x46, 0x69,
+	0x6c, 0x65, 0x53, 0x79, 0x6e, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x28, 0x01,
+	0x30, 0x01, 0x12, 0x3b, 0x0a, 0x10, 0x45, 0x78, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x4d, 0x65,
+	0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x10, 0x2e, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74,
+	0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x11, 0x2e, 0x4d, 0x65, 0x74, 0x61, 0x64,
+	0x61, 0x74, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x28, 0x01, 0x30, 0x01, 0x12,
+	0x32, 0x0a, 0x0d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x73,
+	0x12, 0x0d, 0x2e, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
+	0x0e, 0x2e, 0x43, 0x68, 0x75, 0x6e, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x28,
+	0x01, 0x30, 0x01, 0x42, 0x11, 0x5a, 0x0f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x3b, 0x66, 0x69,
+	0x6c, 0x65, 0x73, 0x79, 0x6e, 0x63, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -963,44 +704,35 @@ func file_proto_filesync_proto_rawDescGZIP() []byte {
 	return file_proto_filesync_proto_rawDescData
 }
 
-var file_proto_filesync_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_proto_filesync_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_proto_filesync_proto_goTypes = []any{
 	(*FileSyncRequest)(nil),  // 0: FileSyncRequest
-	(*StateReq)(nil),         // 1: StateReq
-	(*MetaDataReq)(nil),      // 2: MetaDataReq
-	(*FileMetaData)(nil),     // 3: FileMetaData
-	(*StateRes)(nil),         // 4: StateRes
-	(*FileChunk)(nil),        // 5: FileChunk
-	(*MetaDataChunk)(nil),    // 6: MetaDataChunk
-	(*FileDelete)(nil),       // 7: FileDelete
-	(*FileRename)(nil),       // 8: FileRename
-	(*FileSyncResponse)(nil), // 9: FileSyncResponse
-	(*Acknowledgment)(nil),   // 10: Acknowledgment
-	(*Poll)(nil),             // 11: Poll
-	(*FileList)(nil),         // 12: FileList
+	(*FileSyncResponse)(nil), // 1: FileSyncResponse
+	(*FileChunk)(nil),        // 2: FileChunk
+	(*FileDelete)(nil),       // 3: FileDelete
+	(*FileTruncate)(nil),     // 4: FileTruncate
+	(*MetadataRequest)(nil),  // 5: MetadataRequest
+	(*MetadataResponse)(nil), // 6: MetadataResponse
+	(*ChunkMetadata)(nil),    // 7: ChunkMetadata
+	(*ChunkRequest)(nil),     // 8: ChunkRequest
+	(*ChunkResponse)(nil),    // 9: ChunkResponse
 }
 var file_proto_filesync_proto_depIdxs = []int32{
-	5,  // 0: FileSyncRequest.file_chunk:type_name -> FileChunk
-	7,  // 1: FileSyncRequest.file_delete:type_name -> FileDelete
-	8,  // 2: FileSyncRequest.file_rename:type_name -> FileRename
-	10, // 3: FileSyncRequest.ack:type_name -> Acknowledgment
-	11, // 4: FileSyncRequest.poll:type_name -> Poll
-	12, // 5: FileSyncRequest.file_list:type_name -> FileList
-	1,  // 6: FileSyncService.State:input_type -> StateReq
-	2,  // 7: FileSyncService.MetaData:input_type -> MetaDataReq
-	0,  // 8: FileSyncService.SyncFiles:input_type -> FileSyncRequest
-	6,  // 9: FileSyncService.ModifyFiles:input_type -> MetaDataChunk
-	3,  // 10: FileSyncService.CompareFiles:input_type -> FileMetaData
-	4,  // 11: FileSyncService.State:output_type -> StateRes
-	3,  // 12: FileSyncService.MetaData:output_type -> FileMetaData
-	9,  // 13: FileSyncService.SyncFiles:output_type -> FileSyncResponse
-	3,  // 14: FileSyncService.ModifyFiles:output_type -> FileMetaData
-	5,  // 15: FileSyncService.CompareFiles:output_type -> FileChunk
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	2, // 0: FileSyncRequest.file_chunk:type_name -> FileChunk
+	3, // 1: FileSyncRequest.file_delete:type_name -> FileDelete
+	4, // 2: FileSyncRequest.file_truncate:type_name -> FileTruncate
+	7, // 3: MetadataResponse.chunks:type_name -> ChunkMetadata
+	0, // 4: FileSyncService.SyncFile:input_type -> FileSyncRequest
+	5, // 5: FileSyncService.ExchangeMetadata:input_type -> MetadataRequest
+	8, // 6: FileSyncService.RequestChunks:input_type -> ChunkRequest
+	1, // 7: FileSyncService.SyncFile:output_type -> FileSyncResponse
+	6, // 8: FileSyncService.ExchangeMetadata:output_type -> MetadataResponse
+	9, // 9: FileSyncService.RequestChunks:output_type -> ChunkResponse
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_filesync_proto_init() }
@@ -1022,102 +754,6 @@ func file_proto_filesync_proto_init() {
 			}
 		}
 		file_proto_filesync_proto_msgTypes[1].Exporter = func(v any, i int) any {
-			switch v := v.(*StateReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[2].Exporter = func(v any, i int) any {
-			switch v := v.(*MetaDataReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[3].Exporter = func(v any, i int) any {
-			switch v := v.(*FileMetaData); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[4].Exporter = func(v any, i int) any {
-			switch v := v.(*StateRes); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[5].Exporter = func(v any, i int) any {
-			switch v := v.(*FileChunk); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[6].Exporter = func(v any, i int) any {
-			switch v := v.(*MetaDataChunk); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[7].Exporter = func(v any, i int) any {
-			switch v := v.(*FileDelete); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[8].Exporter = func(v any, i int) any {
-			switch v := v.(*FileRename); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_filesync_proto_msgTypes[9].Exporter = func(v any, i int) any {
 			switch v := v.(*FileSyncResponse); i {
 			case 0:
 				return &v.state
@@ -1129,8 +765,8 @@ func file_proto_filesync_proto_init() {
 				return nil
 			}
 		}
-		file_proto_filesync_proto_msgTypes[10].Exporter = func(v any, i int) any {
-			switch v := v.(*Acknowledgment); i {
+		file_proto_filesync_proto_msgTypes[2].Exporter = func(v any, i int) any {
+			switch v := v.(*FileChunk); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1141,8 +777,8 @@ func file_proto_filesync_proto_init() {
 				return nil
 			}
 		}
-		file_proto_filesync_proto_msgTypes[11].Exporter = func(v any, i int) any {
-			switch v := v.(*Poll); i {
+		file_proto_filesync_proto_msgTypes[3].Exporter = func(v any, i int) any {
+			switch v := v.(*FileDelete); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1153,8 +789,68 @@ func file_proto_filesync_proto_init() {
 				return nil
 			}
 		}
-		file_proto_filesync_proto_msgTypes[12].Exporter = func(v any, i int) any {
-			switch v := v.(*FileList); i {
+		file_proto_filesync_proto_msgTypes[4].Exporter = func(v any, i int) any {
+			switch v := v.(*FileTruncate); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_filesync_proto_msgTypes[5].Exporter = func(v any, i int) any {
+			switch v := v.(*MetadataRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_filesync_proto_msgTypes[6].Exporter = func(v any, i int) any {
+			switch v := v.(*MetadataResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_filesync_proto_msgTypes[7].Exporter = func(v any, i int) any {
+			switch v := v.(*ChunkMetadata); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_filesync_proto_msgTypes[8].Exporter = func(v any, i int) any {
+			switch v := v.(*ChunkRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_filesync_proto_msgTypes[9].Exporter = func(v any, i int) any {
+			switch v := v.(*ChunkResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1169,10 +865,7 @@ func file_proto_filesync_proto_init() {
 	file_proto_filesync_proto_msgTypes[0].OneofWrappers = []any{
 		(*FileSyncRequest_FileChunk)(nil),
 		(*FileSyncRequest_FileDelete)(nil),
-		(*FileSyncRequest_FileRename)(nil),
-		(*FileSyncRequest_Ack)(nil),
-		(*FileSyncRequest_Poll)(nil),
-		(*FileSyncRequest_FileList)(nil),
+		(*FileSyncRequest_FileTruncate)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1180,7 +873,7 @@ func file_proto_filesync_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_filesync_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

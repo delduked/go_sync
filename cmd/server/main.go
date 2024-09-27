@@ -21,7 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to open BadgerDB: %v", err)
 	}
-	defer db.Close() // Ensure BadgerDB is closed when the application shuts down
+	defer db.Close()
 
 	peerData := &servers.PeerData{
 		Clients: make([]string, 0),
@@ -40,22 +40,19 @@ func main() {
 
 	wg.Add(1)
 	go peerData.ScanMdns(ctx, &wg)
-	
-	wg.Add(1)
-	go metaData.ScanPeerMetaData(&wg, ctx)
-	
+
 	wg.Add(1)
 	go metaData.ScanLocalMetaData(&wg, ctx)
 
-	// Start the periodic check in a separate goroutine
-	// wg.Add(1)
-	// go peerData.PeriodicCheck(ctx, &wg)
+	wg.Add(1)
 
-	// Create a new SyncServer
-	server, err := servers.StateServer(metaData, peerData, "./sync_folder", "50051")
+	// Create a new SyncServer with syncDir parameter
+	server, err := servers.StateServer(metaData, peerData, "./sync_folder", "50051", "./sync_folder")
 	if err != nil {
 		log.Fatalf("Failed to create sync server: %v", err)
 	}
+
+	go server.PeriodicMetadataExchange(ctx, &wg)
 
 	// Start the server in a separate goroutine
 	wg.Add(1)

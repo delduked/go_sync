@@ -1,9 +1,11 @@
+// Contents of ./internal/servers/meta.go
 package servers
 
 import (
 	"fmt"
 	"sync"
 
+	"github.com/charmbracelet/log"
 	"github.com/dgraph-io/badger/v3"
 )
 
@@ -22,63 +24,70 @@ func (m MetaData) CalculateFileSize() (int64, error) {
 }
 
 type Meta struct {
-	MetaData map[string]MetaData
+	MetaData map[string]MetaData // map[fileName]MetaData
 	PeerData *PeerData
 	db       *badger.DB // BadgerDB instance
 	mu       sync.Mutex
 }
 
 // NewMeta initializes the Meta struct with the provided PeerData and BadgerDB.
-func NewMeta(peerdata *PeerData, db *badger.DB) *Meta {
+func NewMeta(peerData *PeerData, db *badger.DB) *Meta {
 	return &Meta{
 		MetaData: make(map[string]MetaData),
-		PeerData: peerdata,
+		PeerData: peerData,
 		db:       db,
 	}
 }
 
-func (m *Meta) AddFileMetaData(file string, chunk []byte, offset int64) {
+// saveMetaData saves the metadata to both in-memory map and BadgerDB.
+func (m *Meta) saveMetaData(file string, metadata MetaData) {
+	m.mu.Lock()
+	m.MetaData[file] = metadata
+	m.mu.Unlock()
+
+	if err := m.saveMetaDataToDB(file, metadata); err != nil {
+		log.Errorf("Failed to save metadata to BadgerDB for file %s: %v", file, err)
+	} else {
+		log.Printf("Saved metadata for file %s", file)
+	}
+}
+
+// AddFileMetaData adds or updates metadata for a file.
+func (m *Meta) AddFileMetaData(file string, chunkData []byte, offset int64, chunkSize int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	hash, pos := m.hashPosition(chunk, offset)
+	hash := m.hashChunk(chunkData)
 
-	// Update the in-memory map
-	if _, ok := m.MetaData[file]; ok {
-		m.MetaData[file].Chunks[pos] = hash
-	} else {
-		m.MetaData[file] = MetaData{
-			Chunks:    map[int64]string{pos: hash},
-			ChunkSize: int64(len(chunk)),
+	metaData, exists := m.MetaData[file]
+	if !exists {
+		metaData = MetaData{
+			Chunks:    make(map[int64]string),
+			ChunkSize: chunkSize,
 		}
 	}
+
+	metaData.Chunks[offset] = hash
+	m.MetaData[file] = metaData
+
+	// Save to BadgerDB
+	if err := m.saveMetaDataToDB(file, metaData); err != nil {
+		log.Errorf("Failed to update metadata in BadgerDB: %v", err)
+	}
 }
+
+// GetMetaData retrieves the hash for a specific chunk of a file.
 func (m *Meta) GetMetaData(file string, offset int64) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.MetaData[file]; !ok {
+	metaData, ok := m.MetaData[file]
+	if !ok {
 		return "", fmt.Errorf("file not found in metadata")
 	}
-	return m.MetaData[file].Chunks[offset], nil
+	hash, exists := metaData.Chunks[offset]
+	if !exists {
+		return "", fmt.Errorf("offset not found in metadata")
+	}
+	return hash, nil
 }
-
-// saveToBadger saves the updated metadata to BadgerDB.
-// func (m *Meta) saveToBadger(file string) error {
-// 	err := m.db.Update(func(txn *badger.Txn) error {
-// 		meta := m.MetaData[file]
-
-// 		// Serialize the MetaData into JSON format (or another format if necessary)
-// 		val, err := json.Marshal(meta)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		// Store the metadata in BadgerDB using the file name as the key
-// 		return txn.Set([]byte(file), val)
-// 	})
-// 	return err
-// }
-// func (m *Meta) Close() error {
-// 	return m.db.Close()
-// }

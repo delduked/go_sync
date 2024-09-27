@@ -3,12 +3,12 @@ package servers
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/TypeTerrors/go_sync/internal/clients"
-	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 
 	"github.com/charmbracelet/log"
@@ -23,15 +23,20 @@ type State struct {
 	port       string
 	sharedData *PeerData
 	MetaData   *Meta
+	fw         *FileWatcher
+	syncdir    string
 }
 
 // NewState creates a new State with default settings
-func StateServer(metaData *Meta, sharedData *PeerData, watchDir, port string) (*State, error) {
+func StateServer(metaData *Meta, sharedData *PeerData, watchDir, port, syncDir string) (*State, error) {
 	// Create TCP listener
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on port %s: %v", port, err)
 	}
+
+	// Initialize FileWatcher
+	fw := NewFileWatcher(sharedData)
 
 	// Initialize State
 	server := &State{
@@ -41,6 +46,8 @@ func StateServer(metaData *Meta, sharedData *PeerData, watchDir, port string) (*
 		port:       port,
 		sharedData: sharedData,
 		MetaData:   metaData,
+		fw:         fw,
+		syncdir:    syncDir,
 	}
 
 	return server, nil
@@ -51,10 +58,7 @@ func (s *State) Start(wg *sync.WaitGroup, ctx context.Context, sd *PeerData, md 
 
 	go func() {
 		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(s.grpcServer, &FileSyncServer{
-			PeerData:      sd,
-			LocalMetaData: md,
-		})
+		pb.RegisterFileSyncServiceServer(s.grpcServer, NewFileSyncServer(s.syncdir, s.sharedData, s.MetaData))
 		if err := s.grpcServer.Serve(s.listener); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
 		}
@@ -90,18 +94,26 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 				if !ok {
 					return
 				}
-				if !pkg.ContainsString(s.sharedData.SyncedFiles, event.Name) {
-					s.EventHandler(event)
-				} else if event.Has(fsnotify.Remove) {
-					s.streamDelete(event.Name)
-				} else {
-					log.Printf("Ignoring event for %s; file is currently being synchronized", event.Name)
+
+				if event.Op&fsnotify.Create == fsnotify.Create {
+					log.Printf("File created: %s", event.Name)
+					s.fw.HandleFileCreation(event.Name)
+				}
+
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Printf("File modified: %s", event.Name)
+					s.fw.HandleFileModification(event.Name)
+				}
+
+				if event.Op&fsnotify.Remove == fsnotify.Remove {
+					log.Printf("File deleted: %s", event.Name)
+					s.fw.HandleFileDeletion(event.Name)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
 				}
-				log.Print("Error:", err)
+				log.Printf("Error:", err)
 			}
 		}
 	}()
@@ -109,49 +121,10 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 	return watcher, nil
 }
 
-// Handle file events such as create, modify, delete, rename
-func (s *State) EventHandler(event fsnotify.Event) {
-	fileName := event.Name
-
-	// Check if the file is being deleted first
-	if event.Has(fsnotify.Remove) {
-		log.Printf("File deleted: %s", fileName)
-		s.sharedData.markFileAsComplete(fileName) // Mark it complete to ensure no further actions
-		s.streamDelete(fileName)
-		return
-	}
-
-	// Handle other events like create and modify
-	if s.sharedData.IsFileInProgress(fileName) {
-		log.Printf("File %s is still being synced. Ignoring further modifications.", fileName)
-		return
-	}
-
-	s.sharedData.markFileAsInProgress(event.Name)
-
-	switch {
-	case event.Has(fsnotify.Create):
-		// instant file creation on peer
-		log.Printf("File created: %s", event.Name)
-		s.startStreamingFileInChunks(event.Name)
-		// s.startStreamingFile(event.Name)
-		// case event.Has(fsnotify.Write):
-		// 	// If file has been modified, start streaming new chunks file on peer
-		// 	log.Printf("File modified: %s", event.Name)
-		// 	s.startStreamingFileInChunks(event.Name)
-		// s.startStreamingFile(event.Name)
-		// case event.Has(fsnotify.Remove):
-		// 	// delete file on peer
-		// 	log.Printf("File deleted: %s", event.Name)
-		// 	s.streamDelete(event.Name)
-	}
-
-	s.sharedData.markFileAsComplete(event.Name)
-}
-
 func (s *State) State(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	// If you decide to keep periodic checks, adjust them to work with FileWatcher
 	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
 
@@ -161,42 +134,135 @@ func (s *State) State(ctx context.Context, wg *sync.WaitGroup) {
 			log.Warn("Shutting down list check...")
 			return
 		case <-ticker.C:
+			// Implement any periodic tasks if necessary
+		}
+	}
+}
 
-			localFiles, err := pkg.GetFileList()
+func (s *State) PeriodicMetadataExchange(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Warn("Shutting down periodic metadata exchange...")
+			return
+		case <-ticker.C:
+			s.exchangeMetadataWithPeers()
+		}
+	}
+}
+
+func (s *State) exchangeMetadataWithPeers() {
+	s.sharedData.mu.RLock()
+	peers := make([]string, len(s.sharedData.Clients))
+	copy(peers, s.sharedData.Clients)
+	s.sharedData.mu.RUnlock()
+
+	for _, ip := range peers {
+		go func(ip string) {
+			stream, err := clients.ExchangeMetadataStream(ip)
 			if err != nil {
-				log.Errorf("Error getting file list: %v", err)
+				log.Printf("Error starting metadata exchange stream with peer %s: %v", ip, err)
 				return
 			}
 
-			for peer, conn := range s.sharedData.Clients {
-				go func() {
-					stream, err := clients.StateStream(conn)
-					if err != nil {
-						log.Printf("Error starting stream to peer %v: %v", peer, err)
-						return
-					}
-
-					res, err := stream.Recv()
-					if err != nil {
-						log.Printf("Error receiving response from %v: %v", peer, err)
-						return
-					}
-
-					filesFromPeer := res.Message
-					log.Printf("Files on peer: %v: %v", conn, filesFromPeer)
-					log.Printf("Files on host: %v", localFiles)
-
-					peerMissingFiles := pkg.SubtractValues(filesFromPeer, localFiles)
-
-					for _, file := range peerMissingFiles {
-						s.sharedData.markFileAsInProgress(file)
-					}
-
-					for _, file := range peerMissingFiles {
-						go s.startStreamingFileInChunks(file)
-					}
-				}()
+			// Send metadata requests for each file
+			s.MetaData.mu.Lock()
+			fileNames := make([]string, 0, len(s.MetaData.MetaData))
+			for fileName := range s.MetaData.MetaData {
+				fileNames = append(fileNames, fileName)
 			}
+			s.MetaData.mu.Unlock()
+
+			for _, fileName := range fileNames {
+				err := stream.Send(&pb.MetadataRequest{FileName: fileName})
+				if err != nil {
+					log.Printf("Error sending metadata request to peer %s: %v", ip, err)
+					return
+				}
+
+				// Receive metadata response
+				res, err := stream.Recv()
+				if err != nil {
+					log.Printf("Error receiving metadata response from peer %s: %v", ip, err)
+					return
+				}
+
+				// Compare local and peer metadata
+				s.handleMetadataResponse(res, fileName, ip)
+			}
+		}(ip)
+	}
+}
+
+func (s *State) requestMissingChunks(fileName string, offsets []int64, ip string) {
+	stream, err := clients.RequestChunksStream(ip)
+	if err != nil {
+		log.Printf("Error starting chunk request stream with peer %s: %v", ip, err)
+		return
+	}
+
+	// Send chunk request
+	err = stream.Send(&pb.ChunkRequest{
+		FileName: fileName,
+		Offsets:  offsets,
+	})
+	if err != nil {
+		log.Printf("Error sending chunk request to peer %s: %v", ip, err)
+		return
+	}
+
+	// Receive chunks
+	for {
+		res, err := stream.Recv()
+		if err == io.EOF {
+			break
 		}
+		if err != nil {
+			log.Printf("Error receiving chunk response from peer %s: %v", ip, err)
+			break
+		}
+
+		// Write chunk to file
+		s.MetaData.WriteChunkToFile(res.FileName, res.ChunkData, res.Offset)
+		// Update metadata
+		s.MetaData.UpdateFileMetaData(res.FileName, res.ChunkData, res.Offset, int64(len(res.ChunkData)))
+	}
+}
+
+func (s *State) handleMetadataResponse(res *pb.MetadataResponse, fileName, ip string) {
+	s.MetaData.mu.Lock()
+	localMetaData, exists := s.MetaData.MetaData[fileName]
+	s.MetaData.mu.Unlock()
+
+	if !exists {
+		log.Printf("Local metadata not found for file %s", fileName)
+		return
+	}
+
+	// Build maps for easy comparison
+	localChunks := localMetaData.Chunks
+	peerChunks := make(map[int64]string)
+	for _, chunk := range res.Chunks {
+		peerChunks[chunk.Offset] = chunk.Hash
+	}
+
+	// Identify missing or mismatched chunks
+	var missingOffsets []int64
+	for offset, localHash := range localChunks {
+		peerHash, exists := peerChunks[offset]
+		if !exists || peerHash != localHash {
+			missingOffsets = append(missingOffsets, offset)
+		}
+	}
+
+	// Request missing chunks from peer
+	if len(missingOffsets) > 0 {
+		log.Printf("File %s has %d missing or mismatched chunks with peer %s", fileName, len(missingOffsets), ip)
+		s.requestMissingChunks(fileName, missingOffsets, ip)
 	}
 }

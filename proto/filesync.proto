@@ -2,83 +2,61 @@ syntax = "proto3";
 option go_package = "proto/;filesync";
 
 service FileSyncService {
-  rpc State(StateReq) returns (stream StateRes);
-  rpc MetaData(stream MetaDataReq) returns (stream FileMetaData);
-  rpc SyncFiles(stream FileSyncRequest) returns (stream FileSyncResponse);
-  rpc ModifyFiles(stream MetaDataChunk) returns (stream FileMetaData);
-  rpc CompareFiles(stream FileMetaData) returns (stream FileChunk);
+    rpc SyncFile (stream FileSyncRequest) returns (stream FileSyncResponse);
+    rpc ExchangeMetadata (stream MetadataRequest) returns (stream MetadataResponse);
+    rpc RequestChunks (stream ChunkRequest) returns (stream ChunkResponse);
 }
 
 message FileSyncRequest {
-  oneof request {
-    FileChunk file_chunk = 1;
-    FileDelete file_delete = 2;
-    FileRename file_rename = 3;
-    Acknowledgment ack = 4;
-    Poll poll = 5;
-    FileList file_list = 6;
-  }
+    oneof request {
+        FileChunk file_chunk = 1;
+        FileDelete file_delete = 2;
+        FileTruncate file_truncate = 3;
+    }
 }
 
-message StateReq {}
-
-message MetaDataReq {
-  string file_name = 1;
-  int64 file_size = 2;
-}
-
-message FileMetaData {
-  string file_name = 1;
-  int64 offset = 2;
-  int64 chunk_size = 3;
-  string chunk_hash = 4;
-  string message = 5;
-}
-
-message StateRes {
-  repeated string message = 1; // For file listing if needed
+message FileSyncResponse {
+    string message = 1;
 }
 
 message FileChunk {
     string file_name = 1;
     bytes chunk_data = 2;
     int64 offset = 3;
-    int64 chunk_size = 4;
+    bool is_new_file = 4;
     int64 total_chunks = 5;
 }
 
-message MetaDataChunk {
-    string file_name = 1;
-    bytes chunk_data = 2;
-    int64 offset = 3;
-    int64 chunk_size = 4;
-    int32 total_chunks = 5;
-}
-
 message FileDelete {
-  string file_name = 1;
+    string file_name = 1;
 }
 
-message FileRename {
-  string old_name = 1;
-  string new_name = 2;
+message FileTruncate {
+    string file_name = 1;
+    int64 size = 2;
 }
 
-message FileSyncResponse {
-  string message = 1;
-  repeated string filestosend = 2;
-  string filedeleted = 3;
-  int64 offset = 4;
+message MetadataRequest {
+    string file_name = 1;
 }
 
-message Acknowledgment { 
-  string message = 1;
+message MetadataResponse {
+    string file_name = 1;
+    repeated ChunkMetadata chunks = 2;
 }
 
-message Poll {
-  string message = 1;
+message ChunkMetadata {
+    int64 offset = 1;
+    string hash = 2;
 }
 
-message FileList {
-  repeated string files = 1;
+message ChunkRequest {
+    string file_name = 1;
+    repeated int64 offsets = 2;
+}
+
+message ChunkResponse {
+    string file_name = 1;
+    int64 offset = 2;
+    bytes chunk_data = 3;
 }

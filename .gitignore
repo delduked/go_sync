@@ -4,4 +4,4 @@ main
 cat.sh
 all_contents.txt
 sync_folder
-/cmd/server/badgerdb/*
+/badgerdb

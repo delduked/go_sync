@@ -9,78 +9,53 @@ import (
 	"google.golang.org/grpc"
 )
 
-// SyncStream creates a bidirectional streaming client for syncing files
-// between peers
-func SyncStream(ip string) (grpc.BidiStreamingClient[pb.FileSyncRequest, pb.FileSyncResponse], error) {
-	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
-		return nil, err
-	}
-	client := pb.NewFileSyncServiceClient(conn)
-	stream, err := client.SyncFiles(context.Background())
-	if err != nil {
-		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
-		return nil, err
-	}
-	return stream, nil
-}
+// func dialGRPC(ip string) (*grpc.ClientConn, error) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
+// 	conn, err := grpc.NewClient(, ip, grpc.WithInsecure(), grpc.WithBlock())
+// 	if err != nil {
+// 		log.Errorf("Failed to connect to gRPC server at %v: %v", ip, err)
+// 		return nil, err
+// 	}
+// 	return conn, nil
+// }
 
-// StateStream creates a bidirectional streaming client for boradcasting the local state
-// of the local file system to other peers
-func StateStream(ip string) (grpc.ServerStreamingClient[pb.StateRes], error) {
+// SyncStream creates a bidirectional streaming client for syncing files between peers
+func SyncStream(ip string) (pb.FileSyncService_SyncFileClient, error) {
 	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
-		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
 		return nil, err
 	}
 	client := pb.NewFileSyncServiceClient(conn)
-	stream, err := client.State(context.Background(), &pb.StateReq{})
+	stream, err := client.SyncFile(context.Background())
 	if err != nil {
-		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+		log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
 		return nil, err
 	}
 	return stream, nil
 }
-
-func ModifyStream(ip string) (grpc.BidiStreamingClient[pb.MetaDataChunk, pb.FileMetaData], error) {
+func ExchangeMetadataStream(ip string) (pb.FileSyncService_ExchangeMetadataClient, error) {
 	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
-		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
 		return nil, err
 	}
 	client := pb.NewFileSyncServiceClient(conn)
-	stream, err := client.ModifyFiles(context.Background())
+	stream, err := client.ExchangeMetadata(context.Background())
 	if err != nil {
-		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+		log.Errorf("Failed to open ExchangeMetadata stream on %s: %v", conn.Target(), err)
 		return nil, err
 	}
 	return stream, nil
 }
-func MetaDataStream(ip string) (grpc.BidiStreamingClient[pb.MetaDataReq, pb.FileMetaData], error) {
+func RequestChunksStream(ip string) (pb.FileSyncService_RequestChunksClient, error) {
 	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
-		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
 		return nil, err
 	}
 	client := pb.NewFileSyncServiceClient(conn)
-	stream, err := client.MetaData(context.Background())
+	stream, err := client.RequestChunks(context.Background())
 	if err != nil {
-		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
-		return nil, err
-	}
-	return stream, nil
-}
-func CompareStream(ip string) (grpc.BidiStreamingClient[pb.FileMetaData, pb.FileChunk], error) {
-	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		log.Errorf("failed to connect to gRPC server at %v: %v", ip, err)
-		return nil, err
-	}
-	client := pb.NewFileSyncServiceClient(conn)
-	stream, err := client.CompareFiles(context.Background())
-	if err != nil {
-		log.Errorf("Failed to open stream for list check on %s: %v", conn.Target(), err)
+		log.Errorf("Failed to open RequestChunks stream on %s: %v", conn.Target(), err)
 		return nil, err
 	}
 	return stream, nil

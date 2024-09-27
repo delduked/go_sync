@@ -1,3 +1,4 @@
+// Contents of ./internal/servers/meta_update.go
 package servers
 
 import (
@@ -11,7 +12,7 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// UpdateLocalMetaData periodically updates the metadata of all local files by reading each file and calculating the hash of its chunks.
+// ScanLocalMetaData periodically updates the metadata of all local files by reading each file and calculating the hash of its chunks.
 func (m *Meta) ScanLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
 
@@ -21,13 +22,13 @@ func (m *Meta) ScanLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn("Shutting down list check...")
+			log.Warn("Shutting down local metadata scan...")
 			return
 		case <-ticker.C:
 			localFiles, err := pkg.GetFileList()
 			if err != nil {
 				log.Errorf("Error getting file list: %v", err)
-				return
+				continue
 			}
 
 			for _, file := range localFiles {
@@ -35,7 +36,8 @@ func (m *Meta) ScanLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 					continue
 				}
 				fileMetaData, err := m.getLocalFileMetadata(file, conf.ChunkSize)
-				if err != nil || len(fileMetaData.Chunks) == 0 || fileMetaData.ChunkSize == 0 {
+				if err != nil {
+					log.Errorf("Failed to get metadata for file %s: %v", file, err)
 					continue
 				}
 
@@ -43,11 +45,9 @@ func (m *Meta) ScanLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 				m.MetaData[file] = fileMetaData
 				m.mu.Unlock()
 
-				go func() {
-					if err := m.saveMetaDataToDB(file, fileMetaData); err != nil {
-						log.Errorf("failed to store metadata in BadgerDB for file %s: %v", file, err)
-					}
-				}()
+				if err := m.saveMetaDataToDB(file, fileMetaData); err != nil {
+					log.Errorf("Failed to store metadata in BadgerDB for file %s: %v", file, err)
+				}
 			}
 		}
 	}
@@ -60,32 +60,28 @@ func (m *Meta) UpdateFileMetaData(file string, chunkData []byte, offset int64, c
 
 	metaData, ok := m.MetaData[file]
 	if !ok {
-		m.MetaData[file] = MetaData{
+		metaData = MetaData{
 			Chunks:    make(map[int64]string),
 			ChunkSize: chunkSize,
 		}
-		metaData = m.MetaData[file]
 	}
 
 	// Calculate the new hash for the current chunk
 	newHash := m.hashChunk(chunkData)
 
-	// Compare the new hash with the old one, and update only if necessary
-	if oldHash, exists := metaData.Chunks[offset]; exists && oldHash == newHash {
-		return // No need to update if the hash is the same
-	}
-
+	// Update the chunk hash
 	metaData.Chunks[offset] = newHash
 	m.MetaData[file] = metaData
 
 	// Save to BadgerDB
 	if err := m.saveMetaDataToDB(file, metaData); err != nil {
-		log.Errorf("failed to update metadata in badger DB: %v", err)
+		log.Errorf("Failed to update metadata in BadgerDB: %v", err)
 	}
 }
 
-func (m *Meta) WriteChunkToFile(file string, chunkData []byte, offset int64, chunkSize int64) error {
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+// WriteChunkToFile writes a chunk of data to the specified file at the given offset.
+func (m *Meta) WriteChunkToFile(file string, chunkData []byte, offset int64) error {
+	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}

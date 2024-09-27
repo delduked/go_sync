@@ -1,3 +1,4 @@
+// Contents of ./internal/servers/meta_db.go
 package servers
 
 import (
@@ -45,21 +46,11 @@ func (m *Meta) saveMetaDataToDB(file string, metadata MetaData) error {
 	err = m.db.Update(func(txn *badger.Txn) error {
 		return txn.Set([]byte(file), data)
 	})
-	return err
-}
-
-func (m *Meta) saveMetaDataToRam(file string, metadata MetaData) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.MetaData[file] = metadata
-}
-
-func (m *Meta) saveMetaData(file string, metadata MetaData) {
-	err := m.saveMetaDataToDB(file, metadata)
 	if err != nil {
-		log.Errorf("failed to save metadata to DB: %v", err)
+		return fmt.Errorf("failed to save metadata to BadgerDB: %v", err)
 	}
-	m.saveMetaDataToRam(file, metadata)
+	log.Printf("Saved metadata to DB for file: %s", file)
+	return nil
 }
 
 // DeleteFileMetaData removes the metadata of a file from both in-memory and BadgerDB.
@@ -73,22 +64,6 @@ func (m *Meta) DeleteFileMetaData(file string) {
 		return txn.Delete([]byte(file))
 	})
 	if err != nil {
-		log.Errorf("failed to delete metadata from badger DB: %v", err)
+		log.Errorf("failed to delete metadata from BadgerDB: %v", err)
 	}
 }
-
-// func (m *Meta) saveToBadger(file string) error {
-// 	err := m.db.Update(func(txn *badger.Txn) error {
-// 		meta := m.MetaData[file]
-
-// 		// Serialize the MetaData (use a suitable serialization method like JSON or Gob)
-// 		val, err := json.Marshal(meta)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		// Save the metadata in BadgerDB with the file name as the key
-// 		return txn.Set([]byte(file), val)
-// 	})
-// 	return err
-// }
