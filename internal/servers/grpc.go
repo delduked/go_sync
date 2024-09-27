@@ -1,12 +1,16 @@
 package servers
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/charmbracelet/log"
 )
@@ -212,6 +216,56 @@ func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
 	return nil
 }
 
+func (s *FileSyncServer) GetFileList(ctx context.Context, req *pb.GetFileListRequest) (*pb.GetFileListResponse, error) {
+	fileList, err := s.buildFileList()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetFileListResponse{
+		FileList: fileList,
+	}, nil
+}
+
+func (s *FileSyncServer) buildFileList() (*pb.FileList, error) {
+	files, err := pkg.GetFileList() // Function to get local file paths
+	if err != nil {
+		return nil, err
+	}
+
+	var fileEntries []*pb.FileEntry
+	for _, filePath := range files {
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			continue // Skip if unable to stat file
+		}
+
+		fileEntries = append(fileEntries, &pb.FileEntry{
+			FileName:     filepath.Base(filePath),
+			FileSize:     fileInfo.Size(),
+			LastModified: fileInfo.ModTime().Unix(),
+		})
+	}
+
+	return &pb.FileList{
+		Files: fileEntries,
+	}, nil
+}
+
+func (s *FileSyncServer) GetFile(ctx context.Context, req *pb.RequestFileTransfer) (*pb.EmptyResponse, error) {
+	fileName := req.GetFileName()
+	filePath := filepath.Join(s.syncDir, fileName)
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, status.Errorf(codes.NotFound, "File %s not found", fileName)
+	}
+
+	// Start transferring the file to the requester
+	go s.fw.transferFile(filePath, true) // Assuming transferFile sends to all peers, modify if needed
+
+	return &pb.EmptyResponse{}, nil
+}
+
 // handleFileDelete deletes the specified file.
 func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
 	filePath := filepath.Clean(fileDelete.FileName)
@@ -234,4 +288,18 @@ func (s *FileSyncServer) handleFileTruncate(fileTruncate *pb.FileTruncate) error
 	}
 	log.Printf("Truncated file %s to size %d as per request", filePath, fileTruncate.Size)
 	return nil
+}
+func (s *FileSyncServer) RequestFileTransfer(ctx context.Context, req *pb.RequestFileTransfer) (*pb.EmptyResponse, error) {
+    fileName := req.GetFileName()
+    filePath := filepath.Join(s.syncDir, fileName)
+
+    // Check if file exists
+    if _, err := os.Stat(filePath); os.IsNotExist(err) {
+        return nil, status.Errorf(codes.NotFound, "File %s not found", fileName)
+    }
+
+    // Start transferring the file to the requester
+    go s.fw.transferFile(filePath, true) // Assuming transferFile sends to all peers, modify if needed
+
+    return &pb.EmptyResponse{}, nil
 }

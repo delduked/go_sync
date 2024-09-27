@@ -1,6 +1,13 @@
 package servers
 
-import "github.com/charmbracelet/log"
+import (
+	"context"
+	"time"
+
+	pb "github.com/TypeTerrors/go_sync/proto"
+	"github.com/charmbracelet/log"
+	"google.golang.org/grpc"
+)
 
 // markFileAsInProgress marks a file as being synchronized.
 func (pd *PeerData) markFileAsInProgress(fileName string) {
@@ -39,4 +46,68 @@ func (pd *PeerData) IsFileInProgress(fileName string) bool {
 
 	_, exists := pd.SyncedFiles[fileName]
 	return exists
+}
+
+func (pd *PeerData) CompareFileLists(localList, peerList *pb.FileList) []string {
+	localFiles := make(map[string]struct{})
+	for _, entry := range localList.Files {
+		localFiles[entry.FileName] = struct{}{}
+	}
+
+	var missingFiles []string
+	for _, entry := range peerList.Files {
+		if _, exists := localFiles[entry.FileName]; !exists {
+			missingFiles = append(missingFiles, entry.FileName)
+		}
+	}
+
+	return missingFiles
+}
+
+func (pd *PeerData) RequestMissingFiles(conn *grpc.ClientConn, missingFiles []string) {
+	client := pb.NewFileSyncServiceClient(conn)
+	for _, fileName := range missingFiles {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := client.GetFile(ctx, &pb.RequestFileTransfer{
+			FileName: fileName,
+		})
+		if err != nil {
+			log.Errorf("Failed to request file %s from %s: %v", fileName, conn.Target(), err)
+		} else {
+			log.Infof("Requested file %s from %s", fileName, conn.Target())
+		}
+	}
+}
+
+func (pd *PeerData) SyncWithPeers() {
+	localFileList, err := pd.buildLocalFileList()
+	if err != nil {
+		log.Errorf("Failed to build local file list: %v", err)
+		return
+	}
+
+	for _, conn := range pd.Clients {
+		if conn.Target() == pd.LocalIP {
+			continue // Skip self
+		}
+
+		peerFileList, err := pd.getfilelist(conn)
+		if err != nil {
+			log.Errorf("Failed to get file list from %s: %v", conn.Target(), err)
+			continue
+		}
+
+		missingFiles := pd.CompareFileLists(localFileList, peerFileList)
+		if len(missingFiles) > 0 {
+			log.Infof("Missing files from %s: %v", conn.Target(), missingFiles)
+			pd.RequestMissingFiles(conn, missingFiles)
+		}
+	}
+}
+
+func (pd *PeerData) buildLocalFileList() (*pb.FileList, error) {
+	// Similar to buildFileList in the server implementation
+	// Reuse the code or refactor to a common utility function
 }

@@ -2,9 +2,11 @@ syntax = "proto3";
 option go_package = "proto/;filesync";
 
 service FileSyncService {
-    rpc SyncFile (stream FileSyncRequest) returns (stream FileSyncResponse);
-    rpc ExchangeMetadata (stream MetadataRequest) returns (stream MetadataResponse);
-    rpc RequestChunks (stream ChunkRequest) returns (stream ChunkResponse);
+    rpc SyncFile(stream FileSyncRequest) returns (stream FileSyncResponse);
+    rpc ExchangeMetadata(stream MetadataRequest) returns (stream MetadataResponse);
+    rpc RequestChunks(stream ChunkRequest) returns (stream ChunkResponse);
+    rpc GetFileList(GetFileListRequest) returns (GetFileListResponse);
+    rpc GetFile(RequestFileTransfer) returns (EmptyResponse);
 }
 
 message FileSyncRequest {
@@ -13,6 +15,10 @@ message FileSyncRequest {
         FileDelete file_delete = 2;
         FileTruncate file_truncate = 3;
     }
+}
+
+message RequestFileTransfer {
+    string file_name = 1;
 }
 
 message FileSyncResponse {
@@ -61,3 +67,21 @@ message ChunkResponse {
     int64 offset = 2;
     bytes chunk_data = 3;
 }
+
+message FileEntry {
+    string file_name = 1;
+    int64 file_size = 2;
+    int64 last_modified = 3;
+}
+
+message FileList {
+    repeated FileEntry files = 1;
+}
+
+message GetFileListRequest {}
+
+message GetFileListResponse {
+    FileList file_list = 1;
+}
+
+message EmptyResponse {}
