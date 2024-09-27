@@ -39,6 +39,8 @@ func main() {
 	wg.Add(1)
 	go peerData.ScanMdns(ctx, &wg)
 
+	peerData.InitializeStreams()
+
 	wg.Add(1)
 	go metaData.ScanLocalMetaData(&wg, ctx)
 
