@@ -14,7 +14,7 @@ import (
 )
 
 type PeerData struct {
-	Clients     []string
+	Clients     []*grpc.ClientConn
 	LocalIP     string
 	Subnet      string
 	Streams     map[string]pb.FileSyncService_SyncFileClient // Map of IP to stream
@@ -30,7 +30,7 @@ func NewPeerData() *PeerData {
 	}
 
 	return &PeerData{
-		Clients:     make([]string, 0),
+		Clients:     make([]*grpc.ClientConn, 0),
 		SyncedFiles: make(map[string]bool),
 		LocalIP:     localIP,
 		Subnet:      subnet,
@@ -42,10 +42,10 @@ func (pd *PeerData) InitializeStreams() {
 	defer pd.mu.Unlock()
 
 	pd.Streams = make(map[string]pb.FileSyncService_SyncFileClient)
-	for _, target := range pd.Clients {
-		host, _, err := net.SplitHostPort(target)
+	for _, conn := range pd.Clients {
+		host, _, err := net.SplitHostPort(conn.Target())
 		if err != nil {
-			log.Errorf("Invalid client target %s: %v", target, err)
+			log.Errorf("Invalid client target %s: %v", conn.Target(), err)
 			continue
 		}
 		if host == pd.LocalIP {
@@ -53,20 +53,20 @@ func (pd *PeerData) InitializeStreams() {
 		}
 
 		// Use grpc.NewClient or grpc.Dial based on your gRPC version
-		conn, err := grpc.NewClient(target, grpc.WithInsecure(), grpc.WithBlock())
-		if err != nil {
-			log.Printf("Error initializing connection with peer %s: %v", target, err)
-			continue
-		}
+		// conn, err := grpc.NewClient(target, grpc.WithInsecure(), grpc.WithBlock())
+		// if err != nil {
+		// 	log.Printf("Error initializing connection with peer %s: %v", target, err)
+		// 	continue
+		// }
 		client := pb.NewFileSyncServiceClient(conn)
 		stream, err := client.SyncFile(context.Background())
 		if err != nil {
-			log.Printf("Error creating stream with peer %s: %v", target, err)
+			log.Printf("Error creating stream with peer %s: %v", conn.Target(), err)
 			continue
 		}
 
-		pd.Streams[target] = stream
-		log.Printf("Initialized persistent stream with peer %s", target)
+		pd.Streams[conn.Target()] = stream
+		log.Printf("Initialized persistent stream with peer %s", conn.Target())
 	}
 }
 
@@ -139,13 +139,15 @@ func (pd *PeerData) AddClientConnection(ip string, port string) error {
 
 	log.Infof("Created connection to: %s", conn.Target())
 
-	if pkg.ContainsString(pd.Clients, conn.Target()) {
-		log.Warnf("Connection to %s already exists, skipping...", ip)
-		return nil
+	for _, c := range pd.Clients {
+		if c.Target() == conn.Target() {
+			log.Warnf("Connection to %s already exists", conn.Target())
+			return nil
+		}
 	}
 
 	// Store the connection in the map
-	pd.Clients = append(pd.Clients, conn.Target())
+	pd.Clients = append(pd.Clients, conn)
 	log.Infof("Added gRPC client connection to %s", conn.Target())
 	return nil
 }

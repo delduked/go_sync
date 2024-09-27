@@ -47,6 +47,15 @@ func ExchangeMetadataStream(ip string) (pb.FileSyncService_ExchangeMetadataClien
 	}
 	return stream, nil
 }
+func ExchangeMetadataConn(conn *grpc.ClientConn) (pb.FileSyncService_ExchangeMetadataClient, error) {
+	client := pb.NewFileSyncServiceClient(conn)
+	stream, err := client.ExchangeMetadata(context.Background())
+	if err != nil {
+		log.Errorf("Failed to open ExchangeMetadata stream on %s: %v", conn.Target(), err)
+		return nil, err
+	}
+	return stream, nil
+}
 func RequestChunksStream(ip string) (pb.FileSyncService_RequestChunksClient, error) {
 	conn, err := grpc.NewClient(ip, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {

@@ -74,14 +74,14 @@ func (fw *FileWatcher) HandleFileDeletion(filePath string) {
 	delete(fw.inProgress, filePath)
 
 	// Notify peers about the file deletion
-	for _, ip := range fw.pd.Clients {
-		if ip == fw.pd.LocalIP {
+	for _, conn := range fw.pd.Clients {
+		if conn.Target() == fw.pd.LocalIP {
 			continue // Skip self
 		}
 
-		stream, exists := fw.pd.Streams[ip]
+		stream, exists := fw.pd.Streams[conn.Target()]
 		if !exists {
-			log.Printf("No stream found for peer %s to send delete request", ip)
+			log.Printf("No stream found for peer %s to send delete request", conn.Target())
 			continue
 		}
 
@@ -93,9 +93,9 @@ func (fw *FileWatcher) HandleFileDeletion(filePath string) {
 			},
 		})
 		if err != nil {
-			log.Printf("Error sending delete request to peer %s: %v", ip, err)
+			log.Printf("Error sending delete request to peer %s: %v", conn.Target(), err)
 		} else {
-			log.Printf("Sent delete request to peer %s for file %s", ip, filePath)
+			log.Printf("Sent delete request to peer %s for file %s", conn.Target(), filePath)
 		}
 	}
 }
@@ -287,27 +287,27 @@ func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int6
 	fw.pd.mu.Lock()
 	defer fw.pd.mu.Unlock()
 
-	for _, target := range fw.pd.Clients {
-		host, _, err := net.SplitHostPort(target)
+	for _, conn := range fw.pd.Clients {
+		host, _, err := net.SplitHostPort(conn.Target())
 		if err != nil {
-			log.Errorf("Invalid client target %s: %v", target, err)
+			log.Errorf("Invalid client target %s: %v", conn.Target(), err)
 			continue
 		}
 		if host == fw.pd.LocalIP {
 			continue // Skip self
 		}
 
-		stream, exists := fw.pd.Streams[target]
+		stream, exists := fw.pd.Streams[conn.Target()]
 		if !exists {
-			log.Printf("No persistent stream found for peer %s. Attempting to initialize.", target)
-			newStream, err := clients.SyncStream(target)
+			log.Printf("No persistent stream found for peer %s. Attempting to initialize.", conn.Target())
+			newStream, err := clients.SyncStream(conn.Target())
 			if err != nil {
-				log.Printf("Failed to initialize stream with peer %s: %v", target, err)
+				log.Printf("Failed to initialize stream with peer %s: %v", conn.Target(), err)
 				continue
 			}
-			fw.pd.Streams[target] = newStream
+			fw.pd.Streams[conn.Target()] = newStream
 			stream = newStream
-			log.Printf("Initialized new stream with peer %s", target)
+			log.Printf("Initialized new stream with peer %s", conn.Target())
 		}
 
 		// Attempt to send the chunk with retries
@@ -325,16 +325,16 @@ func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int6
 				},
 			})
 			if err != nil {
-				log.Printf("Attempt %d: Failed to send chunk to peer %s: %v", attempt, target, err)
+				log.Printf("Attempt %d: Failed to send chunk to peer %s: %v", attempt, conn.Target(), err)
 				if attempt < maxRetries {
-					log.Printf("Retrying to send chunk to peer %s...", target)
+					log.Printf("Retrying to send chunk to peer %s...", conn.Target())
 					time.Sleep(2 * time.Second) // Wait before retrying
 					continue
 				} else {
-					log.Printf("Exceeded max retries for peer %s. Skipping chunk.", target)
+					log.Printf("Exceeded max retries for peer %s. Skipping chunk.", conn.Target())
 				}
 			} else {
-				log.Printf("Successfully sent chunk to peer %s for file %s at offset %d", target, fileName, offset)
+				log.Printf("Successfully sent chunk to peer %s for file %s at offset %d", conn.Target(), fileName, offset)
 				break
 			}
 		}
@@ -468,14 +468,14 @@ func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length
 
 // sendFileTruncateToPeer notifies peers to truncate the file to a specific size.
 func (fw *FileWatcher) sendFileTruncateToPeer(fileName string, size int64) error {
-	for _, ip := range fw.pd.Clients {
-		if ip == fw.pd.LocalIP {
+	for _, conn := range fw.pd.Clients {
+		if conn.Target() == fw.pd.LocalIP {
 			continue // Skip sending to self
 		}
 
-		stream, exists := fw.pd.Streams[ip]
+		stream, exists := fw.pd.Streams[conn.Target()]
 		if !exists {
-			log.Printf("No stream found for peer %s to send truncate command", ip)
+			log.Printf("No stream found for peer %s to send truncate command", conn.Target())
 			continue
 		}
 
@@ -488,9 +488,9 @@ func (fw *FileWatcher) sendFileTruncateToPeer(fileName string, size int64) error
 			},
 		})
 		if err != nil {
-			log.Printf("Error sending truncate command to peer %s: %v", ip, err)
+			log.Printf("Error sending truncate command to peer %s: %v", conn.Target(), err)
 		} else {
-			log.Printf("Sent truncate command to peer %s for file %s to size %d", ip, fileName, size)
+			log.Printf("Sent truncate command to peer %s for file %s to size %d", conn.Target(), fileName, size)
 		}
 	}
 	return nil

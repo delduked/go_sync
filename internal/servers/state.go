@@ -111,7 +111,7 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 				if !ok {
 					return
 				}
-				log.Printf("Error:", err)
+				log.Error("Error:", err)
 			}
 		}
 	}()
@@ -156,13 +156,13 @@ func (s *State) PeriodicMetadataExchange(ctx context.Context, wg *sync.WaitGroup
 
 func (s *State) exchangeMetadataWithPeers() {
 	s.sharedData.mu.Lock()
-	peers := make([]string, len(s.sharedData.Clients))
+	peers := make([]*grpc.ClientConn, len(s.sharedData.Clients))
 	copy(peers, s.sharedData.Clients)
 	s.sharedData.mu.Lock()
 
-	for _, ip := range peers {
+	for _, conn := range peers {
 		go func(ip string) {
-			stream, err := clients.ExchangeMetadataStream(ip)
+			stream, err := clients.ExchangeMetadataConn(conn)
 			if err != nil {
 				log.Printf("Error starting metadata exchange stream with peer %s: %v", ip, err)
 				return
@@ -192,7 +192,7 @@ func (s *State) exchangeMetadataWithPeers() {
 				// Compare local and peer metadata
 				s.handleMetadataResponse(res, fileName, ip)
 			}
-		}(ip)
+		}(conn.Target())
 	}
 }
 
