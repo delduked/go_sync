@@ -47,7 +47,7 @@ func main() {
 	wg.Add(1)
 
 	// Create a new SyncServer with syncDir parameter
-	server, err := servers.StateServer(metaData, peerData, "./sync_folder", "50051")
+	server, err := servers.StateServer(metaData, peerData, "50051", "./sync_folder")
 	if err != nil {
 		log.Fatalf("Failed to create sync server: %v", err)
 	}
