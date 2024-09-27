@@ -160,10 +160,15 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 
 // Handler for FileChunk messages
 func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
-
 	s.fw.mu.Lock()
 	s.fw.inProgress[chunk.FileName] = true
 	s.fw.mu.Unlock()
+
+	defer func() {
+		s.fw.mu.Lock()
+		delete(s.fw.inProgress, chunk.FileName)
+		s.fw.mu.Unlock()
+	}()
 
 	// Directly write to the sync directory
 	filePath := filepath.Join(s.syncDir, chunk.FileName)

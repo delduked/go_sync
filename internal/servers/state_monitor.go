@@ -33,6 +33,7 @@ type FileWatcher struct {
 	inProgress     map[string]bool
 	pd             *PeerData
 	mu             sync.Mutex
+	stopChan       chan struct{}
 }
 
 func NewFileWatcher(pd *PeerData) *FileWatcher {
@@ -48,13 +49,12 @@ func NewFileWatcher(pd *PeerData) *FileWatcher {
 // HandleFileCreation starts monitoring a newly created file.
 func (fw *FileWatcher) HandleFileCreation(filePath string) {
 	fw.mu.Lock()
-	defer fw.mu.Unlock()
+	fw.fileSizes[filePath] = 0
+	fw.inProgress[filePath] = true
+	fw.mu.Unlock()
 
-	// Start monitoring the file for modifications
-	fw.monitorFile(filePath, true)
-
-	// Start transferring the file immediately
-	go fw.transferFile(filePath, true)
+	// Start monitoring the file for new data
+	go fw.monitorFile(filePath)
 }
 
 // HandleFileDeletion stops monitoring a deleted file.
@@ -101,27 +101,50 @@ func (fw *FileWatcher) HandleFileDeletion(filePath string) {
 }
 
 // monitorFile starts monitoring a file for modifications.
-func (fw *FileWatcher) monitorFile(filePath string, isNewFile bool) {
-	if _, exists := fw.monitoredFiles[filePath]; exists {
-		return
+func (fw *FileWatcher) monitorFile(filePath string) {
+	fw.mu.Lock()
+	fw.inProgress[filePath] = true
+	fw.mu.Unlock()
+
+	defer func() {
+		fw.mu.Lock()
+		delete(fw.inProgress, filePath)
+		fw.mu.Unlock()
+	}()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-fw.stopChan: // Implement a stop channel if needed
+			return
+		case <-ticker.C:
+			fw.mu.Lock()
+			prevSize := fw.fileSizes[filePath]
+			fw.mu.Unlock()
+
+			fileInfo, err := os.Stat(filePath)
+			if err != nil {
+				log.Printf("Failed to stat file %s: %v", filePath, err)
+				return
+			}
+			currSize := fileInfo.Size()
+
+			if currSize > prevSize {
+				// New data appended
+				newDataSize := currSize - prevSize
+				offset := prevSize
+
+				fw.mu.Lock()
+				fw.fileSizes[filePath] = currSize
+				fw.mu.Unlock()
+
+				// Read and send new data
+				fw.readAndSendFileData(filePath, offset, newDataSize)
+			}
+		}
 	}
-
-	// Create a new FileMonitor
-	pipeReader, pipeWriter := io.Pipe()
-	monitor := &FileMonitor{
-		filePath:   filePath,
-		pipeReader: pipeReader,
-		pipeWriter: pipeWriter,
-		done:       make(chan struct{}),
-		isNewFile:  isNewFile,
-	}
-	fw.monitoredFiles[filePath] = monitor
-
-	// Mark the file as in-progress
-	fw.pd.markFileAsInProgress(filePath)
-
-	go monitor.captureFileWrites()
-	go monitor.processCapturedData(fw)
 }
 
 // StopMonitoring stops monitoring all files.
@@ -346,50 +369,45 @@ func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int6
 // HandleFileModification processes modifications to a file.
 func (fw *FileWatcher) HandleFileModification(filePath string) {
 	fw.mu.Lock()
-	defer fw.mu.Unlock()
-
-	fw.mu.Lock()
 	if fw.inProgress[filePath] {
 		fw.mu.Unlock()
-		return
+		return // Ignore modifications caused by sync process
 	}
 	fw.mu.Unlock()
 
-	// Get previous size
-	prevSize, exists := fw.fileSizes[filePath]
-	if !exists {
-		prevSize = 0
-	}
-
-	// Get current size
+	// Get current file size
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
-		log.Printf("Failed to stat file %s: %v", filePath, err)
+		log.Printf("Error stating file %s: %v", filePath, err)
 		return
 	}
 	currSize := fileInfo.Size()
-	fw.fileSizes[filePath] = currSize
 
-	if currSize < prevSize {
+	fw.mu.Lock()
+	prevSize := fw.fileSizes[filePath]
+	fw.fileSizes[filePath] = currSize
+	fw.mu.Unlock()
+
+	if currSize > prevSize {
+		// New data appended
+		newDataSize := currSize - prevSize
+		offset := prevSize
+
+		// Read and send the new data
+		go fw.readAndSendFileData(filePath, offset, newDataSize)
+	} else if currSize < prevSize {
 		// File has shrunk
-		go fw.handleFileShrunk(filePath, currSize, prevSize)
-	} else if currSize == prevSize {
-		// Possible in-place modification
-		go fw.handleInPlaceModification(filePath)
-	} else {
-		// File has grown
-		// Start monitoring for new data
-		fw.monitorFile(filePath, false)
+		go fw.handleFileShrunk(filePath, currSize)
 	}
 }
 
 // handleFileShrunk notifies peers to truncate the file.
-func (fw *FileWatcher) handleFileShrunk(filePath string, currSize, prevSize int64) {
-	// Notify peers to truncate the file
-	err := fw.sendFileTruncateToPeer(filepath.Base(filePath), currSize)
-	if err != nil {
-		log.Printf("Error sending truncate command for file %s: %v", filePath, err)
-	}
+func (fw *FileWatcher) handleFileShrunk(filePath string, currSize int64) {
+    // Notify peers to truncate the file
+    err := fw.sendFileTruncateToPeer(filepath.Base(filePath), currSize)
+    if err != nil {
+        log.Printf("Error sending truncate command for file %s: %v", filePath, err)
+    }
 }
 
 // handleInPlaceModification detects in-place modifications and sends updated data.
@@ -436,7 +454,6 @@ func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length
 
 	buf := make([]byte, conf.ChunkSize)
 	totalRead := int64(0)
-	isNewFile := offset == 0
 
 	for totalRead < length {
 		bytesToRead := length - totalRead
@@ -453,16 +470,14 @@ func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length
 			break
 		}
 
-		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset+totalRead, isNewFile, 0) // TotalChunks can be recalculated if needed
+		// Send the chunk to peers
+		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset+totalRead, false, 0)
 		if err != nil {
 			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
 			return
 		}
 
 		totalRead += int64(n)
-		if isNewFile {
-			isNewFile = false
-		}
 	}
 }
 
