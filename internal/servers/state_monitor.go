@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
-	"github.com/TypeTerrors/go_sync/internal/clients"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/cespare/xxhash"
 	"github.com/charmbracelet/log"
@@ -286,44 +285,26 @@ func (fw *FileWatcher) sendBytesToPeer(fileName string, data []byte, offset int6
 
 		stream, exists := fw.pd.Streams[ip]
 		if !exists {
-			log.Printf("No persistent stream found for peer %s. Attempting to initialize.", ip)
-			newStream, err := clients.SyncStream(ip)
-			if err != nil {
-				log.Printf("Failed to initialize stream with peer %s: %v", ip, err)
-				continue
-			}
-			fw.pd.Streams[ip] = newStream
-			stream = newStream
-			log.Printf("Initialized new stream with peer %s", ip)
+			log.Printf("No stream found for peer %s to send data", ip)
+			continue
 		}
 
-		// Attempt to send the chunk with retries
-		const maxRetries = 3
-		for attempt := 1; attempt <= maxRetries; attempt++ {
-			err := stream.Send(&pb.FileSyncRequest{
-				Request: &pb.FileSyncRequest_FileChunk{
-					FileChunk: &pb.FileChunk{
-						FileName:    fileName,
-						ChunkData:   data,
-						Offset:      offset,
-						IsNewFile:   isNewFile,
-						TotalChunks: totalChunks,
-					},
+		err := stream.Send(&pb.FileSyncRequest{
+			Request: &pb.FileSyncRequest_FileChunk{
+				FileChunk: &pb.FileChunk{
+					FileName:    fileName,
+					ChunkData:   data,
+					Offset:      offset,
+					IsNewFile:   isNewFile,
+					TotalChunks: totalChunks,
 				},
-			})
-			if err != nil {
-				log.Printf("Attempt %d: Failed to send chunk to peer %s: %v", attempt, ip, err)
-				if attempt < maxRetries {
-					log.Printf("Retrying to send chunk to peer %s...", ip)
-					time.Sleep(2 * time.Second) // Wait before retrying
-					continue
-				} else {
-					log.Printf("Exceeded max retries for peer %s. Skipping chunk.", ip)
-				}
-			} else {
-				log.Printf("Successfully sent chunk to peer %s for file %s at offset %d", ip, fileName, offset)
-				break
-			}
+			},
+		})
+		if err != nil {
+			log.Printf("Error sending chunk to peer %s: %v", ip, err)
+			// Optionally, handle reconnection or stream reinitialization here
+		} else {
+			log.Printf("Sent chunk to peer %s for file %s at offset %d", ip, fileName, offset)
 		}
 	}
 
