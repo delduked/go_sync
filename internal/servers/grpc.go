@@ -192,8 +192,7 @@ func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
 func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
 
 	relativePath := filepath.Clean(fileDelete.FileName)
-	//log.Printf("Deleting file %s", relativePath)
-	//filePath := filepath.Join(s.syncDir, relativePath)
+
 	err := os.Remove(relativePath)
 	if err != nil && !os.IsNotExist(err) {
 		log.Printf("Error deleting file %s: %v", relativePath, err)
