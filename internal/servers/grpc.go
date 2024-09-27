@@ -208,7 +208,7 @@ func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
 
 // handleFileTruncate truncates the specified file to the given size.
 func (s *FileSyncServer) handleFileTruncate(fileTruncate *pb.FileTruncate) error {
-	filePath := filepath.Clean(fileTruncate.FileName)
+	filePath := filepath.Join(s.syncDir, filepath.Clean(fileTruncate.FileName))
 	err := os.Truncate(filePath, fileTruncate.Size)
 	if err != nil {
 		log.Printf("Error truncating file %s to size %d: %v", filePath, fileTruncate.Size, err)
