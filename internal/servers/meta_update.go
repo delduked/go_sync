@@ -58,23 +58,20 @@ func (m *Meta) UpdateFileMetaData(file string, chunkData []byte, offset int64, c
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	metaData, ok := m.MetaData[file]
-	if !ok {
-		metaData = MetaData{
+	if _, ok := m.MetaData[file]; !ok {
+		log.Warnf("File %s not found in metadata", file)
+		m.MetaData[file] = MetaData{
 			Chunks:    make(map[int64]string),
+			WeakSums:  make(map[int64]uint32),
 			ChunkSize: chunkSize,
 		}
 	}
 
-	// Calculate the new hash for the current chunk
-	newHash := m.hashChunk(chunkData)
-
-	// Update the chunk hash
-	metaData.Chunks[offset] = newHash
-	m.MetaData[file] = metaData
+	m.MetaData[file].WeakSums[offset] = pkg.NewRollingChecksum(chunkData).Sum()
+	m.MetaData[file].Chunks[offset] = m.hashChunk(chunkData)
 
 	// Save to BadgerDB
-	if err := m.saveMetaDataToDB(file, metaData); err != nil {
+	if err := m.saveMetaDataToDB(file, m.MetaData[file]); err != nil {
 		log.Errorf("Failed to update metadata in BadgerDB: %v", err)
 	}
 }

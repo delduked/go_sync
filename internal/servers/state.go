@@ -222,24 +222,37 @@ func (s *State) handleMetadataResponse(res *pb.MetadataResponse, fileName, ip st
 	}
 
 	// Build maps for easy comparison
-	localChunks := localMetaData.Chunks
-	peerChunks := make(map[int64]string)
+	localWeakSums := localMetaData.WeakSums
+	localStrongSums := localMetaData.Chunks
+	peerWeakSums := make(map[int64]uint32)
+	peerStrongSums := make(map[int64]string)
+
 	for _, chunk := range res.Chunks {
-		peerChunks[chunk.Offset] = chunk.Hash
+		peerWeakSums[chunk.Offset] = chunk.WeakChecksum
+		peerStrongSums[chunk.Offset] = chunk.Hash
 	}
 
 	// Identify missing or mismatched chunks
 	var missingOffsets []int64
-	for offset, localHash := range localChunks {
-		peerHash, exists := peerChunks[offset]
-		if !exists || peerHash != localHash {
+	for offset, localWeakSum := range localWeakSums {
+		peerWeakSum, exists := peerWeakSums[offset]
+		if !exists || peerWeakSum != localWeakSum {
+			// Weak checksum mismatch; chunk has likely changed
 			missingOffsets = append(missingOffsets, offset)
+		} else {
+			// Weak checksum matches; verify strong checksum
+			localStrongSum := localStrongSums[offset]
+			peerStrongSum := peerStrongSums[offset]
+			if localStrongSum != peerStrongSum {
+				// Strong checksum mismatch; chunk has changed
+				missingOffsets = append(missingOffsets, offset)
+			}
 		}
 	}
 
 	// Request missing chunks from peer
 	if len(missingOffsets) > 0 {
-		log.Printf("File %s has %d missing or mismatched chunks with peer %s", fileName, len(missingOffsets), ip)
+		log.Printf("File %s has %d changed chunks with peer %s", fileName, len(missingOffsets), ip)
 		s.requestMissingChunks(fileName, missingOffsets, ip)
 	}
 }

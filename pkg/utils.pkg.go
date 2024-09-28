@@ -131,9 +131,14 @@ func GetClientIP(ctx context.Context) (string, error) {
 
 func IsTemporaryFile(fileName string) bool {
 	baseName := filepath.Base(fileName)
-	// Add more common patterns for temporary files
-	if strings.Contains(baseName, ".sb-") || strings.HasPrefix(baseName, "~") || strings.HasSuffix(baseName, "~") ||
-		strings.HasSuffix(baseName, ".swp") || strings.HasSuffix(baseName, ".tmp") || strings.HasSuffix(baseName, ".bak") {
+	// Ignore common temporary file patterns
+	if strings.Contains(baseName, ".sb-") ||
+		strings.HasPrefix(baseName, "~") ||
+		strings.HasSuffix(baseName, "~") ||
+		strings.HasSuffix(baseName, ".swp") ||
+		strings.HasSuffix(baseName, ".tmp") ||
+		strings.HasSuffix(baseName, ".bak") ||
+		strings.Contains(baseName, ".DS_Store") {
 		return true
 	}
 	return false

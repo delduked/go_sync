@@ -101,9 +101,11 @@ func (s *FileSyncServer) ExchangeMetadata(stream pb.FileSyncService_ExchangeMeta
 		// Prepare the chunks metadata
 		var chunkMetadataList []*pb.ChunkMetadata
 		for offset, hash := range metaData.Chunks {
+			weakSum := metaData.WeakSums[offset]
 			chunkMetadataList = append(chunkMetadataList, &pb.ChunkMetadata{
-				Offset: offset,
-				Hash:   hash,
+				Offset:       offset,
+				Hash:         hash,
+				WeakChecksum: weakSum,
 			})
 		}
 

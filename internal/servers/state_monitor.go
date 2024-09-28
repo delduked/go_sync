@@ -419,6 +419,9 @@ func (fw *FileWatcher) HandleFileModification(filePath string) {
 		fw.inProgress[filePath] = false
 		fw.mu.Unlock()
 	}()
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
 
 	// Get current file size
 	fileInfo, err := os.Stat(filePath)
@@ -509,6 +512,10 @@ func (fw *FileWatcher) handleFileShrunk(filePath string, currSize int64) {
 }
 
 func (fw *FileWatcher) handleInPlaceModification(filePath string) {
+
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
 	// Lock the file to avoid concurrent changes
 	fw.mu.Lock()
 	if fw.inProgress[filePath] {
@@ -558,6 +565,9 @@ func (fw *FileWatcher) sendChangedChunks(filePath string, offsets []int64) {
 		}
 		chunkData := buf[:n]
 
+		// Update the metadata
+		fw.md.UpdateFileMetaData(filePath, chunkData, offset, int64(len(chunkData)))
+
 		// Send the modified chunk to peers
 		err = fw.sendBytesToPeer(filepath.Base(filePath), chunkData, offset, false, 0)
 		if err != nil {
@@ -565,8 +575,6 @@ func (fw *FileWatcher) sendChangedChunks(filePath string, offsets []int64) {
 			return
 		}
 
-		// Update the metadata
-		fw.md.UpdateFileMetaData(filePath, chunkData, offset, int64(len(chunkData)))
 	}
 }
 

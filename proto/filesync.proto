@@ -53,8 +53,9 @@ message MetadataResponse {
 }
 
 message ChunkMetadata {
-    int64 offset = 1;
-    string hash = 2;
+	int64 offset = 1;
+	string hash = 2;
+	uint32 weak_checksum = 3; // Added field
 }
 
 message ChunkRequest {
