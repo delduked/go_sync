@@ -134,6 +134,7 @@ func IsTemporaryFile(fileName string) bool {
 	// Ignore common temporary file patterns
 	if strings.Contains(baseName, ".sb-") ||
 		strings.HasPrefix(baseName, "~") ||
+		strings.HasPrefix(baseName, ".") ||
 		strings.HasSuffix(baseName, "~") ||
 		strings.HasSuffix(baseName, ".swp") ||
 		strings.HasSuffix(baseName, ".tmp") ||
