@@ -162,6 +162,7 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 	}
 }
 
+
 func (s *FileSyncServer) GetFileList(ctx context.Context, req *pb.GetFileListRequest) (*pb.GetFileListResponse, error) {
 	fileList, err := s.buildFileList()
 	if err != nil {
