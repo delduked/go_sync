@@ -174,12 +174,12 @@ func (pd *PeerData) HealthCheck(ctx context.Context, wg *sync.WaitGroup) {
 
 				go func() {
 					for {
-						recv, err := stream.Recv()
+						_, err := stream.Recv()
 						if err != nil {
 							log.Errorf("Failed to receive health check response from %s: %v", conn.Target(), err)
 							break
 						}
-						log.Infof(recv.Message)
+						// log.Infof(recv.Message)
 					}
 				}()
 				stream.Send(&pb.Ping{

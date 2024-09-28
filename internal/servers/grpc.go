@@ -203,14 +203,14 @@ func (s *FileSyncServer) buildFileList() (*pb.FileList, error) {
 
 func (s *FileSyncServer) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 	for {
-		recv, err := stream.Recv()
+		_, err := stream.Recv()
 		if err == io.EOF {
 			return nil
 		}
 		if err != nil {
 			log.Errorf("Error receiving health check request: %v", err)
 		}
-		log.Infof(recv.Message)
+		// log.Infof(recv.Message)
 
 		stream.Send(&pb.Pong{
 			Message: fmt.Sprintf("Pong from %v at %v", s.PeerData.LocalIP, time.Now().Unix()),
