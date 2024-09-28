@@ -2,8 +2,11 @@ package servers
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
@@ -49,16 +52,21 @@ func (pd *PeerData) IsFileInProgress(fileName string) bool {
 }
 
 func (pd *PeerData) CompareFileLists(localList, peerList *pb.FileList) []string {
-	localFiles := make(map[string]struct{})
+	localFiles := make(map[string]*pb.FileEntry)
 	for _, entry := range localList.Files {
-		localFiles[entry.FileName] = struct{}{}
+		localFiles[entry.FileName] = entry
 	}
 
 	var missingFiles []string
-	for _, entry := range peerList.Files {
-		if _, exists := localFiles[entry.FileName]; !exists {
-			missingFiles = append(missingFiles, entry.FileName)
+	for _, peerEntry := range peerList.Files {
+		_, exists := localFiles[peerEntry.FileName]
+		if !exists {
+			if !peerEntry.IsDeleted {
+				missingFiles = append(missingFiles, peerEntry.FileName)
+			}
+			continue
 		}
+		// Handle updates or conflicts if needed
 	}
 
 	return missingFiles
@@ -90,7 +98,7 @@ func (pd *PeerData) SyncWithPeers() {
 
 	for _, conn := range pd.Clients {
 		if conn.Target() == pd.LocalIP {
-			continue // Skip self
+			continue
 		}
 
 		peerFileList, err := pd.getfilelist(conn)
@@ -110,4 +118,39 @@ func (pd *PeerData) SyncWithPeers() {
 func (pd *PeerData) buildLocalFileList() (*pb.FileList, error) {
 	// Similar to buildFileList in the server implementation
 	// Reuse the code or refactor to a common utility function
+	files, err := pkg.GetFileList() // Function to get local file paths
+	if err != nil {
+		return nil, err
+	}
+
+	var fileEntries []*pb.FileEntry
+	for _, filePath := range files {
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			continue // Skip if unable to stat file
+		}
+
+		fileEntries = append(fileEntries, &pb.FileEntry{
+			FileName:     filepath.Base(filePath),
+			FileSize:     fileInfo.Size(),
+			LastModified: fileInfo.ModTime().Unix(),
+		})
+	}
+
+	return &pb.FileList{
+		Files: fileEntries,
+	}, nil
+}
+
+func (pd *PeerData) getfilelist(conn *grpc.ClientConn) (*pb.FileList, error) {
+	client := pb.NewFileSyncServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := client.GetFileList(ctx, &pb.GetFileListRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.GetFileList(), nil
 }

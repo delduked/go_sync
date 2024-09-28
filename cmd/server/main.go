@@ -62,6 +62,9 @@ func main() {
 		}
 	}()
 
+	wg.Add(1)
+	go peerData.StartPeriodicSync(ctx, &wg)
+
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

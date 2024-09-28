@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
@@ -97,9 +98,9 @@ func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		for entry := range results {
 			if entry.Instance == instance {
-                log.Infof("Skipping own service instance: %s", entry.Instance)
-                continue // Skip own service
-            }
+				log.Infof("Skipping own service instance: %s", entry.Instance)
+				continue // Skip own service
+			}
 			for _, ip := range entry.AddrIPv4 {
 				if !pkg.IsInSameSubnet(ip.String(), pd.Subnet) {
 					continue
@@ -130,6 +131,21 @@ func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {
 	<-ctx.Done()
 	log.Warn("Shutting down mDNS discovery...")
 	close(entries)
+}
+
+func (pd *PeerData) StartPeriodicSync(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pd.SyncWithPeers()
+		}
+	}
 }
 
 func (pd *PeerData) AddClientConnection(ip string, port string) error {
