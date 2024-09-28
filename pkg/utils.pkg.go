@@ -128,3 +128,18 @@ func GetClientIP(ctx context.Context) (string, error) {
 	}
 	return p.Addr.String(), nil
 }
+
+func IsTemporaryFile(fileName string) bool {
+	baseName := filepath.Base(fileName)
+	if strings.Contains(baseName, ".sb-") {
+		return true
+	}
+	if strings.HasPrefix(baseName, "~") || strings.HasSuffix(baseName, "~") {
+		return true
+	}
+	if strings.HasPrefix(baseName, ".") {
+		return true
+	}
+	// Add more patterns as needed
+	return false
+}

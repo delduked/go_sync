@@ -51,6 +51,15 @@ func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
 		log.Printf("Error deleting file %s: %v", filePath, err)
 		return err
 	}
+
+	s.LocalMetaData.mu.Lock()
+	delete(s.LocalMetaData.MetaData, filePath)
+	s.LocalMetaData.mu.Unlock()
+
+	s.fw.mu.Lock()
+	delete(s.fw.inProgress, filePath)
+	s.fw.mu.Unlock()
+
 	log.Printf("Deleted file %s as per request", filePath)
 	return nil
 }

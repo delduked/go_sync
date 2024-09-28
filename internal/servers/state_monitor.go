@@ -11,6 +11,7 @@ import (
 
 	"github.com/TypeTerrors/go_sync/conf"
 	"github.com/TypeTerrors/go_sync/internal/clients"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/cespare/xxhash"
 	"github.com/charmbracelet/log"
@@ -28,6 +29,7 @@ type FileMonitor struct {
 // FileWatcher monitors files in a directory for changes.
 type FileWatcher struct {
 	monitoredFiles map[string]*FileMonitor
+	debounceTimers map[string]*time.Timer // Map to track debounced file events
 	fileSizes      map[string]int64
 	fileHashes     map[string]string
 	inProgress     map[string]bool
@@ -40,6 +42,7 @@ type FileWatcher struct {
 func NewFileWatcher(pd *PeerData, md *Meta) *FileWatcher {
 	return &FileWatcher{
 		monitoredFiles: make(map[string]*FileMonitor),
+		debounceTimers: make(map[string]*time.Timer), 
 		fileSizes:      make(map[string]int64),
 		fileHashes:     make(map[string]string),
 		inProgress:     make(map[string]bool),
@@ -74,9 +77,32 @@ func (fw *FileWatcher) HandleFileCreation(filePath string) {
 	go monitor.processCapturedData(fw)
 
 }
+func (fw *FileWatcher) HandleFileDeletion(filePath string) {
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
+
+	// Debounce deletion handling
+	fw.mu.Lock()
+	if fw.debounceTimers == nil {
+		fw.debounceTimers = make(map[string]*time.Timer)
+	}
+
+	if timer, exists := fw.debounceTimers[filePath]; exists {
+		timer.Stop()
+	}
+
+	fw.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
+		fw.processFileDeletion(filePath)
+		fw.mu.Lock()
+		delete(fw.debounceTimers, filePath)
+		fw.mu.Unlock()
+	})
+	fw.mu.Unlock()
+}
 
 // HandleFileDeletion stops monitoring a deleted file.
-func (fw *FileWatcher) HandleFileDeletion(filePath string) {
+func (fw *FileWatcher) processFileDeletion(filePath string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 
@@ -259,7 +285,6 @@ func (fm *FileMonitor) processCapturedData(fw *FileWatcher) {
 		}
 	}
 }
-
 
 // Stop signals the monitor to stop monitoring.
 func (fm *FileMonitor) Stop() {
