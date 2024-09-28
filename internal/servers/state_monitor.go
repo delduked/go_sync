@@ -55,8 +55,24 @@ func (fw *FileWatcher) HandleFileCreation(filePath string) {
 	fw.inProgress[filePath] = true
 	fw.mu.Unlock()
 
-	// Start monitoring the file for new data
-	go fw.monitorFile(filePath)
+	// Initialize pipeReader and pipeWriter for this file
+	reader, writer := io.Pipe()
+	monitor := &FileMonitor{
+		filePath:   filePath,
+		pipeReader: reader,
+		pipeWriter: writer,
+		done:       make(chan struct{}),
+		isNewFile:  true, // Assuming it's a new file
+	}
+
+	fw.mu.Lock()
+	fw.monitoredFiles[filePath] = monitor
+	fw.mu.Unlock()
+
+	// Start monitoring the file for new data and capture file writes
+	go monitor.captureFileWrites()
+	go monitor.processCapturedData(fw)
+
 }
 
 // HandleFileDeletion stops monitoring a deleted file.
@@ -205,20 +221,19 @@ func (fm *FileMonitor) captureFileWrites() {
 // processCapturedData reads data from the pipe and processes it.
 func (fm *FileMonitor) processCapturedData(fw *FileWatcher) {
 	defer fm.pipeReader.Close()
-	buf := make([]byte, 4096)
+	buf := make([]byte, conf.AppConfig.ChunkSize)
 	var offset int64 = 0
 
 	for {
 		select {
 		case <-fm.done:
-			// Mark the file as no longer in-progress
+			// Mark the file as no longer in progress
 			fw.pd.markFileAsComplete(fm.filePath)
 			return
 		default:
 			n, err := fm.pipeReader.Read(buf)
 			if err != nil {
 				if err == io.EOF {
-					// Mark the file as no longer in-progress
 					fw.pd.markFileAsComplete(fm.filePath)
 					return
 				}
@@ -227,18 +242,13 @@ func (fm *FileMonitor) processCapturedData(fw *FileWatcher) {
 				return
 			}
 
-			// Send the captured data to the peer with rate-limiting
+			// Send the captured data to peers with rate-limiting
 			err = fw.sendBytesToPeer(filepath.Base(fm.filePath), buf[:n], offset, fm.isNewFile, 0)
 			if err != nil {
 				log.Printf("Error sending data to peer for file %s: %v", fm.filePath, err)
 				fw.pd.markFileAsComplete(fm.filePath)
 				return
 			}
-
-			// Update the file size
-			fw.mu.Lock()
-			fw.fileSizes[fm.filePath] = offset + int64(n)
-			fw.mu.Unlock()
 
 			offset += int64(n)
 
@@ -249,6 +259,7 @@ func (fm *FileMonitor) processCapturedData(fw *FileWatcher) {
 		}
 	}
 }
+
 
 // Stop signals the monitor to stop monitoring.
 func (fm *FileMonitor) Stop() {
@@ -375,7 +386,14 @@ func (fw *FileWatcher) HandleFileModification(filePath string) {
 		fw.mu.Unlock()
 		return // Ignore modifications caused by sync process
 	}
+	fw.inProgress[filePath] = true
 	fw.mu.Unlock()
+
+	defer func() {
+		fw.mu.Lock()
+		fw.inProgress[filePath] = false
+		fw.mu.Unlock()
+	}()
 
 	// Get current file size
 	fileInfo, err := os.Stat(filePath)
@@ -395,8 +413,19 @@ func (fw *FileWatcher) HandleFileModification(filePath string) {
 		newDataSize := currSize - prevSize
 		offset := prevSize
 
-		// Read and send the new data
-		go fw.readAndSendFileData(filePath, offset, newDataSize)
+		// Initialize pipe for new data transfer
+		reader, writer := io.Pipe()
+		fw.monitoredFiles[filePath] = &FileMonitor{
+			filePath:   filePath,
+			pipeReader: reader,
+			pipeWriter: writer,
+			done:       make(chan struct{}),
+			isNewFile:  false,
+		}
+
+		// Start capturing new data and sending to peers
+		go fw.readAndSendFileDataWithPipe(filePath, offset, newDataSize, writer)
+		go fw.monitoredFiles[filePath].processCapturedData(fw)
 	} else if currSize < prevSize {
 		// File has shrunk
 		go fw.handleFileShrunk(filePath, currSize)
@@ -404,6 +433,45 @@ func (fw *FileWatcher) HandleFileModification(filePath string) {
 		// In-place modification detected
 		go fw.handleInPlaceModification(filePath)
 	}
+}
+func (fw *FileWatcher) readAndSendFileDataWithPipe(filePath string, offset int64, length int64, writer *io.PipeWriter) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Failed to open file %s: %v", filePath, err)
+		writer.CloseWithError(err)
+		return
+	}
+	defer file.Close()
+
+	buf := make([]byte, conf.AppConfig.ChunkSize)
+	totalRead := int64(0)
+
+	for totalRead < length {
+		bytesToRead := length - totalRead
+		if bytesToRead > int64(len(buf)) {
+			bytesToRead = int64(len(buf))
+		}
+
+		n, err := file.ReadAt(buf[:bytesToRead], offset+totalRead)
+		if err != nil && err != io.EOF {
+			log.Printf("Error reading file %s: %v", filePath, err)
+			writer.CloseWithError(err)
+			return
+		}
+		if n == 0 {
+			break
+		}
+
+		_, err = writer.Write(buf[:n])
+		if err != nil {
+			log.Printf("Error writing data to pipe for file %s: %v", filePath, err)
+			writer.CloseWithError(err)
+			return
+		}
+
+		totalRead += int64(n)
+	}
+	writer.Close() // Close the pipe when done
 }
 
 // handleFileShrunk notifies peers to truncate the file.

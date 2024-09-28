@@ -77,8 +77,8 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 		return nil, err
 	}
 
-	log.Printf("Watching directory: %s", s.syncdir)
-	err = watcher.Add(s.syncdir)
+	log.Printf("Watching directory: %s", conf.AppConfig.SyncFolder)
+	err = watcher.Add(conf.AppConfig.SyncFolder)
 	if err != nil {
 		return nil, err
 	}
