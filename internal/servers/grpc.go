@@ -213,7 +213,7 @@ func (s *FileSyncServer) HealthCheck(stream pb.FileSyncService_HealthCheckServer
 		log.Infof(recv.Message)
 
 		stream.Send(&pb.Pong{
-			Message: fmt.Sprintf("ping from %v at %v", s.PeerData.LocalIP, time.Now().Unix()),
+			Message: fmt.Sprintf("Pong from %v at %v", s.PeerData.LocalIP, time.Now().Unix()),
 		})
 	}
 }
