@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"google.golang.org/grpc/peer"
 )
 
 // validateService checks if the discovered service contains the required TXT records
@@ -49,8 +51,8 @@ func GetLocalIPAndSubnet() (string, string, error) {
 		for _, addr := range addrs {
 			ip, netIPNet := parseIPNet(addr)
 			if ip != nil && ip.IsGlobalUnicast() && ip.To4() != nil {
-				ones, _ := netIPNet.Mask.Size()                            
-				subnet := fmt.Sprintf("%s/%d", netIPNet.IP.String(), ones) 
+				ones, _ := netIPNet.Mask.Size()
+				subnet := fmt.Sprintf("%s/%d", netIPNet.IP.String(), ones)
 				return ip.String(), subnet, nil
 			}
 		}
@@ -118,4 +120,27 @@ func SubtractValues(firstParam []string, secondParam []string) []string {
 		}
 	}
 	return result
+}
+func GetClientIP(ctx context.Context) (string, error) {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return "", fmt.Errorf("unable to get peer info")
+	}
+	return p.Addr.String(), nil
+}
+
+func IsTemporaryFile(fileName string) bool {
+	baseName := filepath.Base(fileName)
+	// Ignore common temporary file patterns
+	if strings.Contains(baseName, ".sb-") ||
+		strings.HasPrefix(baseName, "~") ||
+		strings.HasPrefix(baseName, ".") ||
+		strings.HasSuffix(baseName, "~") ||
+		strings.HasSuffix(baseName, ".swp") ||
+		strings.HasSuffix(baseName, ".tmp") ||
+		strings.HasSuffix(baseName, ".bak") ||
+		strings.Contains(baseName, ".DS_Store") {
+		return true
+	}
+	return false
 }
