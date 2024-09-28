@@ -52,7 +52,10 @@ func NewFileWatcher(pd *PeerData, md *Meta) *FileWatcher {
 }
 
 // HandleFileCreation starts monitoring a newly created file.
-func (fw *FileWatcher) HandleFileCreation(filePath string) {
+func (fw *FileWatcher) FileCreation(filePath string) {
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
 	fw.mu.Lock()
 	fw.fileSizes[filePath] = 0
 	fw.inProgress[filePath] = true
@@ -75,7 +78,29 @@ func (fw *FileWatcher) HandleFileCreation(filePath string) {
 	// Start monitoring the file for new data and capture file writes
 	go monitor.captureFileWrites()
 	go monitor.processCapturedData(fw)
+}
 
+func (fw *FileWatcher) HandleFileCreation(filePath string) {
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
+
+	fw.mu.Lock()
+	if fw.debounceTimers == nil {
+		fw.debounceTimers = make(map[string]*time.Timer)
+	}
+
+	if timer, exists := fw.debounceTimers[filePath]; exists {
+		timer.Stop()
+	}
+
+	fw.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
+		fw.FileCreation(filePath)
+		fw.mu.Lock()
+		delete(fw.debounceTimers, filePath)
+		fw.mu.Unlock()
+	})
+	fw.mu.Unlock()
 }
 func (fw *FileWatcher) HandleFileDeletion(filePath string) {
 	if pkg.IsTemporaryFile(filePath) {
