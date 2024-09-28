@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/TypeTerrors/go_sync/conf"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
@@ -135,7 +136,7 @@ func (pd *PeerData) ScanMdns(ctx context.Context, wg *sync.WaitGroup) {
 
 func (pd *PeerData) StartPeriodicSync(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(conf.AppConfig.SyncInterval)
 	defer ticker.Stop()
 
 	for {

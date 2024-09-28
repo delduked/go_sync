@@ -35,7 +35,7 @@ func (m *Meta) ScanLocalMetaData(wg *sync.WaitGroup, ctx context.Context) {
 				if m.PeerData.IsFileInProgress(file) {
 					continue
 				}
-				fileMetaData, err := m.getLocalFileMetadata(file, conf.ChunkSize)
+				fileMetaData, err := m.getLocalFileMetadata(file, conf.AppConfig.ChunkSize)
 				if err != nil {
 					log.Errorf("Failed to get metadata for file %s: %v", file, err)
 					continue

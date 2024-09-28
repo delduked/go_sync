@@ -19,7 +19,7 @@ func (m *Meta) PreScanAndStoreMetaData(dir string) error {
 		}
 		if !info.IsDir() {
 			log.Printf("Processing file: %s", path)
-			metaData, err := m.getLocalFileMetadata(path, conf.ChunkSize)
+			metaData, err := m.getLocalFileMetadata(path, conf.AppConfig.ChunkSize)
 			if err != nil {
 				log.Errorf("Failed to get metadata for file %s: %v", path, err)
 				return nil // Continue scanning even if one file fails

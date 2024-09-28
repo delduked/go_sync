@@ -91,3 +91,33 @@ func (m *Meta) GetMetaData(file string, offset int64) (string, error) {
 	}
 	return hash, nil
 }
+
+func (m *Meta) DetectChangedChunks(fileName string, chunkSize int64) ([]int64, error) {
+    currentMetaData, err := m.getLocalFileMetadata(fileName, chunkSize)
+    if err != nil {
+        return nil, err
+    }
+
+    m.mu.Lock()
+    storedMetaData, exists := m.MetaData[fileName]
+    m.mu.Unlock()
+
+    var changedOffsets []int64
+
+    if !exists {
+        // If we don't have stored metadata, consider all chunks as changed
+        for offset := range currentMetaData.Chunks {
+            changedOffsets = append(changedOffsets, offset)
+        }
+    } else {
+        // Compare current chunks with stored chunks
+        for offset, currentHash := range currentMetaData.Chunks {
+            storedHash, exists := storedMetaData.Chunks[offset]
+            if !exists || currentHash != storedHash {
+                changedOffsets = append(changedOffsets, offset)
+            }
+        }
+    }
+
+    return changedOffsets, nil
+}

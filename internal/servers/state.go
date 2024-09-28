@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/TypeTerrors/go_sync/conf"
 	"github.com/TypeTerrors/go_sync/internal/clients"
 	pb "github.com/TypeTerrors/go_sync/proto"
 
@@ -29,13 +30,13 @@ type State struct {
 // NewState creates a new State with default settings
 func StateServer(metaData *Meta, sharedData *PeerData, port, syncDir string) (*State, error) {
 	// Create TCP listener
-	listener, err := net.Listen("tcp", ":"+port)
+	listener, err := net.Listen("tcp", ":"+conf.AppConfig.Port)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on port %s: %v", port, err)
 	}
 
 	// Initialize FileWatcher
-	fw := NewFileWatcher(sharedData)
+	fw := NewFileWatcher(sharedData, metaData)
 
 	// Initialize State
 	server := &State{
@@ -66,9 +67,6 @@ func (s *State) Start(wg *sync.WaitGroup, ctx context.Context, sd *PeerData, md 
 	if err != nil {
 		return fmt.Errorf("failed to start directory watcher: %v", err)
 	}
-
-	wg.Add(1)
-	go s.State(ctx, wg)
 
 	return nil
 }
@@ -117,24 +115,6 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 	}()
 
 	return watcher, nil
-}
-
-func (s *State) State(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// If you decide to keep periodic checks, adjust them to work with FileWatcher
-	ticker := time.NewTicker(20 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Warn("Shutting down list check...")
-			return
-		case <-ticker.C:
-			// Implement any periodic tasks if necessary
-		}
-	}
 }
 
 func (s *State) PeriodicMetadataExchange(ctx context.Context, wg *sync.WaitGroup) {

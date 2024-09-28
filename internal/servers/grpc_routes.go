@@ -10,55 +10,36 @@ import (
 
 // Handler for FileChunk messages
 func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
+	filePath := filepath.Join(s.syncDir, chunk.FileName)
 	s.fw.mu.Lock()
-	s.fw.inProgress[chunk.FileName] = true
+	s.fw.inProgress[filePath] = true
 	s.fw.mu.Unlock()
 
 	defer func() {
 		s.fw.mu.Lock()
-		delete(s.fw.inProgress, chunk.FileName)
+		delete(s.fw.inProgress, filePath)
 		s.fw.mu.Unlock()
 	}()
 
-	// Directly write to the sync directory
-	filePath := filepath.Join(s.syncDir, chunk.FileName)
-
-	// Ensure the directory structure exists
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		log.Printf("Error creating directories for %s: %v", filePath, err)
-		return err
-	}
-
-	// Determine file flags based on whether it's a new file
-	flags := os.O_CREATE | os.O_WRONLY
-	if chunk.IsNewFile {
-		flags |= os.O_TRUNC
-	}
-
-	// Open the file with appropriate flags
-	file, err := os.OpenFile(filePath, flags, 0644)
+	// Open the file for writing
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Printf("Error opening file %s: %v", filePath, err)
+		log.Printf("Failed to open file %s: %v", filePath, err)
 		return err
 	}
 	defer file.Close()
 
-	// Write the chunk at the specified offset
+	// Write the chunk data at the specified offset
 	_, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
 	if err != nil {
-		log.Printf("Error writing to file %s: %v", filePath, err)
+		log.Printf("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
 		return err
 	}
 
-	if chunk.Offset+int64(len(chunk.ChunkData)) >= chunk.TotalSize {
-		s.fw.mu.Lock()
-		delete(s.fw.inProgress, chunk.FileName)
-		s.fw.mu.Unlock()
-	}
+	// Update the metadata
+	s.LocalMetaData.UpdateFileMetaData(filePath, chunk.ChunkData, chunk.Offset, int64(len(chunk.ChunkData)))
 
 	log.Printf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
-
 	return nil
 }
 

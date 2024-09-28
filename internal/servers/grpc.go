@@ -142,7 +142,7 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 		defer file.Close()
 
 		for _, offset := range offsets {
-			chunkData := make([]byte, conf.ChunkSize)
+			chunkData := make([]byte, conf.AppConfig.ChunkSize)
 			n, err := file.ReadAt(chunkData, offset)
 			if err != nil && err != io.EOF {
 				log.Printf("Error reading file %s at offset %d: %v", filePath, offset, err)
@@ -161,7 +161,6 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 		}
 	}
 }
-
 
 func (s *FileSyncServer) GetFileList(ctx context.Context, req *pb.GetFileListRequest) (*pb.GetFileListResponse, error) {
 	fileList, err := s.buildFileList()

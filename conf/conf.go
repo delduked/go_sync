@@ -1,3 +1,12 @@
 package conf
 
-var ChunkSize int64 = int64(64 * 1024) // 64KB chunks
+import "time"
+
+type Config struct {
+	SyncFolder   string
+	ChunkSize    int64
+	SyncInterval time.Duration
+	Port         string
+}
+
+var AppConfig Config

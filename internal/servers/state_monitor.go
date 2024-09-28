@@ -31,17 +31,19 @@ type FileWatcher struct {
 	fileSizes      map[string]int64
 	fileHashes     map[string]string
 	inProgress     map[string]bool
+	md             *Meta
 	pd             *PeerData
 	mu             sync.Mutex
 	stopChan       chan struct{}
 }
 
-func NewFileWatcher(pd *PeerData) *FileWatcher {
+func NewFileWatcher(pd *PeerData, md *Meta) *FileWatcher {
 	return &FileWatcher{
 		monitoredFiles: make(map[string]*FileMonitor),
 		fileSizes:      make(map[string]int64),
 		fileHashes:     make(map[string]string),
 		inProgress:     make(map[string]bool),
+		md:             md,
 		pd:             pd,
 	}
 }
@@ -272,9 +274,9 @@ func (fw *FileWatcher) transferFile(filePath string, isNewFile bool) {
 		return
 	}
 	fileSize := fileInfo.Size()
-	totalChunks := (fileSize + conf.ChunkSize - 1) / conf.ChunkSize
+	totalChunks := (fileSize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize
 
-	buf := make([]byte, conf.ChunkSize)
+	buf := make([]byte, conf.AppConfig.ChunkSize)
 	var offset int64 = 0
 
 	for {
@@ -398,49 +400,81 @@ func (fw *FileWatcher) HandleFileModification(filePath string) {
 	} else if currSize < prevSize {
 		// File has shrunk
 		go fw.handleFileShrunk(filePath, currSize)
+	} else {
+		// In-place modification detected
+		go fw.handleInPlaceModification(filePath)
 	}
 }
 
 // handleFileShrunk notifies peers to truncate the file.
 func (fw *FileWatcher) handleFileShrunk(filePath string, currSize int64) {
-    // Notify peers to truncate the file
-    err := fw.sendFileTruncateToPeer(filepath.Base(filePath), currSize)
-    if err != nil {
-        log.Printf("Error sending truncate command for file %s: %v", filePath, err)
-    }
+	// Notify peers to truncate the file
+	err := fw.sendFileTruncateToPeer(filepath.Base(filePath), currSize)
+	if err != nil {
+		log.Printf("Error sending truncate command for file %s: %v", filePath, err)
+	}
 }
 
 // handleInPlaceModification detects in-place modifications and sends updated data.
 func (fw *FileWatcher) handleInPlaceModification(filePath string) {
-	// Compute current hash
-	currHash, err := computeFileHash(filePath)
+	fw.mu.Lock()
+	if fw.inProgress[filePath] {
+		fw.mu.Unlock()
+		return // Avoid reacting to our own changes
+	}
+	fw.inProgress[filePath] = true
+	fw.mu.Unlock()
+
+	defer func() {
+		fw.mu.Lock()
+		delete(fw.inProgress, filePath)
+		fw.mu.Unlock()
+	}()
+
+	// Detect changed chunks using metadata
+	changedOffsets, err := fw.md.DetectChangedChunks(filePath, conf.AppConfig.ChunkSize)
 	if err != nil {
-		log.Printf("Failed to compute hash for %s: %v", filePath, err)
+		log.Printf("Failed to detect changed chunks for %s: %v", filePath, err)
 		return
 	}
 
-	fw.mu.Lock()
-	prevHash, hasPrevHash := fw.fileHashes[filePath]
-	fw.mu.Unlock()
-
-	if hasPrevHash && currHash == prevHash {
+	if len(changedOffsets) == 0 {
 		// No changes detected
 		return
 	}
 
-	// Update the stored hash
-	fw.mu.Lock()
-	fw.fileHashes[filePath] = currHash
-	fw.mu.Unlock()
+	// Send the changed chunks
+	fw.sendChangedChunks(filePath, changedOffsets)
+}
 
-	// Read the entire file and send it to peers
-	fileInfo, err := os.Stat(filePath)
+func (fw *FileWatcher) sendChangedChunks(filePath string, offsets []int64) {
+	file, err := os.Open(filePath)
 	if err != nil {
-		log.Printf("Failed to stat file %s: %v", filePath, err)
+		log.Printf("Failed to open file %s: %v", filePath, err)
 		return
 	}
+	defer file.Close()
 
-	fw.readAndSendFileData(filePath, 0, fileInfo.Size())
+	buf := make([]byte, conf.AppConfig.ChunkSize)
+
+	for _, offset := range offsets {
+		n, err := file.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			log.Printf("Error reading file %s at offset %d: %v", filePath, offset, err)
+			continue
+		}
+		chunkData := buf[:n]
+
+		// Send the chunk to peers
+		err = fw.sendBytesToPeer(filepath.Base(filePath), chunkData, offset, false, 0)
+		if err != nil {
+			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
+			return
+		}
+
+		// Update the metadata
+		fw.md.UpdateFileMetaData(filePath, chunkData, offset, int64(len(chunkData)))
+	}
 }
 
 // readAndSendFileData reads specified data from the file and sends it to peers.
@@ -452,7 +486,7 @@ func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length
 	}
 	defer file.Close()
 
-	buf := make([]byte, conf.ChunkSize)
+	buf := make([]byte, conf.AppConfig.ChunkSize)
 	totalRead := int64(0)
 
 	for totalRead < length {
