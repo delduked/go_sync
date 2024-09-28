@@ -100,7 +100,7 @@ func (pd *PeerData) SyncWithPeers() {
 		if conn.Target() == pd.LocalIP {
 			continue
 		}
-
+		conn.GetState()
 		peerFileList, err := pd.getfilelist(conn)
 		if err != nil {
 			log.Errorf("Failed to get file list from %s: %v", conn.Target(), err)

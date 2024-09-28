@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"github.com/grandcat/zeroconf"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 type PeerData struct {
@@ -148,12 +150,55 @@ func (pd *PeerData) StartPeriodicSync(ctx context.Context, wg *sync.WaitGroup) {
 		}
 	}
 }
+func (pd *PeerData) HealthCheck(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Warn("Shutting down periodic metadata exchange...")
+			return
+		case <-ticker.C:
+			for _, conn := range pd.Clients {
+				if conn.Target() == pd.LocalIP {
+					continue
+				}
+				stream, err := clients.Ping(conn)
+				if err != nil {
+					log.Errorf("Failed to ping %s: %v", conn.Target(), err)
+					continue
+				}
+
+				go func() {
+					for {
+						recv, err := stream.Recv()
+						if err != nil {
+							log.Errorf("Failed to receive health check response from %s: %v", conn.Target(), err)
+							break
+						}
+						log.Infof(recv.Message)
+					}
+				}()
+				stream.Send(&pb.Ping{
+					Message: fmt.Sprintf("Ping from %v at %v", pd.LocalIP, time.Now().Unix()),
+				})
+			}
+		}
+	}
+}
 
 func (pd *PeerData) AddClientConnection(ip string, port string) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	conn, err := grpc.NewClient(ip+":"+port, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.NewClient(ip+":"+port, grpc.WithInsecure(), grpc.WithKeepaliveParams(keepalive.ClientParameters{
+		Time:                10 * time.Second,
+		Timeout:             20 * time.Second,
+		PermitWithoutStream: true,
+	}))
 	if err != nil {
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ip, err)
 	}

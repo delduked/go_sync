@@ -52,9 +52,7 @@ func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
 		return err
 	}
 
-	s.LocalMetaData.mu.Lock()
-	delete(s.LocalMetaData.MetaData, filePath)
-	s.LocalMetaData.mu.Unlock()
+	s.LocalMetaData.DeleteFileMetaData(filePath)
 
 	s.fw.mu.Lock()
 	delete(s.fw.inProgress, filePath)

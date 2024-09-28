@@ -2,9 +2,11 @@ package servers
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
 	"github.com/TypeTerrors/go_sync/pkg"
@@ -197,6 +199,23 @@ func (s *FileSyncServer) buildFileList() (*pb.FileList, error) {
 	return &pb.FileList{
 		Files: fileEntries,
 	}, nil
+}
+
+func (s *FileSyncServer) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
+	for {
+		recv, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			log.Errorf("Error receiving health check request: %v", err)
+		}
+		log.Infof(recv.Message)
+
+		stream.Send(&pb.Pong{
+			Message: fmt.Sprintf("ping from %v at %v", s.PeerData.LocalIP, time.Now().Unix()),
+		})
+	}
 }
 
 func (s *FileSyncServer) GetFile(ctx context.Context, req *pb.RequestFileTransfer) (*pb.EmptyResponse, error) {

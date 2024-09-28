@@ -3,6 +3,7 @@ option go_package = "proto/;filesync";
 
 service FileSyncService {
     rpc SyncFile(stream FileSyncRequest) returns (stream FileSyncResponse);
+    rpc HealthCheck(stream Ping) returns (stream Pong);
     rpc ExchangeMetadata(stream MetadataRequest) returns (stream MetadataResponse);
     rpc RequestChunks(stream ChunkRequest) returns (stream ChunkResponse);
     rpc GetFileList(GetFileListRequest) returns (GetFileListResponse);
@@ -15,6 +16,13 @@ message FileSyncRequest {
         FileDelete file_delete = 2;
         FileTruncate file_truncate = 3;
     }
+}
+
+message Ping {
+    string message = 1;
+}
+message Pong {
+    string message = 1;
 }
 
 message RequestFileTransfer {
