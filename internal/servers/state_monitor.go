@@ -42,7 +42,7 @@ type FileWatcher struct {
 func NewFileWatcher(pd *PeerData, md *Meta) *FileWatcher {
 	return &FileWatcher{
 		monitoredFiles: make(map[string]*FileMonitor),
-		debounceTimers: make(map[string]*time.Timer), 
+		debounceTimers: make(map[string]*time.Timer),
 		fileSizes:      make(map[string]int64),
 		fileHashes:     make(map[string]string),
 		inProgress:     make(map[string]bool),
@@ -508,12 +508,12 @@ func (fw *FileWatcher) handleFileShrunk(filePath string, currSize int64) {
 	}
 }
 
-// handleInPlaceModification detects in-place modifications and sends updated data.
 func (fw *FileWatcher) handleInPlaceModification(filePath string) {
+	// Lock the file to avoid concurrent changes
 	fw.mu.Lock()
 	if fw.inProgress[filePath] {
 		fw.mu.Unlock()
-		return // Avoid reacting to our own changes
+		return // Skip if the file is already being synced
 	}
 	fw.inProgress[filePath] = true
 	fw.mu.Unlock()
@@ -524,7 +524,7 @@ func (fw *FileWatcher) handleInPlaceModification(filePath string) {
 		fw.mu.Unlock()
 	}()
 
-	// Detect changed chunks using metadata
+	// Detect changed chunks using metadata comparison
 	changedOffsets, err := fw.md.DetectChangedChunks(filePath, conf.AppConfig.ChunkSize)
 	if err != nil {
 		log.Printf("Failed to detect changed chunks for %s: %v", filePath, err)
@@ -536,7 +536,7 @@ func (fw *FileWatcher) handleInPlaceModification(filePath string) {
 		return
 	}
 
-	// Send the changed chunks
+	// Sync only the changed chunks
 	fw.sendChangedChunks(filePath, changedOffsets)
 }
 
@@ -558,10 +558,10 @@ func (fw *FileWatcher) sendChangedChunks(filePath string, offsets []int64) {
 		}
 		chunkData := buf[:n]
 
-		// Send the chunk to peers
+		// Send the modified chunk to peers
 		err = fw.sendBytesToPeer(filepath.Base(filePath), chunkData, offset, false, 0)
 		if err != nil {
-			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
+			log.Printf("Error sending modified data to peer for file %s: %v", filePath, err)
 			return
 		}
 
