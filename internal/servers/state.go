@@ -93,17 +93,17 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 
 				if event.Op&fsnotify.Create == fsnotify.Create {
 					log.Printf("File created: %s", event.Name)
-					s.fw.HandleFileCreation(event.Name)
+					go s.fw.HandleFileCreation(event.Name)
 				}
 
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					log.Printf("File modified: %s", event.Name)
-					s.fw.HandleFileModification(event.Name)
+					go s.fw.HandleFileModification(event.Name)
 				}
 
 				if event.Op&fsnotify.Remove == fsnotify.Remove {
 					log.Printf("File deleted: %s", event.Name)
-					s.fw.HandleFileDeletion(event.Name)
+					go s.fw.HandleFileDeletion(event.Name)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
