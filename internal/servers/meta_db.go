@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/TypeTerrors/go_sync/pkg"
 	"github.com/charmbracelet/log"
 	"github.com/dgraph-io/badger/v3"
 )
@@ -39,6 +40,9 @@ func (m *Meta) LoadMetaDataFromDB() error {
 
 // saveMetaDataToDB saves the metadata to BadgerDB.
 func (m *Meta) saveMetaDataToDB(file string, metadata MetaData) error {
+	if pkg.IsTemporaryFile(file) {
+		return nil
+	}
 	data, err := json.Marshal(metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %v", err)
