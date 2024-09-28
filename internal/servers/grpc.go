@@ -162,8 +162,6 @@ func (s *FileSyncServer) RequestChunks(stream pb.FileSyncService_RequestChunksSe
 	}
 }
 
-
-
 func (s *FileSyncServer) GetFileList(ctx context.Context, req *pb.GetFileListRequest) (*pb.GetFileListResponse, error) {
 	fileList, err := s.buildFileList()
 	if err != nil {
@@ -215,16 +213,16 @@ func (s *FileSyncServer) GetFile(ctx context.Context, req *pb.RequestFileTransfe
 }
 
 func (s *FileSyncServer) RequestFileTransfer(ctx context.Context, req *pb.RequestFileTransfer) (*pb.EmptyResponse, error) {
-    fileName := req.GetFileName()
-    filePath := filepath.Join(s.syncDir, fileName)
+	fileName := req.GetFileName()
+	filePath := filepath.Join(s.syncDir, fileName)
 
-    // Check if file exists
-    if _, err := os.Stat(filePath); os.IsNotExist(err) {
-        return nil, status.Errorf(codes.NotFound, "File %s not found", fileName)
-    }
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, status.Errorf(codes.NotFound, "File %s not found", fileName)
+	}
 
-    // Start transferring the file to the requester
-    go s.fw.transferFile(filePath, true) // Assuming transferFile sends to all peers, modify if needed
+	// Start transferring the file to the requester
+	go s.fw.transferFile(filePath, true) // Assuming transferFile sends to all peers, modify if needed
 
-    return &pb.EmptyResponse{}, nil
+	return &pb.EmptyResponse{}, nil
 }
