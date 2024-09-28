@@ -131,6 +131,9 @@ func startServices(ctx context.Context, wg *sync.WaitGroup, peerData *servers.Pe
 	wg.Add(1)
 	go server.PeriodicMetadataExchange(ctx, wg)
 
+	wg.Add(1)
+	go peerData.HealthCheck(ctx, wg)
+
 	// Start the server (and watch the sync folder)
 	wg.Add(1)
 	go func() {
