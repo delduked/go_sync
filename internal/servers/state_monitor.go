@@ -294,12 +294,12 @@ func (fm *FileMonitor) processCapturedData(fw *FileWatcher) {
 			}
 
 			// Send the captured data to peers with rate-limiting
-			err = fw.sendBytesToPeer(filepath.Base(fm.filePath), buf[:n], offset, fm.isNewFile, 0)
-			if err != nil {
-				log.Printf("Error sending data to peer for file %s: %v", fm.filePath, err)
-				fw.pd.markFileAsComplete(fm.filePath)
-				return
-			}
+			go fw.sendBytesToPeer(filepath.Base(fm.filePath), buf[:n], offset, fm.isNewFile, 0)
+			// if err != nil {
+			// 	log.Printf("Error sending data to peer for file %s: %v", fm.filePath, err)
+			// 	fw.pd.markFileAsComplete(fm.filePath)
+			// 	return
+			// }
 
 			offset += int64(n)
 
@@ -350,11 +350,11 @@ func (fw *FileWatcher) transferFile(filePath string, isNewFile bool) {
 			break
 		}
 
-		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, isNewFile, totalChunks)
-		if err != nil {
-			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
-			return
-		}
+		go fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, isNewFile, totalChunks)
+		// if err != nil {
+		// 	log.Printf("Error sending data to peer for file %s: %v", filePath, err)
+		// 	return
+		// }
 		offset += int64(n)
 
 		if isNewFile {
@@ -591,14 +591,10 @@ func (fw *FileWatcher) sendChangedChunks(filePath string, offsets []int64) {
 		chunkData := buf[:n]
 
 		// Update the metadata
-		fw.md.UpdateFileMetaData(filePath, chunkData, offset, int64(len(chunkData)))
+		go fw.md.UpdateFileMetaData(filePath, chunkData, offset, int64(len(chunkData)))
 
 		// Send the modified chunk to peers
-		err = fw.sendBytesToPeer(filepath.Base(filePath), chunkData, offset, false, 0)
-		if err != nil {
-			log.Printf("Error sending modified data to peer for file %s: %v", filePath, err)
-			return
-		}
+		go fw.sendBytesToPeer(filepath.Base(filePath), chunkData, offset, false, 0)
 
 	}
 }
@@ -631,11 +627,11 @@ func (fw *FileWatcher) readAndSendFileData(filePath string, offset int64, length
 		}
 
 		// Send the chunk to peers
-		err = fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset+totalRead, false, 0)
-		if err != nil {
-			log.Printf("Error sending data to peer for file %s: %v", filePath, err)
-			return
-		}
+		go fw.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset+totalRead, false, 0)
+		// if err != nil {
+		// 	log.Printf("Error sending data to peer for file %s: %v", filePath, err)
+		// 	return
+		// }
 
 		totalRead += int64(n)
 	}
