@@ -116,6 +116,51 @@ func (s *State) listen() (*fsnotify.Watcher, error) {
 
 	return watcher, nil
 }
+func (fw *FileWatcher) HandleFileCreation(filePath string) {
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
+
+	fw.mu.Lock()
+	if fw.debounceTimers == nil {
+		fw.debounceTimers = make(map[string]*time.Timer)
+	}
+
+	if timer, exists := fw.debounceTimers[filePath]; exists {
+		timer.Stop()
+	}
+
+	fw.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
+		fw.FileCreation(filePath)
+		fw.mu.Lock()
+		delete(fw.debounceTimers, filePath)
+		fw.mu.Unlock()
+	})
+	fw.mu.Unlock()
+}
+func (fw *FileWatcher) HandleFileDeletion(filePath string) {
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
+
+	// Debounce deletion handling
+	fw.mu.Lock()
+	if fw.debounceTimers == nil {
+		fw.debounceTimers = make(map[string]*time.Timer)
+	}
+
+	if timer, exists := fw.debounceTimers[filePath]; exists {
+		timer.Stop()
+	}
+
+	fw.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
+		fw.processFileDeletion(filePath)
+		fw.mu.Lock()
+		delete(fw.debounceTimers, filePath)
+		fw.mu.Unlock()
+	})
+	fw.mu.Unlock()
+}
 
 func (s *State) PeriodicMetadataExchange(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()

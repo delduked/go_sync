@@ -46,6 +46,11 @@ func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
 // handleFileDelete deletes the specified file.
 func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
 	filePath := filepath.Clean(fileDelete.FileName)
+	if fileDelete.Offset != 0 {
+		// need to delete a specific offset in the file
+		s.f.DeleteFileChunk(filePath, fileDelete.Offset)
+		return nil
+	}
 	err := os.Remove(filePath)
 	if err != nil {
 		log.Printf("Error deleting file %s: %v", filePath, err)

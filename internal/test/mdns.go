@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TypeTerrors/go_sync/conf"
 	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
@@ -136,20 +135,6 @@ func (m *Mdns) Scan(ctx context.Context, wg *sync.WaitGroup) {
 	close(entries)
 }
 
-func (m *Mdns) StartPeriodicSync(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
-	ticker := time.NewTicker(conf.AppConfig.SyncInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			m.SyncWithPeers()
-		}
-	}
-}
 func (m *Mdns) HealthCheck(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 

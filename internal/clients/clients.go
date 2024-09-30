@@ -34,6 +34,15 @@ func SyncStream(ip string) (pb.FileSyncService_SyncFileClient, error) {
 	}
 	return stream, nil
 }
+func SyncConn(conn *grpc.ClientConn) (pb.FileSyncService_SyncFileClient, error) {
+	client := pb.NewFileSyncServiceClient(conn)
+	stream, err := client.SyncFile(context.Background())
+	if err != nil {
+		log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
+		return nil, err
+	}
+	return stream, nil
+}
 func Ping(conn *grpc.ClientConn) (pb.FileSyncService_HealthCheckClient, error) {
 
 	client := pb.NewFileSyncServiceClient(conn)

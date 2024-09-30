@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/internal/test"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"google.golang.org/grpc/codes"
@@ -22,6 +23,8 @@ type FileSyncServer struct {
 	syncDir       string
 	PeerData      *PeerData
 	LocalMetaData *Meta
+	m             *test.Meta
+	f             *test.FileData
 	fw            *FileWatcher
 }
 
@@ -58,6 +61,15 @@ func (s *FileSyncServer) SyncFile(stream pb.FileSyncService_SyncFileServer) erro
 			if err != nil {
 				log.Errorf("Error handling file delete: %v", err)
 				return err
+			}
+			if req.FileDelete.Offset != 0 {
+				stream.Send(&pb.FileSyncResponse{
+					Message: fmt.Sprintf("Chunk %s deleted in file %v on peer %v", req.FileDelete.FileName, req.FileDelete.Offset, s.PeerData.LocalIP),
+				})
+			} else {
+				stream.Send(&pb.FileSyncResponse{
+					Message: fmt.Sprintf("File %s deleted on peer %v", req.FileDelete.FileName, s.PeerData.LocalIP),
+				})
 			}
 		case *pb.FileSyncRequest_FileTruncate:
 			err := s.handleFileTruncate(req.FileTruncate)

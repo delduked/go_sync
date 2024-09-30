@@ -12,19 +12,22 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
+	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/zeebo/xxh3"
 )
 
 type Meta struct {
-	ChunkSize    int64
-	Files        map[string]FileMetaData // map[filename][offset]Hash
-	mismatchQeue chan MetaData
-	mdns         *Mdns
-	db           *badger.DB // BadgerDB instance
-	mu           sync.Mutex
+	ChunkSize int64
+	Files     map[string]FileMetaData // map[filename][offset]Hash
+	Save      chan MetaData
+	Delete    chan MetaData
+	mdns      *Mdns
+	db        *badger.DB // BadgerDB instance
+	mu        sync.Mutex
 }
 
 // Used for comparing metadata between old scan and new scan
@@ -104,6 +107,9 @@ func (m *Meta) Scan(wg *sync.WaitGroup, ctx context.Context) {
 }
 
 func (m *Meta) CreateFileMetaData(fileName string) error {
+	if pkg.IsTemporaryFile(fileName) {
+		return nil
+	}
 	// Open the file
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -111,15 +117,44 @@ func (m *Meta) CreateFileMetaData(fileName string) error {
 	}
 	defer file.Close()
 
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get file info for %s: %w", fileName, err)
+	}
+
+	// If the file has shrunk, delete chunks from the metadata that no longer apply
+	if fileMeta, exists := m.Files[fileName]; exists {
+		if fileInfo.Size() < fileMeta.filesize {
+			// File has shrunk, remove extra chunks
+			log.Printf("File %s has shrunk from %d to %d", fileName, fileMeta.filesize, fileInfo.Size())
+			for offset := fileInfo.Size(); offset < fileMeta.filesize; offset += conf.AppConfig.ChunkSize {
+				err1, err2 := m.DeleteMetaData(fileName, offset)
+				if err1 != nil || err2 != nil {
+					log.Errorf("Failed to delete metadata for shrunk file at offset %d: %v, %v", offset, err1, err2)
+				}
+			}
+		} else if fileInfo.Size() > fileMeta.filesize {
+			log.Printf("File %s has grown from %d to %d", fileName, fileMeta.filesize, fileInfo.Size())
+			// Continue with logic to add new chunks...
+		}
+	}
+
 	// Buffer to hold file chunks
 	buffer := make([]byte, conf.AppConfig.ChunkSize)
 	var offset int64 = 0
 	for {
-		// Read chunk of file
-		bytesRead, err := file.Seek(offset, 0) // not sure if this is correct, i couuld be looping from the start or from the end of the file, but i'm incrementing the offset upwards
+		// Move the file pointer to the current offset
+		_, err := file.Seek(offset, io.SeekStart) // Seek to the exact offset
 		if err != nil {
-			return fmt.Errorf("error reading file: %w", err)
+			return fmt.Errorf("error seeking to offset %d in file %s: %w", offset, fileName, err)
 		}
+
+		// Read the chunk from the current offset
+		bytesRead, err := file.Read(buffer) // Read up to ChunkSize bytes into buffer
+		if err != nil && err != io.EOF {
+			return fmt.Errorf("error reading file %s at offset %d: %w", fileName, offset, err)
+		}
+
 		if err != io.EOF {
 			return fmt.Errorf("EOF reached: %w", err)
 		}
@@ -144,30 +179,30 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64) error {
 		return nil
 	}
 
-	// Also need to check if the hashes match, if they do, then we don't need to save the metadata
-	// If they don't match, then we need to save the metadata
-	// And send the new chunks at the same offsets that are different to the other peer
-
-	// what would happen if the file size is now smaller?
-	// i woulld not know how each chunk was changed, just that the file is now smaller
-	// i would need to compare the file size to the number of chunks i have stored
-	// what if only a portion of a chunk was removed? i wouldn't know how the missing chunk was changed
-	// i would need to compare the file size to the number of chunks i have stored
-
-	// what would happen if the file size is now larger?
-	
-
-	h, err := m.GetMetaData(filename, offset)
+	oldMeta, err := m.GetMetaData(filename, offset)
 	if err != nil {
-		log.Errorf("Failed to get metadata for file %s: %v", filename, err)
-	} else if h.Stronghash == m.hashChunk(chunk) {
-		m.mismatchQeue <- MetaData{
-			filename: filename,
-			offset:   offset,
+		// No existing metadata, proceed to save new chunk
+		log.Printf("No existing metadata for %s at offset %d, saving new metadata", filename, offset)
+	} else {
+		// Compare old and new hashes
+		newWeakHash := pkg.NewRollingChecksum(chunk).Sum()
+		newStrongHash := m.hashChunk(chunk)
+
+		if oldMeta.Weakhash == newWeakHash && oldMeta.Stronghash == newStrongHash {
+			// No change, skip saving this chunk
+			log.Printf("Chunk at offset %d for file %s has not changed", offset, filename)
+			return nil
 		}
+
+		log.Printf("Chunk at offset %d for file %s has changed", offset, filename)
 	}
 
 	m.saveMetaDataToMem(filename, chunk, offset)
+
+	m.Save <- MetaData{
+		filename: filename,
+		offset:   offset,
+	}
 
 	if err := m.saveMetaDataToDB(filename, chunk, offset); err != nil {
 		log.Printf("Failed to save metadata to BadgerDB: %v", err)
@@ -268,9 +303,32 @@ func (m *Meta) getMetaDataFromMem(filename string, offset int64) (Hash, error) {
 	h = m.Files[filename].hashes[offset]
 	return h, nil
 }
+func (m *Meta) DeleteEntireFileMetaData(filename string) (error, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var err1, err2 error
+	for offset := range m.Files[filename].hashes {
+		err1 = m.deleteMetaDataFromDB(filename, offset)
+	}
+	if _, exists := m.Files[filename]; exists {
+		delete(m.Files, filename)
+	} else {
+		err2 = fmt.Errorf("metadata for file %s not found in memory", filename)
+		return err1, err2
+	}
+
+	return err1, err2
+}
 
 // DeleteMetaData will delete the metadata from both the in-memory map and the database
 func (m *Meta) DeleteMetaData(filename string, offset int64) (error, error) {
+	if pkg.IsTemporaryFile(filename) {
+		return nil, nil
+	}
+	m.Delete <- MetaData{
+		filename: filename,
+		offset:   offset,
+	}
 	var err1, err2 error
 	if err1 := m.deleteMetaDataFromMem(filename, offset); err1 != nil {
 		log.Errorf("Failed to delete metadata from in-memory map: %v", err1)
@@ -315,11 +373,71 @@ func (m *Meta) hashChunk(chunk []byte) string {
 	return fmt.Sprintf("%016x%016x", hash.Lo, hash.Hi)
 }
 
-func (m *Meta) MetaDataMismatchBatch(done <-chan struct{}) {
+func (m *Meta) DeleteChunkOnPeer(req MetaData) {
+	for _, conn := range m.mdns.Clients {
+		stream, err := clients.SyncConn(conn)
+		if err != nil {
+			log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
+			continue
+		}
+		go func() {
+			for {
+				recv, err := stream.Recv()
+				if err != nil {
+					log.Errorf("Failed to receive response from %s: %v", conn.Target(), err)
+					break
+				}
+				log.Infof(recv.Message)
+			}
+		}()
+		stream.Send(&pb.FileSyncRequest{
+			Request: &pb.FileSyncRequest_FileDelete{
+				FileDelete: &pb.FileDelete{
+					FileName: req.filename,
+					Offset:   req.offset,
+				},
+			},
+		})
+	}
+}
+func (m *Meta) SaveChunkOnPeer(req MetaData) {
+	for _, conn := range m.mdns.Clients {
+		stream, err := clients.SyncConn(conn)
+		if err != nil {
+			log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
+			continue
+		}
+		go func() {
+			for {
+				recv, err := stream.Recv()
+				if err != nil {
+					log.Errorf("Failed to receive response from %s: %v", conn.Target(), err)
+					break
+				}
+				log.Infof(recv.Message)
+			}
+		}()
+		stream.Send(&pb.FileSyncRequest{
+			Request: &pb.FileSyncRequest_FileChunk{
+				FileChunk: &pb.FileChunk{
+					FileName: req.filename,
+					Offset:   req.offset,
+				},
+			},
+		})
+	}
+}
+func (m *Meta) SendToPeer(done <-chan struct{}) {
 	for {
 		select {
-		case <-m.mismatchQeue:
+		case <-m.Save:
 			// Send the new chunks at the same offsets because a local file has changed
+			req := <-m.Save
+			m.SaveChunkOnPeer(req)
+		case <-m.Delete:
+			// Send the deleted chunks at the same offsets because a local file has changed
+			req := <-m.Delete
+			m.DeleteChunkOnPeer(req)
 		case <-done:
 			// stop listening for messages in queue
 			return
