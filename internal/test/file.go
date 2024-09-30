@@ -24,98 +24,18 @@ type FileData struct {
 	mu             sync.Mutex
 	debounceTimers map[string]*time.Timer
 	inProgress     map[string]bool
-	files          map[string]FileMonitor
-}
-type FileMonitor struct {
-	pipeReader *io.PipeReader
-	pipeWriter *io.PipeWriter
-	done       chan struct{}
-	isNewFile  bool
 }
 
-func (f *FileData) captureFileWrites(filePath string) {
-	// Open the file
-	file, err := os.OpenFile(filePath, os.O_RDONLY, 0644)
-	if err != nil {
-		log.Printf("Failed to open file %s: %v", filePath, err)
-		return
-	}
-	defer file.Close()
-
-	// Read from the file and write to the pipe
-	buf := make([]byte, 4096)
-	for {
-		select {
-		case <-f.files[filePath].done:
-			f.files[filePath].pipeWriter.Close()
-			return
-		default:
-			n, err := file.Read(buf)
-			if err != nil && err != io.EOF {
-				log.Printf("Error reading file %s: %v", filePath, err)
-				return
-			}
-			if n == 0 {
-				// No more data to read
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-
-			// Write the data to the pipe
-			_, err = f.files[filePath].pipeWriter.Write(buf[:n])
-			if err != nil {
-				log.Printf("Error writing to pipe for %s: %v", filePath, err)
-				return
-			}
-		}
+func NewFileData(meta *Meta, mdns *Mdns) *FileData {
+	return &FileData{
+		meta:           meta,
+		mdns:           mdns,
+		debounceTimers: make(map[string]*time.Timer),
+		inProgress:     make(map[string]bool),
 	}
 }
 
-// processCapturedData reads data from the pipe and processes it.
-func (f *FileData) processCapturedData(filePath string) {
-	defer f.files[filePath].pipeReader.Close()
-	buf := make([]byte, conf.AppConfig.ChunkSize)
-	var offset int64 = 0
-
-	for {
-		select {
-		case <-f.files[filePath].done:
-			// Mark the file as no longer in progress
-			f.markFileAsComplete(filePath)
-			return
-		default:
-			n, err := f.files[filePath].pipeReader.Read(buf)
-			if err != nil {
-				if err == io.EOF {
-					f.markFileAsComplete(filePath)
-					return
-				}
-				log.Printf("Error reading from pipe for file %s: %v", filePath, err)
-				f.markFileAsComplete(filePath)
-				return
-			}
-
-			// Send the captured data to peers with rate-limiting
-			go f.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, f.files[filePath].isNewFile, 0)
-			// if err != nil {
-			// 	log.Printf("Error sending data to peer for file %s: %v", fm.filePath, err)
-			// 	fw.pd.markFileAsComplete(fm.filePath)
-			// 	return
-			// }
-
-			offset += int64(n)
-
-			// After sending the first chunk, mark the file as not new
-			fileMeta := f.files[filePath]
-			if fileMeta.isNewFile {
-				fileMeta.isNewFile = false
-				f.files[filePath] = fileMeta
-			}
-		}
-	}
-}
-
-func (f *FileData) listen() (*fsnotify.Watcher, error) {
+func (f *FileData) Start() (*fsnotify.Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -175,13 +95,14 @@ func (f *FileData) Scan(ctx context.Context, wg *sync.WaitGroup) {
 		}
 	}
 }
-
 func (f *FileData) HandleFileCreation(filePath string) {
 	if pkg.IsTemporaryFile(filePath) {
 		return
 	}
 
 	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	if f.debounceTimers == nil {
 		f.debounceTimers = make(map[string]*time.Timer)
 	}
@@ -191,53 +112,87 @@ func (f *FileData) HandleFileCreation(filePath string) {
 	}
 
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-
-		// not sure about this part
-		// should i send the message only to create a new file and handle the modification through the modification event?
-		// or should i read the file and send the chunks inside the creation event?
-		f.FileCreation(filePath)
+		f.handleDebouncedFileCreation(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
 		f.mu.Unlock()
 	})
-	f.mu.Unlock()
 }
 
-// HandleFileCreation starts monitoring a newly created file.
-func (f *FileData) FileCreation(filePath string) {
-	if pkg.IsTemporaryFile(filePath) {
+func (f *FileData) handleDebouncedFileCreation(filePath string) {
+	// Check if file is already being processed
+	f.mu.Lock()
+	if f.inProgress[filePath] {
+		f.mu.Unlock()
 		return
 	}
-	f.mu.Lock()
-	// f.fileSizes[filePath] = 0
 	f.inProgress[filePath] = true
 	f.mu.Unlock()
 
-	// Initialize pipeReader and pipeWriter for this file
-	reader, writer := io.Pipe()
-	monitor := FileMonitor{
-		pipeReader: reader,
-		pipeWriter: writer,
-		done:       make(chan struct{}),
-		isNewFile:  true, // Assuming it's a new file
+	defer func() {
+		f.mu.Lock()
+		delete(f.inProgress, filePath)
+		f.mu.Unlock()
+	}()
+
+	// Initialize metadata
+	err := f.meta.CreateFileMetaData(filePath)
+	if err != nil {
+		log.Errorf("Failed to initialize metadata for new file %s: %v", filePath, err)
+		return
 	}
 
-	f.mu.Lock()
-	f.files[filePath] = monitor
-	f.mu.Unlock()
-
-	// Start monitoring the file for new data and capture file writes
-	go f.captureFileWrites(filePath)
-	go f.processCapturedData(filePath)
+	// The meta.go's Save channel will handle sending updates to peers
 }
 
 func (f *FileData) HandleFileModification(filePath string) {
-	// maybe I can use a debounce method and compare the metadata every 500ms after the last modification
-	// if the metadata is the same, then I can send the file to the peers
-	// if the metadata is different, then I can send the chunks that are different
-	// I can also use the debounce method to send the chunks to the peers
-	// I can also use the debounce method to send the file to the peers
+	if pkg.IsTemporaryFile(filePath) {
+		return
+	}
 
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.debounceTimers == nil {
+		f.debounceTimers = make(map[string]*time.Timer)
+	}
+
+	if timer, exists := f.debounceTimers[filePath]; exists {
+		timer.Stop()
+	}
+
+	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
+		f.handleDebouncedFileModification(filePath)
+		f.mu.Lock()
+		delete(f.debounceTimers, filePath)
+		f.mu.Unlock()
+	})
+}
+
+func (f *FileData) handleDebouncedFileModification(filePath string) {
+	// Check if file is already being processed
+	f.mu.Lock()
+	if f.inProgress[filePath] {
+		f.mu.Unlock()
+		return
+	}
+	f.inProgress[filePath] = true
+	f.mu.Unlock()
+
+	defer func() {
+		f.mu.Lock()
+		delete(f.inProgress, filePath)
+		f.mu.Unlock()
+	}()
+
+	// Update metadata
+	err := f.meta.CreateFileMetaData(filePath)
+	if err != nil {
+		log.Errorf("Failed to create/update metadata for file %s: %v", filePath, err)
+		return
+	}
+
+	// The meta.go's Save channel will handle sending updates to peers
 }
 
 func (f *FileData) HandleFileDeletion(filePath string) {
@@ -245,8 +200,9 @@ func (f *FileData) HandleFileDeletion(filePath string) {
 		return
 	}
 
-	// Debounce deletion handling
 	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	if f.debounceTimers == nil {
 		f.debounceTimers = make(map[string]*time.Timer)
 	}
@@ -254,13 +210,21 @@ func (f *FileData) HandleFileDeletion(filePath string) {
 	if timer, exists := f.debounceTimers[filePath]; exists {
 		timer.Stop()
 	}
-	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-		f.DeleteFileOnPeer(filePath)
-		f.meta.DeleteEntireFileMetaData(filePath)
-	})
-	f.mu.Unlock()
+
+	f.DeleteFile(filePath)
 }
-func (f *FileData) DeleteFileOnPeer(filePath string) error {
+
+func (f *FileData) DeleteFile(filePath string) {
+	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
+		f.deleteFileOnPeer(filePath)
+		f.meta.DeleteEntireFileMetaData(filePath)
+		f.mu.Lock()
+		delete(f.debounceTimers, filePath)
+		f.mu.Unlock()
+	})
+}
+
+func (f *FileData) deleteFileOnPeer(filePath string) error {
 	for _, conn := range f.mdns.Clients {
 		stream, err := clients.SyncConn(conn)
 		if err != nil {
@@ -486,6 +450,53 @@ func (f *FileData) sendBytesToPeer(fileName string, data []byte, offset int64, i
 	}
 
 	return nil
+}
+
+func (f *FileData) transferFile(filePath string, isNewFile bool) {
+	f.markFileAsInProgress(filePath)
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Error opening file %s for transfer: %v", filePath, err)
+		return
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("Error getting file info for %s: %v", filePath, err)
+		return
+	}
+	fileSize := fileInfo.Size()
+	totalChunks := (fileSize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize
+
+	buf := make([]byte, conf.AppConfig.ChunkSize)
+	var offset int64 = 0
+
+	for {
+		n, err := file.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			log.Printf("Error reading file %s: %v", filePath, err)
+			return
+		}
+		if n == 0 {
+			break
+		}
+
+		go f.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, isNewFile, totalChunks)
+		// if err != nil {
+		// 	log.Printf("Error sending data to peer for file %s: %v", filePath, err)
+		// 	return
+		// }
+		offset += int64(n)
+
+		if isNewFile {
+			isNewFile = false
+		}
+	}
+
+	f.markFileAsComplete(filePath)
+	log.Printf("File %s transfer complete", filePath)
 }
 
 func (f *FileData) markFileAsComplete(fileName string) {

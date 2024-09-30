@@ -45,27 +45,35 @@ func (s *FileSyncServer) handleFileChunk(chunk *pb.FileChunk) error {
 
 // handleFileDelete deletes the specified file.
 func (s *FileSyncServer) handleFileDelete(fileDelete *pb.FileDelete) error {
-	filePath := filepath.Clean(fileDelete.FileName)
-	if fileDelete.Offset != 0 {
-		// need to delete a specific offset in the file
-		s.f.DeleteFileChunk(filePath, fileDelete.Offset)
-		return nil
-	}
-	err := os.Remove(filePath)
-	if err != nil {
-		log.Printf("Error deleting file %s: %v", filePath, err)
-		return err
-	}
+    filePath := filepath.Clean(fileDelete.FileName)
+    if fileDelete.Offset != 0 {
+        // Delete specific chunk
+        err := s.f.DeleteFileChunk(filePath, fileDelete.Offset)
+        if err != nil {
+            log.Printf("Error deleting chunk at offset %d in file %s: %v", fileDelete.Offset, filePath, err)
+            return err
+        }
+        log.Printf("Deleted chunk at offset %d in file %s as per request", fileDelete.Offset, filePath)
+    } else {
+        // Delete entire file
+        err := os.Remove(filePath)
+        if err != nil {
+            log.Printf("Error deleting file %s: %v", filePath, err)
+            return err
+        }
 
-	s.LocalMetaData.DeleteFileMetaData(filePath)
+        s.m.DeleteEntireFileMetaData(filePath)
 
-	s.fw.mu.Lock()
-	delete(s.fw.inProgress, filePath)
-	s.fw.mu.Unlock()
+        s.fw.mu.Lock()
+        delete(s.fw.inProgress, filePath)
+        s.fw.mu.Unlock()
 
-	log.Printf("Deleted file %s as per request", filePath)
-	return nil
+        log.Printf("Deleted file %s as per request", filePath)
+    }
+
+    return nil
 }
+
 
 // handleFileTruncate truncates the specified file to the given size.
 func (s *FileSyncServer) handleFileTruncate(fileTruncate *pb.FileTruncate) error {

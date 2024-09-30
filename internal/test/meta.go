@@ -43,12 +43,12 @@ type FileMetaData struct {
 	filesize int64
 }
 
-func (f FileMetaData) CurrentSize() int64 {
-	return int64(len(f.hashes)) * conf.AppConfig.ChunkSize
-}
-func (f FileMetaData) UpdateFileSize() {
-	f.filesize = int64(len(f.hashes)) * conf.AppConfig.ChunkSize
-}
+// func (f FileMetaData) CurrentSize() int64 {
+// 	return int64(len(f.hashes)) * conf.AppConfig.ChunkSize
+// }
+// func (f FileMetaData) UpdateFileSize() {
+// 	f.filesize = int64(len(f.hashes)) * conf.AppConfig.ChunkSize
+// }
 
 type Hash struct {
 	Stronghash string
@@ -107,109 +107,124 @@ func (m *Meta) Scan(wg *sync.WaitGroup, ctx context.Context) {
 }
 
 func (m *Meta) CreateFileMetaData(fileName string) error {
-	if pkg.IsTemporaryFile(fileName) {
-		return nil
-	}
-	// Open the file
-	file, err := os.Open(fileName)
-	if err != nil {
-		return fmt.Errorf("failed to open file %s: %w", fileName, err)
-	}
-	defer file.Close()
+    if pkg.IsTemporaryFile(fileName) {
+        return nil
+    }
 
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to get file info for %s: %w", fileName, err)
-	}
+    // Open the file
+    file, err := os.Open(fileName)
+    if err != nil {
+        return fmt.Errorf("failed to open file %s: %w", fileName, err)
+    }
+    defer file.Close()
 
-	// If the file has shrunk, delete chunks from the metadata that no longer apply
-	if fileMeta, exists := m.Files[fileName]; exists {
-		if fileInfo.Size() < fileMeta.filesize {
-			// File has shrunk, remove extra chunks
-			log.Printf("File %s has shrunk from %d to %d", fileName, fileMeta.filesize, fileInfo.Size())
-			for offset := fileInfo.Size(); offset < fileMeta.filesize; offset += conf.AppConfig.ChunkSize {
-				err1, err2 := m.DeleteMetaData(fileName, offset)
-				if err1 != nil || err2 != nil {
-					log.Errorf("Failed to delete metadata for shrunk file at offset %d: %v, %v", offset, err1, err2)
-				}
-			}
-		} else if fileInfo.Size() > fileMeta.filesize {
-			log.Printf("File %s has grown from %d to %d", fileName, fileMeta.filesize, fileInfo.Size())
-			// Continue with logic to add new chunks...
-		}
-	}
+    fileInfo, err := file.Stat()
+    if err != nil {
+        return fmt.Errorf("failed to get file info for %s: %w", fileName, err)
+    }
 
-	// Buffer to hold file chunks
-	buffer := make([]byte, conf.AppConfig.ChunkSize)
-	var offset int64 = 0
-	for {
-		// Move the file pointer to the current offset
-		_, err := file.Seek(offset, io.SeekStart) // Seek to the exact offset
-		if err != nil {
-			return fmt.Errorf("error seeking to offset %d in file %s: %w", offset, fileName, err)
-		}
+    // Lock to prevent concurrent modifications
+    m.mu.Lock()
+    defer m.mu.Unlock()
 
-		// Read the chunk from the current offset
-		bytesRead, err := file.Read(buffer) // Read up to ChunkSize bytes into buffer
-		if err != nil && err != io.EOF {
-			return fmt.Errorf("error reading file %s at offset %d: %w", fileName, offset, err)
-		}
+    // If the file has shrunk, delete chunks from the metadata that no longer apply
+    if fileMeta, exists := m.Files[fileName]; exists {
+        if fileInfo.Size() < fileMeta.filesize {
+            // File has shrunk, remove extra chunks
+            log.Printf("File %s has shrunk from %d to %d", fileName, fileMeta.filesize, fileInfo.Size())
+            for offset := fileInfo.Size(); offset < fileMeta.filesize; offset += conf.AppConfig.ChunkSize {
+                err1, err2 := m.DeleteMetaData(fileName, offset)
+                if err1 != nil || err2 != nil {
+                    log.Errorf("Failed to delete metadata for shrunk file at offset %d: %v, %v", offset, err1, err2)
+                }
+            }
+        }
+    }
 
-		if err != io.EOF {
-			return fmt.Errorf("EOF reached: %w", err)
-		}
-		if bytesRead == 0 {
-			break // End of file
-		}
+    // Buffer to hold file chunks
+    buffer := make([]byte, conf.AppConfig.ChunkSize)
+    var offset int64 = 0
 
-		m.SaveMetaData(fileName, buffer[:bytesRead], offset)
+    for {
+        // Move the file pointer to the current offset
+        _, err := file.Seek(offset, io.SeekStart)
+        if err != nil {
+            return fmt.Errorf("error seeking to offset %d in file %s: %w", offset, fileName, err)
+        }
 
-		// Move to the next chunk
-		offset += int64(bytesRead)
-	}
+        // Read the chunk from the current offset
+        bytesRead, err := file.Read(buffer)
+        if err != nil && err != io.EOF {
+            return fmt.Errorf("error reading file %s at offset %d: %w", fileName, offset, err)
+        }
 
-	// Return the file metadata with both weak and strong checksums
-	return nil
+        if bytesRead == 0 {
+            break // End of file
+        }
+
+        // Save the metadata for this chunk
+        err = m.SaveMetaData(fileName, buffer[:bytesRead], offset)
+        if err != nil {
+            return fmt.Errorf("error saving metadata for file %s at offset %d: %w", fileName, offset, err)
+        }
+
+        // Move to the next chunk
+        offset += conf.AppConfig.ChunkSize
+    }
+
+    // Update the filesize to the actual file size
+    if fileMeta, exists := m.Files[fileName]; exists {
+        fileMeta.filesize = fileInfo.Size()
+        m.Files[fileName] = fileMeta
+    } else {
+        m.Files[fileName] = FileMetaData{
+            hashes:   m.Files[fileName].hashes, // Or initialize accordingly
+            filesize: fileInfo.Size(),
+        }
+    }
+
+    return nil
 }
+
 
 // SaveMetaData will save the metadata to both in-memory map and the database
 func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64) error {
+    if pkg.IsTemporaryFile(filename) {
+        return nil
+    }
 
-	if pkg.IsTemporaryFile(filename) {
-		return nil
-	}
+    oldMeta, err := m.GetMetaData(filename, offset)
+    if err != nil {
+        // No existing metadata, proceed to save new chunk
+        log.Printf("No existing metadata for %s at offset %d, saving new metadata", filename, offset)
+    } else {
+        // Compare old and new hashes
+        newWeakHash := pkg.NewRollingChecksum(chunk).Sum()
+        newStrongHash := m.hashChunk(chunk)
 
-	oldMeta, err := m.GetMetaData(filename, offset)
-	if err != nil {
-		// No existing metadata, proceed to save new chunk
-		log.Printf("No existing metadata for %s at offset %d, saving new metadata", filename, offset)
-	} else {
-		// Compare old and new hashes
-		newWeakHash := pkg.NewRollingChecksum(chunk).Sum()
-		newStrongHash := m.hashChunk(chunk)
+        if oldMeta.Weakhash == newWeakHash && oldMeta.Stronghash == newStrongHash {
+            // No change, skip saving this chunk
+            log.Printf("Chunk at offset %d for file %s has not changed", offset, filename)
+            return nil
+        }
 
-		if oldMeta.Weakhash == newWeakHash && oldMeta.Stronghash == newStrongHash {
-			// No change, skip saving this chunk
-			log.Printf("Chunk at offset %d for file %s has not changed", offset, filename)
-			return nil
-		}
+        log.Printf("Chunk at offset %d for file %s has changed", offset, filename)
+    }
 
-		log.Printf("Chunk at offset %d for file %s has changed", offset, filename)
-	}
+    m.saveMetaDataToMem(filename, chunk, offset)
 
-	m.saveMetaDataToMem(filename, chunk, offset)
+    m.Save <- MetaData{
+        filename: filename,
+        offset:   offset,
+    }
 
-	m.Save <- MetaData{
-		filename: filename,
-		offset:   offset,
-	}
-
-	if err := m.saveMetaDataToDB(filename, chunk, offset); err != nil {
-		log.Printf("Failed to save metadata to BadgerDB: %v", err)
-		return err
-	}
-	return nil
+    if err := m.saveMetaDataToDB(filename, chunk, offset); err != nil {
+        log.Printf("Failed to save metadata to BadgerDB: %v", err)
+        return err
+    }
+    return nil
 }
+
 
 // saveMetaDataToDB will save the metadata to the database using the filename and the offset to determine the chunk position
 func (m *Meta) saveMetaDataToDB(filename string, chunk []byte, offset int64) error {
@@ -231,20 +246,20 @@ func (m *Meta) saveMetaDataToDB(filename string, chunk []byte, offset int64) err
 
 // saveMetaDataToMem will save the metadata to the in-memory map using the filename and the offset to determine the chunk position
 func (m *Meta) saveMetaDataToMem(filename string, chunk []byte, offset int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+    m.mu.Lock()
+    defer m.mu.Unlock()
 
-	if _, ok := m.Files[filename]; !ok {
-		m.Files[filename] = FileMetaData{
-			hashes:   make(map[int64]Hash),
-			filesize: 0,
-		}
-	}
-	m.Files[filename].hashes[offset] = Hash{
-		Stronghash: m.hashChunk(chunk),
-		Weakhash:   pkg.NewRollingChecksum(chunk).Sum(),
-	}
-	m.Files[filename].UpdateFileSize()
+    if _, ok := m.Files[filename]; !ok {
+        m.Files[filename] = FileMetaData{
+            hashes:   make(map[int64]Hash),
+            filesize: 0,
+        }
+    }
+    m.Files[filename].hashes[offset] = Hash{
+        Stronghash: m.hashChunk(chunk),
+        Weakhash:   pkg.NewRollingChecksum(chunk).Sum(),
+    }
+    // Do not use UpdateFileSize; set it to the actual file size elsewhere
 }
 
 // GetMetaData will retrieve the metadata using the filename and the offset determining the chunk position.
@@ -318,6 +333,15 @@ func (m *Meta) DeleteEntireFileMetaData(filename string) (error, error) {
 	}
 
 	return err1, err2
+}
+
+func (m *Meta) GetEntireFileMetaData(filename string) (map[int64]Hash, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.Files[filename]; !ok {
+		return nil, fmt.Errorf("file not found in metadata")
+	}
+	return m.Files[filename].hashes, nil
 }
 
 // DeleteMetaData will delete the metadata from both the in-memory map and the database
