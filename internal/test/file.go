@@ -35,7 +35,7 @@ func NewFileData(meta *Meta, mdns *Mdns) *FileData {
 	}
 }
 
-func (f *FileData) Start() (*fsnotify.Watcher, error) {
+func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -47,7 +47,9 @@ func (f *FileData) Start() (*fsnotify.Watcher, error) {
 		return nil, err
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case event, ok := <-watcher.Events:
@@ -55,25 +57,26 @@ func (f *FileData) Start() (*fsnotify.Watcher, error) {
 					return
 				}
 
-				if event.Op&fsnotify.Create == fsnotify.Create {
+				switch {
+				case event.Op&fsnotify.Create == fsnotify.Create:
 					log.Printf("File created: %s", event.Name)
 					go f.HandleFileCreation(event.Name)
-				}
-
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				case event.Op&fsnotify.Write == fsnotify.Write:
 					log.Printf("File modified: %s", event.Name)
 					go f.HandleFileModification(event.Name)
-				}
-
-				if event.Op&fsnotify.Remove == fsnotify.Remove {
+				case event.Op&fsnotify.Remove == fsnotify.Remove:
 					log.Printf("File deleted: %s", event.Name)
 					go f.HandleFileDeletion(event.Name)
 				}
+
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
 				}
-				log.Error("Error:", err)
+				log.Error("Watcher error:", err)
+			case <-ctx.Done():
+				watcher.Close()
+				return
 			}
 		}
 	}()
@@ -120,7 +123,6 @@ func (f *FileData) HandleFileCreation(filePath string) {
 }
 
 func (f *FileData) handleDebouncedFileCreation(filePath string) {
-	// Check if file is already being processed
 	f.mu.Lock()
 	if f.inProgress[filePath] {
 		f.mu.Unlock()
@@ -129,11 +131,7 @@ func (f *FileData) handleDebouncedFileCreation(filePath string) {
 	f.inProgress[filePath] = true
 	f.mu.Unlock()
 
-	defer func() {
-		f.mu.Lock()
-		delete(f.inProgress, filePath)
-		f.mu.Unlock()
-	}()
+	defer f.markFileAsComplete(filePath)
 
 	// Initialize metadata
 	err := f.meta.CreateFileMetaData(filePath)
@@ -142,7 +140,7 @@ func (f *FileData) handleDebouncedFileCreation(filePath string) {
 		return
 	}
 
-	// The meta.go's Save channel will handle sending updates to peers
+	// `CreateFileMetaData` handles sending updates via channels
 }
 
 func (f *FileData) HandleFileModification(filePath string) {
@@ -170,7 +168,7 @@ func (f *FileData) HandleFileModification(filePath string) {
 }
 
 func (f *FileData) handleDebouncedFileModification(filePath string) {
-	// Check if file is already being processed
+	// Prevent concurrent processing
 	f.mu.Lock()
 	if f.inProgress[filePath] {
 		f.mu.Unlock()
@@ -179,20 +177,16 @@ func (f *FileData) handleDebouncedFileModification(filePath string) {
 	f.inProgress[filePath] = true
 	f.mu.Unlock()
 
-	defer func() {
-		f.mu.Lock()
-		delete(f.inProgress, filePath)
-		f.mu.Unlock()
-	}()
+	defer f.markFileAsComplete(filePath)
 
-	// Update metadata
+	// Update metadata and detect changes
 	err := f.meta.CreateFileMetaData(filePath)
 	if err != nil {
-		log.Errorf("Failed to create/update metadata for file %s: %v", filePath, err)
+		log.Errorf("Failed to update metadata for %s: %v", filePath, err)
 		return
 	}
 
-	// The meta.go's Save channel will handle sending updates to peers
+	// `CreateFileMetaData` handles sending updates via channels
 }
 
 func (f *FileData) HandleFileDeletion(filePath string) {
@@ -211,17 +205,34 @@ func (f *FileData) HandleFileDeletion(filePath string) {
 		timer.Stop()
 	}
 
-	f.DeleteFile(filePath)
-}
-
-func (f *FileData) DeleteFile(filePath string) {
+	// For deletions, immediate handling might be preferable, but you can also debounce if necessary
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-		f.deleteFileOnPeer(filePath)
-		f.meta.DeleteEntireFileMetaData(filePath)
+		f.handleDebouncedFileDeletion(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
 		f.mu.Unlock()
 	})
+}
+
+func (f *FileData) handleDebouncedFileDeletion(filePath string) {
+	f.mu.Lock()
+	if f.inProgress[filePath] {
+		f.mu.Unlock()
+		return
+	}
+	f.inProgress[filePath] = true
+	f.mu.Unlock()
+
+	defer f.markFileAsComplete(filePath)
+
+	// Delete metadata and notify peers
+	err1, err2 := f.meta.DeleteEntireFileMetaData(filePath)
+	if err1 != nil || err2 != nil {
+		log.Errorf("Failed to delete metadata for %s: %v %v", filePath, err1, err2)
+		return
+	}
+
+	go f.deleteFileOnPeer(filePath)
 }
 
 func (f *FileData) deleteFileOnPeer(filePath string) error {
@@ -497,6 +508,42 @@ func (f *FileData) transferFile(filePath string, isNewFile bool) {
 
 	f.markFileAsComplete(filePath)
 	log.Printf("File %s transfer complete", filePath)
+}
+
+// CompareMetadata compares previous and current metadata.
+// Returns true if changes are detected along with a description of changes.
+func (m *Meta) CompareMetadata(prev, curr *FileMetaData) (bool, []string) {
+	if prev == nil || curr == nil {
+		return true, []string{"Metadata missing for comparison"}
+	}
+
+	changes := []string{}
+
+	// Compare file sizes
+	if prev.filesize != curr.filesize {
+		changes = append(changes, fmt.Sprintf("Size changed from %d to %d", prev.filesize, curr.filesize))
+	}
+
+	// Compare chunk hashes
+	for offset, currHash := range curr.hashes {
+		prevHash, exists := prev.hashes[offset]
+		if !exists {
+			changes = append(changes, fmt.Sprintf("New chunk added at offset %d", offset))
+			continue
+		}
+		if currHash.Stronghash != prevHash.Stronghash || currHash.Weakhash != prevHash.Weakhash {
+			changes = append(changes, fmt.Sprintf("Chunk modified at offset %d", offset))
+		}
+	}
+
+	// Check for deleted chunks
+	for offset := range prev.hashes {
+		if _, exists := curr.hashes[offset]; !exists {
+			changes = append(changes, fmt.Sprintf("Chunk deleted at offset %d", offset))
+		}
+	}
+
+	return len(changes) > 0, changes
 }
 
 func (f *FileData) markFileAsComplete(fileName string) {

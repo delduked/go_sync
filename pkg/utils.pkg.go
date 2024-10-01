@@ -3,6 +3,7 @@ package pkg
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -143,4 +144,37 @@ func IsTemporaryFile(fileName string) bool {
 		return true
 	}
 	return false
+}
+
+// ReadChunk reads a specific chunk of a file based on the provided filename, offset, and chunkSize.
+// It returns the bytes read and any error encountered during the operation.
+func ReadChunk(filename string, offset int64, chunkSize int64) ([]byte, error) {
+	// Open the file in read-only mode
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %w", filename, err)
+	}
+	defer file.Close()
+
+	// Seek to the specified offset
+	_, err = file.Seek(offset, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek to offset %d in file %s: %w", offset, filename, err)
+	}
+
+	// Initialize a buffer to hold the chunk data
+	buffer := make([]byte, chunkSize)
+
+	// Read the chunk data into the buffer
+	bytesRead, err := file.Read(buffer)
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("failed to read chunk from file %s at offset %d: %w", filename, offset, err)
+	}
+
+	// If EOF is reached, adjust the buffer size to the actual bytes read
+	if bytesRead < int(chunkSize) {
+		buffer = buffer[:bytesRead]
+	}
+
+	return buffer, nil
 }

@@ -55,13 +55,19 @@ func (s *Grpc) Start(wg *sync.WaitGroup) error {
 
 	go func() {
 		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(grpc.NewServer(), NewGrpc(s.syncDir, s.mdns, s.meta, s.file, s.port))
+		pb.RegisterFileSyncServiceServer(s.grpcServer, s) // Registering on s.grpcServer
 		if err := s.grpcServer.Serve(s.listener); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
 		}
 	}()
 
 	return nil
+}
+
+// Stop gracefully stops the gRPC server
+func (s *Grpc) Stop() {
+	s.grpcServer.GracefulStop()
+	log.Info("gRPC server stopped gracefully.")
 }
 
 // Implement the SyncFile method as per the generated interface

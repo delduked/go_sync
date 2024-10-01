@@ -202,3 +202,11 @@ func (m *Mdns) AddClientConnection(ip string, port string) error {
 	log.Infof("Added gRPC client connection to %s", conn.Target())
 	return nil
 }
+func (mdns *Mdns) GetConnByTarget(target string) *grpc.ClientConn {
+	for _, conn := range mdns.Clients {
+		if conn.Target() == target {
+			return conn
+		}
+	}
+	return nil
+}
