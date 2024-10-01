@@ -25,14 +25,14 @@ func main() {
 	defer db.Close()
 
 	// Initialize core services
-	peerData, metaData, fileWatcher := initServices(db)
+	mdns, meta, file := initServices(db)
 
 	// Create context and waitgroup for goroutine management
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
 	// Start services
-	startServices(ctx, &wg, peerData, metaData, fileWatcher)
+	startServices(ctx, &wg, mdns, meta, file)
 
 	// Wait for shutdown signal (e.g., CTRL+C)
 	waitForShutdownSignal(cancel)
