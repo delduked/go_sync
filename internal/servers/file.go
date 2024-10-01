@@ -1,4 +1,4 @@
-package test
+package servers
 
 import (
 	"context"
@@ -26,7 +26,7 @@ type FileData struct {
 	inProgress     map[string]bool
 }
 
-func NewFileData(meta *Meta, mdns *Mdns) *FileData {
+func NewFile(meta *Meta, mdns *Mdns) *FileData {
 	return &FileData{
 		meta:           meta,
 		mdns:           mdns,

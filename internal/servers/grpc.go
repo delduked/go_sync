@@ -1,4 +1,4 @@
-package test
+package servers
 
 import (
 	"context"
@@ -50,18 +50,15 @@ func NewGrpc(syncDir string, mdns *Mdns, meta *Meta, file *FileData, port string
 	}
 }
 
-func (s *Grpc) Start(wg *sync.WaitGroup) error {
+func (s *Grpc) Start(wg *sync.WaitGroup) {
+
 	defer wg.Done()
+	log.Printf("Starting gRPC server on port %s...", s.port)
+	pb.RegisterFileSyncServiceServer(s.grpcServer, s) // Registering on s.grpcServer
+	if err := s.grpcServer.Serve(s.listener); err != nil {
+		panic(fmt.Sprintf("failed to serve gRPC server: %v", err))
+	}
 
-	go func() {
-		log.Printf("Starting gRPC server on port %s...", s.port)
-		pb.RegisterFileSyncServiceServer(s.grpcServer, s) // Registering on s.grpcServer
-		if err := s.grpcServer.Serve(s.listener); err != nil {
-			log.Fatalf("Failed to serve gRPC server: %v", err)
-		}
-	}()
-
-	return nil
 }
 
 // Stop gracefully stops the gRPC server

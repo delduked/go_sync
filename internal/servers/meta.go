@@ -1,4 +1,4 @@
-package test
+package servers
 
 import (
 	"bytes"
@@ -21,18 +21,12 @@ import (
 )
 
 type Meta struct {
-	ChunkSize    int64
-	Files        map[string]FileMetaData // map[filename][offset]Hash
-	SaveChunks   chan MetaData
-	DeleteChunks chan MetaData
-	mdns         *Mdns
-	db           *badger.DB // BadgerDB instance
-	mu           sync.Mutex
-	done         chan struct{}
-
-	activeStreams    map[string]pb.FileSyncService_SyncFileClient // map[peerID]stream
-	streamMu         sync.Mutex
-	peerSendChannels map[string]chan pb.FileSyncRequest // map[peerID]sendChannel
+	ChunkSize int64
+	Files     map[string]FileMetaData // map[filename][offset]Hash
+	mdns *Mdns
+	db   *badger.DB // BadgerDB instance
+	mu   sync.Mutex
+	done chan struct{}
 }
 
 // Used for comparing metadata between old scan and new scan
@@ -47,13 +41,6 @@ type FileMetaData struct {
 	hashes   map[int64]Hash
 	filesize int64
 }
-
-// func (f FileMetaData) CurrentSize() int64 {
-// 	return int64(len(f.hashes)) * conf.AppConfig.ChunkSize
-// }
-// func (f FileMetaData) UpdateFileSize() {
-// 	f.filesize = int64(len(f.hashes)) * conf.AppConfig.ChunkSize
-// }
 
 type Hash struct {
 	Stronghash string
@@ -71,64 +58,17 @@ func (h Hash) Bytes() []byte {
 
 func NewMeta(db *badger.DB, mdns *Mdns) *Meta {
 	return &Meta{
-		Files:        make(map[string]FileMetaData),
-		SaveChunks:   make(chan MetaData, 100), // Buffered to prevent blocking
-		DeleteChunks: make(chan MetaData, 100),
-		mdns:         mdns,
-		db:           db,
-		mu:           sync.Mutex{},
-		done:         make(chan struct{}), // Initialize the done channel
-
+		Files: make(map[string]FileMetaData),
+		// SaveChunks:   make(chan MetaData, 100), // Buffered to prevent blocking
+		// DeleteChunks: make(chan MetaData, 100),
+		mdns:             mdns,
+		db:               db,
+		mu:               sync.Mutex{},
+		done:             make(chan struct{}), // Initialize the done channel
 	}
 }
 
 func (m *Meta) Start(ctx context.Context, wg *sync.WaitGroup) error {
-	// Initialize maps
-	m.activeStreams = make(map[string]pb.FileSyncService_SyncFileClient)
-	m.peerSendChannels = make(map[string]chan pb.FileSyncRequest)
-
-	// Launch the ChunksToPeer goroutine only once
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		m.ChunksToPeer(ctx)
-	}()
-
-	// Initialize streams to all current peers
-	for _, conn := range m.mdns.Clients {
-		if conn.Target() == m.mdns.LocalIP {
-			continue
-		}
-		peerID := conn.Target()
-
-		stream, err := clients.SyncConn(conn)
-		if err != nil {
-			log.Errorf("Failed to open SyncFile stream on %s: %v", peerID, err)
-			continue
-		}
-
-		m.streamMu.Lock()
-		m.activeStreams[peerID] = stream
-		m.streamMu.Unlock()
-
-		// Create a send channel for the peer
-		sendChan := make(chan pb.FileSyncRequest, 100) // Buffered to prevent blocking
-		m.peerSendChannels[peerID] = sendChan
-
-		// Launch a sender goroutine for the peer
-		wg.Add(1)
-		go func(peerID string, stream pb.FileSyncService_SyncFileClient, sendChan chan pb.FileSyncRequest) {
-			defer wg.Done()
-			m.peerSender(peerID, stream, sendChan)
-		}(peerID, stream, sendChan)
-
-		// Start a receiver goroutine for the stream
-		wg.Add(1)
-		go func(peerID string, stream pb.FileSyncService_SyncFileClient) {
-			defer wg.Done()
-			m.receiveResponses(peerID, stream)
-		}(peerID, stream)
-	}
 
 	// Walk through the sync folder and process existing files
 	err := filepath.Walk(conf.AppConfig.SyncFolder, func(path string, info os.FileInfo, err error) error {
@@ -290,17 +230,16 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64) error {
 		log.Printf("Chunk at offset %d for file %s has changed", offset, filename)
 	}
 
-	m.saveMetaDataToMem(filename, chunk, offset)
-
-	m.SaveChunks <- MetaData{
+	
+	go m.SendSaveToPeers(MetaData{
 		filename: filename,
 		offset:   offset,
-	}
+		}, chunk)
 
-	if err := m.saveMetaDataToDB(filename, chunk, offset); err != nil {
-		log.Printf("Failed to save metadata to BadgerDB: %v", err)
-		return err
-	}
+	go m.saveMetaDataToMem(filename, chunk, offset)
+		
+	go m.saveMetaDataToDB(filename, chunk, offset)
+
 	return nil
 }
 
@@ -427,10 +366,12 @@ func (m *Meta) DeleteMetaData(filename string, offset int64) (error, error) {
 	if pkg.IsTemporaryFile(filename) {
 		return nil, nil
 	}
-	m.DeleteChunks <- MetaData{
+
+	go m.SendDeleteToPeers(MetaData{
 		filename: filename,
 		offset:   offset,
-	}
+	})
+
 	var err1, err2 error
 	if err1 := m.deleteMetaDataFromMem(filename, offset); err1 != nil {
 		log.Errorf("Failed to delete metadata from in-memory map: %v", err1)
@@ -534,67 +475,17 @@ func (m *Meta) SaveChunkOnPeer(req MetaData) {
 	}
 }
 
-// handleStreamFailure manages the failure of a stream to a specific peer.
-// It removes the failed stream, closes the send channel, and initiates reconnection attempts.
-func (m *Meta) handleStreamFailure(peerID string) {
-	m.streamMu.Lock()
-	defer m.streamMu.Unlock()
-
-	// Remove the failed stream from activeStreams
-	stream, exists := m.activeStreams[peerID]
-	if exists {
-		// Attempt to close the stream gracefully
-		if err := stream.CloseSend(); err != nil {
-			log.Errorf("Failed to close stream for peer %s: %v", peerID, err)
-		}
-		delete(m.activeStreams, peerID)
-	}
-
-	// Close the send channel to stop the sender goroutine
-	sendChan, exists := m.peerSendChannels[peerID]
-	if exists {
-		close(sendChan)
-		delete(m.peerSendChannels, peerID)
-	}
-
-	log.Infof("Handling stream failure for peer %s. Initiating reconnection attempts.", peerID)
-
-	// Start reconnection attempts in a separate goroutine
-	go m.attemptReconnection(peerID)
-}
-
-// peerSender listens on the send channel and sends messages via the stream.
-func (m *Meta) peerSender(peerID string, stream pb.FileSyncService_SyncFileClient, sendChan <-chan pb.FileSyncRequest) {
-	for {
-		select {
-		case msg := <-sendChan:
-			if err := stream.Send(&msg); err != nil {
-				log.Errorf("Failed to send message to peer %s: %v", peerID, err)
-				// Handle stream failure, possibly attempt reconnection
-				m.handleStreamFailure(peerID)
-				return
-			}
-		case <-m.done:
-			// Gracefully close the stream
-			if err := stream.CloseSend(); err != nil {
-				log.Errorf("Failed to close stream for peer %s: %v", peerID, err)
-			}
-			return
-		}
-	}
-}
-
 // SendDeleteToPeers enqueues delete requests to each peer's send channel.
 func (m *Meta) SendDeleteToPeers(req MetaData) {
-	m.streamMu.Lock()
-	defer m.streamMu.Unlock()
+	m.mdns.mu.Lock()
+	defer m.mdns.mu.Unlock()
 
-	for peerID, sendChan := range m.peerSendChannels {
+	for peerID, sendChan := range m.mdns.sendChannels {
 		// Prepare the delete request
 		deleteReq := pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileDelete{
 				FileDelete: &pb.FileDelete{
-					FileName: filepath.Base(req.filename),
+					FileName: req.filename,
 					Offset:   req.offset, // 0 signifies entire file deletion
 				},
 			},
@@ -602,7 +493,7 @@ func (m *Meta) SendDeleteToPeers(req MetaData) {
 
 		// Enqueue the delete request
 		select {
-		case sendChan <- deleteReq:
+		case sendChan <- &deleteReq:
 			// Successfully enqueued
 		default:
 			log.Warnf("Send channel for peer %s is full, dropping delete request", peerID)
@@ -611,24 +502,18 @@ func (m *Meta) SendDeleteToPeers(req MetaData) {
 }
 
 // SendSaveToPeers enqueues save chunk requests to each peer's send channel.
-func (m *Meta) SendSaveToPeers(req MetaData) {
-	m.streamMu.Lock()
-	defer m.streamMu.Unlock()
+func (m *Meta) SendSaveToPeers(req MetaData, chunk []byte) {
+	m.mdns.mu.Lock()
+	defer m.mdns.mu.Unlock()
 
-	for peerID, sendChan := range m.peerSendChannels {
-		// Read the specific chunk data
-		chunkData, err := pkg.ReadChunk(req.filename, req.offset, conf.AppConfig.ChunkSize)
-		if err != nil {
-			log.Errorf("Failed to read chunk for %s at offset %d: %v", req.filename, req.offset, err)
-			continue
-		}
+	for peerID, sendChan := range m.mdns.sendChannels {
 
 		// Prepare the file chunk request
 		chunkReq := pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileChunk{
 				FileChunk: &pb.FileChunk{
-					FileName:    filepath.Base(req.filename),
-					ChunkData:   chunkData,
+					FileName:    req.filename,
+					ChunkData:   chunk,
 					Offset:      req.offset,
 					IsNewFile:   false, // Determine based on context
 					TotalChunks: (m.Files[req.filename].filesize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize,
@@ -639,99 +524,10 @@ func (m *Meta) SendSaveToPeers(req MetaData) {
 
 		// Enqueue the chunk request
 		select {
-		case sendChan <- chunkReq:
+		case sendChan <- &chunkReq:
 			// Successfully enqueued
 		default:
 			log.Warnf("Send channel for peer %s is full, dropping chunk request", peerID)
-		}
-	}
-}
-
-// receiveResponses handles incoming responses from a specific peer.
-func (m *Meta) receiveResponses(peerID string, stream pb.FileSyncService_SyncFileClient) {
-	for {
-		recv, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				log.Infof("Stream closed gracefully by peer %s", peerID)
-			} else {
-				log.Errorf("Failed to receive response from %s: %v", peerID, err)
-			}
-			break
-		}
-		log.Infof("Received response from %s: %s", peerID, recv.Message)
-	}
-
-	// Handle stream closure, possibly attempt reconnection
-	m.handleStreamFailure(peerID)
-}
-
-// attemptReconnection tries to reconnect to a peer after a failure.
-func (m *Meta) attemptReconnection(peerID string) {
-	for {
-		select {
-		case <-m.done:
-			return
-		default:
-			// Attempt to retrieve the connection
-			conn := m.mdns.GetConnByTarget(peerID) // Implement this method to retrieve connection
-			if conn == nil {
-				log.Errorf("No connection found for peer %s during reconnection", peerID)
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Attempt to open a new stream
-			stream, err := clients.SyncConn(conn)
-			if err != nil {
-				log.Errorf("Failed to reconnect SyncFile stream on %s: %v", peerID, err)
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Update activeStreams
-			m.streamMu.Lock()
-			m.activeStreams[peerID] = stream
-			m.streamMu.Unlock()
-
-			// Create a new send channel for the peer
-			sendChan := make(chan pb.FileSyncRequest, 100) // Buffered
-			m.streamMu.Lock()
-			m.peerSendChannels[peerID] = sendChan
-			m.streamMu.Unlock()
-
-			// Launch a new sender goroutine for the peer
-			go m.peerSender(peerID, stream, sendChan)
-
-			// Start a new receiver goroutine for the stream
-			go m.receiveResponses(peerID, stream)
-
-			log.Infof("Reconnected SyncFile stream on %s", peerID)
-			return
-		}
-	}
-}
-
-func (m *Meta) ChunksToPeer(ctx context.Context) {
-	for {
-		select {
-		case saveChunk := <-m.SaveChunks:
-			// Dispatch the save chunk to all peers
-			m.SendSaveToPeers(saveChunk)
-		case deleteChunk := <-m.DeleteChunks:
-			// Dispatch the delete chunk to all peers
-			m.SendDeleteToPeers(deleteChunk)
-		case <-ctx.Done():
-			// Signal all peer senders to terminate by closing their send channels
-			log.Info("ChunksToPeer received shutdown signal. Closing all peer send channels.")
-			m.streamMu.Lock()
-			for peerID, sendChan := range m.peerSendChannels {
-				close(sendChan)
-				log.Infof("Closed send channel for peer %s", peerID)
-				delete(m.peerSendChannels, peerID) // Optional: clean up the map
-			}
-			m.streamMu.Unlock()
-			return
 		}
 	}
 }
