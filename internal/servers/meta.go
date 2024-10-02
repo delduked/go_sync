@@ -26,7 +26,6 @@ type Meta struct {
 	mdns                *Mdns
 	db                  *badger.DB // BadgerDB instance
 	mu                  sync.Mutex
-	lastProcessedOffset map[string]int64 // Map of filename to last processed offset
 	done                chan struct{}
 }
 
@@ -61,12 +60,9 @@ func (h Hash) Bytes() []byte {
 func NewMeta(db *badger.DB, mdns *Mdns) *Meta {
 	return &Meta{
 		Files: make(map[string]FileMetaData),
-		// SaveChunks:   make(chan MetaData, 100), // Buffered to prevent blocking
-		// DeleteChunks: make(chan MetaData, 100),
 		mdns:                mdns,
 		db:                  db,
 		mu:                  sync.Mutex{},
-		lastProcessedOffset: make(map[string]int64),
 		done:                make(chan struct{}), // Initialize the done channel
 	}
 }
@@ -349,11 +345,12 @@ func (m *Meta) getMetaDataFromMem(filename string, offset int64) (Hash, error) {
 		return h, fmt.Errorf("file not found in metadata")
 	}
 	if _, ok := m.Files[filename].hashes[offset]; !ok {
-		return h, fmt.Errorf("offset not found in metadata")
+		return h, fmt.Errorf("offset not found in metadata for file %s", filename)
 	}
 	h = m.Files[filename].hashes[offset]
 	return h, nil
 }
+
 func (m *Meta) DeleteEntireFileMetaData(filename string) (error, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
