@@ -21,12 +21,13 @@ import (
 )
 
 type Meta struct {
-	ChunkSize int64
-	Files     map[string]FileMetaData // map[filename][offset]Hash
-	mdns *Mdns
-	db   *badger.DB // BadgerDB instance
-	mu   sync.Mutex
-	done chan struct{}
+	ChunkSize           int64
+	Files               map[string]FileMetaData // map[filename][offset]Hash
+	mdns                *Mdns
+	db                  *badger.DB // BadgerDB instance
+	mu                  sync.Mutex
+	lastProcessedOffset map[string]int64 // Map of filename to last processed offset
+	done                chan struct{}
 }
 
 // Used for comparing metadata between old scan and new scan
@@ -38,8 +39,9 @@ type MetaData struct {
 }
 
 type FileMetaData struct {
-	hashes   map[int64]Hash
-	filesize int64
+	hashes       map[int64]Hash
+	filesize     int64
+	lastModified time.Time
 }
 
 type Hash struct {
@@ -61,10 +63,11 @@ func NewMeta(db *badger.DB, mdns *Mdns) *Meta {
 		Files: make(map[string]FileMetaData),
 		// SaveChunks:   make(chan MetaData, 100), // Buffered to prevent blocking
 		// DeleteChunks: make(chan MetaData, 100),
-		mdns:             mdns,
-		db:               db,
-		mu:               sync.Mutex{},
-		done:             make(chan struct{}), // Initialize the done channel
+		mdns:                mdns,
+		db:                  db,
+		mu:                  sync.Mutex{},
+		lastProcessedOffset: make(map[string]int64),
+		done:                make(chan struct{}), // Initialize the done channel
 	}
 }
 
@@ -77,7 +80,7 @@ func (m *Meta) Start(ctx context.Context, wg *sync.WaitGroup) error {
 		}
 		if !info.IsDir() {
 			log.Printf("Processing file: %s", path)
-			err := m.CreateFileMetaData(path)
+			err := m.CreateFileMetaData(path, false)
 			if err != nil {
 				log.Errorf("Failed to get metadata for file %s: %v", path, err)
 				return nil // Continue scanning even if one file fails
@@ -116,7 +119,7 @@ func (m *Meta) ScanSyncFolder() error {
 		}
 		if !info.IsDir() {
 			log.Printf("Scanning file: %s", path)
-			err := m.CreateFileMetaData(path)
+			err := m.CreateFileMetaData(path, false)
 			if err != nil {
 				log.Errorf("Failed to get metadata for file %s: %v", path, err)
 				return nil // Continue scanning even if one file fails
@@ -126,7 +129,7 @@ func (m *Meta) ScanSyncFolder() error {
 	})
 }
 
-func (m *Meta) CreateFileMetaData(fileName string) error {
+func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	if pkg.IsTemporaryFile(fileName) {
 		return nil
 	}
@@ -143,37 +146,36 @@ func (m *Meta) CreateFileMetaData(fileName string) error {
 		return fmt.Errorf("failed to get file info for %s: %w", fileName, err)
 	}
 
-	// Lock to prevent concurrent modifications
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// If the file has shrunk, delete chunks from the metadata that no longer apply
-	if fileMeta, exists := m.Files[fileName]; exists {
-		if fileInfo.Size() < fileMeta.filesize {
-			// File has shrunk, remove extra chunks
-			log.Printf("File %s has shrunk from %d to %d", fileName, fileMeta.filesize, fileInfo.Size())
-			for offset := fileInfo.Size(); offset < fileMeta.filesize; offset += conf.AppConfig.ChunkSize {
-				err1, err2 := m.DeleteMetaData(fileName, offset)
-				if err1 != nil || err2 != nil {
-					log.Errorf("Failed to delete metadata for shrunk file at offset %d: %v, %v", offset, err1, err2)
-				}
-			}
+	// Get existing file metadata
+	fileMeta, exists := m.Files[fileName]
+	if !exists {
+		// File is new, initialize metadata
+		fileMeta = FileMetaData{
+			hashes:   make(map[int64]Hash),
+			filesize: 0,
 		}
+		m.Files[fileName] = fileMeta
 	}
+
+	if exists && fileMeta.lastModified.Equal(fileInfo.ModTime()) {
+		// File hasn't changed since last processing
+		return nil
+	}
+
+	// Update lastModified
+	fileMeta.lastModified = fileInfo.ModTime()
 
 	// Buffer to hold file chunks
 	buffer := make([]byte, conf.AppConfig.ChunkSize)
 	var offset int64 = 0
 
-	for {
-		// Move the file pointer to the current offset
-		_, err := file.Seek(offset, io.SeekStart)
-		if err != nil {
-			return fmt.Errorf("error seeking to offset %d in file %s: %w", offset, fileName, err)
-		}
-
+	for offset < fileInfo.Size() {
 		// Read the chunk from the current offset
-		bytesRead, err := file.Read(buffer)
+		bytesToRead := min(conf.AppConfig.ChunkSize, fileInfo.Size()-offset)
+		bytesRead, err := file.ReadAt(buffer[:bytesToRead], offset)
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("error reading file %s at offset %d: %w", fileName, offset, err)
 		}
@@ -182,63 +184,80 @@ func (m *Meta) CreateFileMetaData(fileName string) error {
 			break // End of file
 		}
 
-		// Save the metadata for this chunk
-		err = m.SaveMetaData(fileName, buffer[:bytesRead], offset)
-		if err != nil {
-			return fmt.Errorf("error saving metadata for file %s at offset %d: %w", fileName, offset, err)
+		// Compute hashes
+		newWeakHash := pkg.NewRollingChecksum(buffer[:bytesRead]).Sum()
+		newStrongHash := m.hashChunk(buffer[:bytesRead])
+
+		// Compare with existing hash
+		oldHash, hasOldHash := fileMeta.hashes[offset]
+		chunkModified := !hasOldHash || oldHash.Weakhash != newWeakHash || oldHash.Stronghash != newStrongHash
+
+		if chunkModified {
+			// Update metadata
+			fileMeta.hashes[offset] = Hash{
+				Stronghash: newStrongHash,
+				Weakhash:   newWeakHash,
+			}
+			// Save metadata to DB
+			m.SaveMetaData(fileName, buffer[:bytesRead], offset, isNewFile)
 		}
+
+		// After the first chunk, set isNewFile to false
+		isNewFile = false
 
 		// Move to the next chunk
-		offset += conf.AppConfig.ChunkSize
+		offset += int64(bytesRead)
 	}
 
-	// Update the filesize to the actual file size
-	if fileMeta, exists := m.Files[fileName]; exists {
-		fileMeta.filesize = fileInfo.Size()
-		m.Files[fileName] = fileMeta
-	} else {
-		m.Files[fileName] = FileMetaData{
-			hashes:   m.Files[fileName].hashes, // Or initialize accordingly
-			filesize: fileInfo.Size(),
+	// Remove any chunks beyond the current file size
+	for oldOffset := range fileMeta.hashes {
+		if oldOffset >= fileInfo.Size() {
+			m.DeleteMetaData(fileName, oldOffset)
 		}
 	}
+
+	// Update file size
+	fileMeta.filesize = fileInfo.Size()
+	m.Files[fileName] = fileMeta
 
 	return nil
 }
 
+// Helper function to get the minimum of two int64 values
+func min(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // SaveMetaData will save the metadata to both in-memory map and the database
-func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64) error {
+func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool) error {
 	if pkg.IsTemporaryFile(filename) {
 		return nil
 	}
 
-	oldMeta, err := m.GetMetaData(filename, offset)
-	if err != nil {
-		// No existing metadata, proceed to save new chunk
-		log.Printf("No existing metadata for %s at offset %d, saving new metadata", filename, offset)
-	} else {
-		// Compare old and new hashes
-		newWeakHash := pkg.NewRollingChecksum(chunk).Sum()
-		newStrongHash := m.hashChunk(chunk)
+	// oldMeta, err := m.GetMetaData(filename, offset)
+	// newWeakHash := pkg.NewRollingChecksum(chunk).Sum()
+	// newStrongHash := m.hashChunk(chunk)
 
-		if oldMeta.Weakhash == newWeakHash && oldMeta.Stronghash == newStrongHash {
-			// No change, skip saving this chunk
-			log.Printf("Chunk at offset %d for file %s has not changed", offset, filename)
-			return nil
-		}
+	// if err == nil {
+	// 	// Existing metadata found; compare hashes
+	// 	if oldMeta.Weakhash == newWeakHash && oldMeta.Stronghash == newStrongHash {
+	// 		// No change; skip processing
+	// 		return nil
+	// 	}
+	// }
 
-		log.Printf("Chunk at offset %d for file %s has changed", offset, filename)
-	}
+	// Save new metadata
+	m.saveMetaDataToMem(filename, chunk, offset)
+	m.saveMetaDataToDB(filename, chunk, offset)
 
-	
-	go m.SendSaveToPeers(MetaData{
+	// Send chunk to peers
+	m.SendSaveToPeers(MetaData{
 		filename: filename,
 		offset:   offset,
-		}, chunk)
-
-	go m.saveMetaDataToMem(filename, chunk, offset)
-		
-	go m.saveMetaDataToDB(filename, chunk, offset)
+	}, chunk, isNewFile)
 
 	return nil
 }
@@ -502,12 +521,11 @@ func (m *Meta) SendDeleteToPeers(req MetaData) {
 }
 
 // SendSaveToPeers enqueues save chunk requests to each peer's send channel.
-func (m *Meta) SendSaveToPeers(req MetaData, chunk []byte) {
+func (m *Meta) SendSaveToPeers(req MetaData, chunk []byte, isNewFile bool) {
 	m.mdns.mu.Lock()
 	defer m.mdns.mu.Unlock()
 
 	for peerID, sendChan := range m.mdns.sendChannels {
-
 		// Prepare the file chunk request
 		chunkReq := pb.FileSyncRequest{
 			Request: &pb.FileSyncRequest_FileChunk{
@@ -515,7 +533,7 @@ func (m *Meta) SendSaveToPeers(req MetaData, chunk []byte) {
 					FileName:    req.filename,
 					ChunkData:   chunk,
 					Offset:      req.offset,
-					IsNewFile:   false, // Determine based on context
+					IsNewFile:   isNewFile,
 					TotalChunks: (m.Files[req.filename].filesize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize,
 					TotalSize:   m.Files[req.filename].filesize,
 				},

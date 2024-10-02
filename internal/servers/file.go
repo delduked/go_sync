@@ -21,7 +21,7 @@ import (
 type FileData struct {
 	meta           *Meta
 	mdns           *Mdns
-	mu             sync.Mutex
+	mu             sync.RWMutex
 	debounceTimers map[string]*time.Timer
 	inProgress     map[string]bool
 }
@@ -123,24 +123,15 @@ func (f *FileData) HandleFileCreation(filePath string) {
 }
 
 func (f *FileData) handleDebouncedFileCreation(filePath string) {
-	f.mu.Lock()
-	if f.inProgress[filePath] {
-		f.mu.Unlock()
-		return
-	}
-	f.inProgress[filePath] = true
-	f.mu.Unlock()
-
+	f.markFileAsInProgress(filePath)
 	defer f.markFileAsComplete(filePath)
 
-	// Initialize metadata
-	err := f.meta.CreateFileMetaData(filePath)
+	// Initialize metadata with isNewFile = true
+	err := f.meta.CreateFileMetaData(filePath, true)
 	if err != nil {
 		log.Errorf("Failed to initialize metadata for new file %s: %v", filePath, err)
 		return
 	}
-
-	// `CreateFileMetaData` handles sending updates via channels
 }
 
 func (f *FileData) HandleFileModification(filePath string) {
@@ -168,25 +159,15 @@ func (f *FileData) HandleFileModification(filePath string) {
 }
 
 func (f *FileData) handleDebouncedFileModification(filePath string) {
-	// Prevent concurrent processing
-	f.mu.Lock()
-	if f.inProgress[filePath] {
-		f.mu.Unlock()
-		return
-	}
-	f.inProgress[filePath] = true
-	f.mu.Unlock()
-
+	f.markFileAsInProgress(filePath)
 	defer f.markFileAsComplete(filePath)
 
-	// Update metadata and detect changes
-	err := f.meta.CreateFileMetaData(filePath)
+	// Update metadata with isNewFile = false
+	err := f.meta.CreateFileMetaData(filePath, false)
 	if err != nil {
 		log.Errorf("Failed to update metadata for %s: %v", filePath, err)
 		return
 	}
-
-	// `CreateFileMetaData` handles sending updates via channels
 }
 
 func (f *FileData) HandleFileDeletion(filePath string) {
@@ -550,35 +531,18 @@ func (f *FileData) markFileAsComplete(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.inProgress == nil {
-		log.Warnf("SyncedFiles map is nil while trying to mark file as complete. Initializing it now.")
-		f.inProgress = make(map[string]bool)
-	}
-
 	delete(f.inProgress, fileName)
 }
 
-// markFileAsInProgress marks a file as being synchronized.
 func (f *FileData) markFileAsInProgress(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.inProgress == nil {
-		log.Warnf("SyncedFiles map is nil. Initializing it now.")
-		f.inProgress = make(map[string]bool)
-	}
-
 	f.inProgress[fileName] = true
 }
 func (f *FileData) IsFileInProgress(fileName string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.inProgress == nil {
-		log.Warnf("SyncedFiles map is nil while checking if file is in progress. Initializing it now.")
-		f.inProgress = make(map[string]bool)
-		return false
-	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 
 	_, exists := f.inProgress[fileName]
 	return exists
