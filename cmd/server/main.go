@@ -70,10 +70,10 @@ func parseFlags() {
 	chunkSize := *chunkSizeKB * 1024
 
 	// Output the configurations
-	fmt.Printf("Sync Folder  : %s\n", *syncFolder)
-	fmt.Printf("Chunk Size   : %d bytes\n", chunkSize)
-	fmt.Printf("Sync Interval: %v\n", *syncInterval)
-	fmt.Printf("Port Number  : %s\n", *portNumber)
+	log.Printf("Sync Folder  : %s\n", *syncFolder)
+	log.Printf("Chunk Size   : %d bytes\n", chunkSize)
+	log.Printf("Sync Interval: %v\n", *syncInterval)
+	log.Printf("Port Number  : %s\n", *portNumber)
 
 	// Initialize the configuration
 	conf.AppConfig = conf.Config{
