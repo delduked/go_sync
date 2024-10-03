@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
-	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
@@ -22,14 +21,16 @@ type FileData struct {
 	meta           *Meta
 	mdns           *Mdns
 	mu             sync.RWMutex
+	conn           *ConnManager
 	debounceTimers map[string]*time.Timer
 	inProgress     map[string]bool
 }
 
-func NewFile(meta *Meta, mdns *Mdns) *FileData {
+func NewFile(meta *Meta, mdns *Mdns, conn *ConnManager) *FileData {
 	return &FileData{
 		meta:           meta,
 		mdns:           mdns,
+		conn:           conn,
 		debounceTimers: make(map[string]*time.Timer),
 		inProgress:     make(map[string]bool),
 	}
@@ -213,34 +214,38 @@ func (f *FileData) handleDebouncedFileDeletion(filePath string) {
 		return
 	}
 
-	go f.deleteFileOnPeer(filePath)
+	// go f.deleteFileOnPeer(filePath)
+
+	f.conn.SendMessage(FileDeletePayload{
+		FileName: filePath,
+	})
 }
 
-func (f *FileData) deleteFileOnPeer(filePath string) error {
-	for _, conn := range f.mdns.Clients {
-		stream, err := clients.SyncConn(conn)
-		if err != nil {
-			log.Printf("Failed to initialize stream with peer %s: %v", conn.Target(), err)
-			continue
-		}
+// func (f *FileData) deleteFileOnPeer(filePath string) error {
+// 	for _, conn := range f.mdns.Clients {
+// 		stream, err := clients.SyncConn(conn)
+// 		if err != nil {
+// 			log.Printf("Failed to initialize stream with peer %s: %v", conn.Target(), err)
+// 			continue
+// 		}
 
-		err = stream.Send(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileDelete{
-				FileDelete: &pb.FileDelete{
-					FileName: filePath,
-				},
-			},
-		})
-		if err != nil {
-			log.Printf("Failed to send delete request to peer %s: %v", conn.Target(), err)
-			continue
-		}
+// 		err = stream.Send(&pb.FileSyncRequest{
+// 			Request: &pb.FileSyncRequest_FileDelete{
+// 				FileDelete: &pb.FileDelete{
+// 					FileName: filePath,
+// 				},
+// 			},
+// 		})
+// 		if err != nil {
+// 			log.Printf("Failed to send delete request to peer %s: %v", conn.Target(), err)
+// 			continue
+// 		}
 
-		log.Printf("Successfully sent delete request for file %s to peer %s", filePath, conn.Target())
-	}
+// 		log.Printf("Successfully sent delete request for file %s to peer %s", filePath, conn.Target())
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // deleteFileChunk removes a specific chunk at the provided offset
 // It rewrites only the affected part of the file.
@@ -305,22 +310,25 @@ func (f *FileData) SyncWithPeers() {
 		log.Errorf("Failed to build local file list: %v", err)
 		return
 	}
-
-	for _, conn := range f.mdns.Clients {
-		if conn.Target() == f.mdns.LocalIP {
+	// need to make a channel to receive response.
+	// can filter responses by type to determine fruther logic after response mssage is received
+	for _, conn := range f.conn.peers {
+		if conn.Conn.Target() == f.mdns.LocalIP {
 			continue
 		}
-		conn.GetState()
-		peerFileList, err := f.getPeerfilelist(conn)
+		peerFileList, err := f.getPeerfilelist(conn.Conn)
 		if err != nil {
-			log.Errorf("Failed to get file list from %s: %v", conn.Target(), err)
+			log.Errorf("Failed to get file list from %s: %v", conn.Conn.Target(), err)
 			continue
 		}
-
 		missingFiles := f.CompareFileLists(localFileList, peerFileList)
 		if len(missingFiles) > 0 {
-			log.Infof("Missing files from %s: %v", conn.Target(), missingFiles)
-			f.RequestMissingFiles(conn, missingFiles)
+			// f.RequestMissingFiles(conn, missingFiles)
+			for _, fileName := range missingFiles {
+				f.conn.SendMessage(FileTransfer{
+					FileName: fileName,
+				})
+			}
 		}
 	}
 }
@@ -477,11 +485,20 @@ func (f *FileData) transferFile(filePath string, isNewFile bool) {
 
 		// go f.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, isNewFile, totalChunks)
 
-		f.meta.SendSaveToPeers(MetaData{
-			filename: filePath,
-			filesize: fileSize,
-			offset:  offset,
-		}, buf[:n], isNewFile)
+		// f.meta.SendSaveToPeers(MetaData{
+		// 	filename: filePath,
+		// 	filesize: fileSize,
+		// 	offset:   offset,
+		// }, buf[:n], isNewFile)
+
+		f.conn.SendMessage(FileChunkPayload{
+			FileName:    filePath,
+			ChunkData:   buf[:n],
+			Offset:      offset,
+			IsNewFile:   isNewFile,
+			TotalSize:   fileSize,
+			TotalChunks: f.meta.Files[filePath].TotalChunks(),
+		})
 
 		offset += int64(n)
 

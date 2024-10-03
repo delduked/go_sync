@@ -12,21 +12,20 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
-	"github.com/TypeTerrors/go_sync/internal/clients"
 	"github.com/TypeTerrors/go_sync/pkg"
-	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/zeebo/xxh3"
 )
 
 type Meta struct {
-	ChunkSize           int64
-	Files               map[string]FileMetaData // map[filename][offset]Hash
-	mdns                *Mdns
-	db                  *badger.DB // BadgerDB instance
-	mu                  sync.Mutex
-	done                chan struct{}
+	ChunkSize int64
+	Files     map[string]FileMetaData // map[filename][offset]Hash
+	mdns      *Mdns
+	db        *badger.DB // BadgerDB instance
+	mu        sync.Mutex
+	done      chan struct{}
+	conn      *ConnManager
 }
 
 // Used for comparing metadata between old scan and new scan
@@ -43,6 +42,10 @@ type FileMetaData struct {
 	lastModified time.Time
 }
 
+func (fm FileMetaData) TotalChunks() int64 {
+	return (fm.filesize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize
+}
+
 type Hash struct {
 	Stronghash string
 	Weakhash   uint32
@@ -57,13 +60,14 @@ func (h Hash) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func NewMeta(db *badger.DB, mdns *Mdns) *Meta {
+func NewMeta(db *badger.DB, mdns *Mdns, conn *ConnManager) *Meta {
 	return &Meta{
 		Files: make(map[string]FileMetaData),
-		mdns:                mdns,
-		db:                  db,
-		mu:                  sync.Mutex{},
-		done:                make(chan struct{}), // Initialize the done channel
+		mdns:  mdns,
+		db:    db,
+		mu:    sync.Mutex{},
+		conn:  conn,
+		done:  make(chan struct{}), // Initialize the done channel
 	}
 }
 
@@ -249,11 +253,14 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 	m.saveMetaDataToMem(filename, chunk, offset)
 	m.saveMetaDataToDB(filename, chunk, offset)
 
-	// Send chunk to peers
-	m.SendSaveToPeers(MetaData{
-		filename: filename,
-		offset:   offset,
-	}, chunk, isNewFile)
+	m.conn.SendMessage(FileChunkPayload{
+		FileName:    filename,
+		ChunkData:   chunk,
+		Offset:      offset,
+		IsNewFile:   isNewFile,
+		TotalChunks: m.Files[filename].TotalChunks(),
+		TotalSize:   m.Files[filename].filesize,
+	})
 
 	return nil
 }
@@ -383,9 +390,9 @@ func (m *Meta) DeleteMetaData(filename string, offset int64) (error, error) {
 		return nil, nil
 	}
 
-	go m.SendDeleteToPeers(MetaData{
-		filename: filename,
-		offset:   offset,
+	m.conn.SendMessage(FileDeletePayload{
+		FileName: filename,
+		Offset:   offset,
 	})
 
 	var err1, err2 error
@@ -432,117 +439,117 @@ func (m *Meta) hashChunk(chunk []byte) string {
 	return fmt.Sprintf("%016x%016x", hash.Lo, hash.Hi)
 }
 
-func (m *Meta) DeleteChunkOnPeer(req MetaData) {
-	for _, conn := range m.mdns.Clients {
-		stream, err := clients.SyncConn(conn)
-		if err != nil {
-			log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
-			continue
-		}
-		go func() {
-			for {
-				recv, err := stream.Recv()
-				if err != nil {
-					log.Errorf("Failed to receive response from %s: %v", conn.Target(), err)
-					break
-				}
-				log.Infof(recv.Message)
-			}
-		}()
-		stream.Send(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileDelete{
-				FileDelete: &pb.FileDelete{
-					FileName: req.filename,
-					Offset:   req.offset,
-				},
-			},
-		})
-	}
-}
-func (m *Meta) SaveChunkOnPeer(req MetaData) {
-	for _, conn := range m.mdns.Clients {
-		stream, err := clients.SyncConn(conn)
-		if err != nil {
-			log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
-			continue
-		}
-		go func() {
-			for {
-				recv, err := stream.Recv()
-				if err != nil {
-					if err == io.EOF {
-						// Stream closed gracefully
-						return
-					}
-					log.Errorf("Failed to receive response from %s: %v", conn.Target(), err)
-					break
-				}
-				log.Infof(recv.Message)
-			}
-		}()
-		stream.Send(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileChunk{
-				FileChunk: &pb.FileChunk{
-					FileName: req.filename,
-					Offset:   req.offset,
-				},
-			},
-		})
-	}
-}
+// func (m *Meta) DeleteChunkOnPeer(req MetaData) {
+// 	for _, conn := range m.mdns.Clients {
+// 		stream, err := clients.SyncConn(conn)
+// 		if err != nil {
+// 			log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
+// 			continue
+// 		}
+// 		go func() {
+// 			for {
+// 				recv, err := stream.Recv()
+// 				if err != nil {
+// 					log.Errorf("Failed to receive response from %s: %v", conn.Target(), err)
+// 					break
+// 				}
+// 				log.Infof(recv.Message)
+// 			}
+// 		}()
+// 		stream.Send(&pb.FileSyncRequest{
+// 			Request: &pb.FileSyncRequest_FileDelete{
+// 				FileDelete: &pb.FileDelete{
+// 					FileName: req.filename,
+// 					Offset:   req.offset,
+// 				},
+// 			},
+// 		})
+// 	}
+// }
+// func (m *Meta) SaveChunkOnPeer(req MetaData) {
+// 	for _, conn := range m.mdns.Clients {
+// 		stream, err := clients.SyncConn(conn)
+// 		if err != nil {
+// 			log.Errorf("Failed to open SyncFile stream on %s: %v", conn.Target(), err)
+// 			continue
+// 		}
+// 		go func() {
+// 			for {
+// 				recv, err := stream.Recv()
+// 				if err != nil {
+// 					if err == io.EOF {
+// 						// Stream closed gracefully
+// 						return
+// 					}
+// 					log.Errorf("Failed to receive response from %s: %v", conn.Target(), err)
+// 					break
+// 				}
+// 				log.Infof(recv.Message)
+// 			}
+// 		}()
+// 		stream.Send(&pb.FileSyncRequest{
+// 			Request: &pb.FileSyncRequest_FileChunk{
+// 				FileChunk: &pb.FileChunk{
+// 					FileName: req.filename,
+// 					Offset:   req.offset,
+// 				},
+// 			},
+// 		})
+// 	}
+// }
 
 // SendDeleteToPeers enqueues delete requests to each peer's send channel.
-func (m *Meta) SendDeleteToPeers(req MetaData) {
-	m.mdns.mu.Lock()
-	defer m.mdns.mu.Unlock()
+// func (m *Meta) SendDeleteToPeers(req MetaData) {
+// 	m.mdns.mu.Lock()
+// 	defer m.mdns.mu.Unlock()
 
-	for peerID, sendChan := range m.mdns.sendChannels {
-		// Prepare the delete request
-		deleteReq := pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileDelete{
-				FileDelete: &pb.FileDelete{
-					FileName: req.filename,
-					Offset:   req.offset, // 0 signifies entire file deletion
-				},
-			},
-		}
+// 	for peerID, sendChan := range m.mdns.sendChannels {
+// 		// Prepare the delete request
+// 		deleteReq := pb.FileSyncRequest{
+// 			Request: &pb.FileSyncRequest_FileDelete{
+// 				FileDelete: &pb.FileDelete{
+// 					FileName: req.filename,
+// 					Offset:   req.offset, // 0 signifies entire file deletion
+// 				},
+// 			},
+// 		}
 
-		// Enqueue the delete request
-		select {
-		case sendChan <- &deleteReq:
-			// Successfully enqueued
-		default:
-			log.Warnf("Send channel for peer %s is full, dropping delete request", peerID)
-		}
-	}
-}
+// 		// Enqueue the delete request
+// 		select {
+// 		case sendChan <- &deleteReq:
+// 			// Successfully enqueued
+// 		default:
+// 			log.Warnf("Send channel for peer %s is full, dropping delete request", peerID)
+// 		}
+// 	}
+// }
 
-// SendSaveToPeers enqueues save chunk requests to each peer's send channel.
-func (m *Meta) SendSaveToPeers(req MetaData, chunk []byte, isNewFile bool) {
-	m.mdns.mu.Lock()
-	defer m.mdns.mu.Unlock()
+// // SendSaveToPeers enqueues save chunk requests to each peer's send channel.
+// func (m *Meta) SendSaveToPeers(req MetaData, chunk []byte, isNewFile bool) {
+// 	m.mdns.mu.Lock()
+// 	defer m.mdns.mu.Unlock()
 
-	for peerID, sendChan := range m.mdns.sendChannels {
-		// Prepare the file chunk request
-		chunkReq := pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileChunk{
-				FileChunk: &pb.FileChunk{
-					FileName:    req.filename,
-					ChunkData:   chunk,
-					Offset:      req.offset,
-					IsNewFile:   isNewFile,
-					TotalChunks: (m.Files[req.filename].filesize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize,
-					TotalSize:   m.Files[req.filename].filesize,
-				},
-			},
-		}
+// 	for peerID, sendChan := range m.mdns.sendChannels {
+// 		// Prepare the file chunk request
+// 		chunkReq := pb.FileSyncRequest{
+// 			Request: &pb.FileSyncRequest_FileChunk{
+// 				FileChunk: &pb.FileChunk{
+// 					FileName:    req.filename,
+// 					ChunkData:   chunk,
+// 					Offset:      req.offset,
+// 					IsNewFile:   isNewFile,
+// 					TotalChunks: (m.Files[req.filename].filesize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize,
+// 					TotalSize:   m.Files[req.filename].filesize,
+// 				},
+// 			},
+// 		}
 
-		// Enqueue the chunk request
-		select {
-		case sendChan <- &chunkReq:
-			// Successfully enqueued
-		default:
-			log.Warnf("Send channel for peer %s is full, dropping chunk request", peerID)
-		}
-	}
-}
+// 		// Enqueue the chunk request
+// 		select {
+// 		case sendChan <- &chunkReq:
+// 			// Successfully enqueued
+// 		default:
+// 			log.Warnf("Send channel for peer %s is full, dropping chunk request", peerID)
+// 		}
+// 	}
+// }
