@@ -214,95 +214,14 @@ func (f *FileData) handleDebouncedFileDeletion(filePath string) {
 		return
 	}
 
-	// go f.deleteFileOnPeer(filePath)
-
-	f.conn.SendMessage(FileDeletePayload{
-		FileName: filePath,
+	f.conn.SendMessage(&pb.FileSyncRequest{
+		Request: &pb.FileSyncRequest_FileDelete{
+			FileDelete: &pb.FileDelete{
+				FileName: filePath,
+			},
+		},
 	})
 }
-
-// func (f *FileData) deleteFileOnPeer(filePath string) error {
-// 	for _, conn := range f.mdns.Clients {
-// 		stream, err := clients.SyncConn(conn)
-// 		if err != nil {
-// 			log.Printf("Failed to initialize stream with peer %s: %v", conn.Target(), err)
-// 			continue
-// 		}
-
-// 		err = stream.Send(&pb.FileSyncRequest{
-// 			Request: &pb.FileSyncRequest_FileDelete{
-// 				FileDelete: &pb.FileDelete{
-// 					FileName: filePath,
-// 				},
-// 			},
-// 		})
-// 		if err != nil {
-// 			log.Printf("Failed to send delete request to peer %s: %v", conn.Target(), err)
-// 			continue
-// 		}
-
-// 		log.Printf("Successfully sent delete request for file %s to peer %s", filePath, conn.Target())
-// 	}
-
-// 	return nil
-// }
-
-// deleteFileChunk removes a specific chunk at the provided offset
-// It rewrites only the affected part of the file.
-// func (f *FileData) DeleteFileChunk(filePath string, offset int64) error {
-// 	// Open the file for reading and writing
-// 	file, err := os.OpenFile(filePath, os.O_RDWR, 0644)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to open file: %w", err)
-// 	}
-// 	defer file.Close()
-
-// 	// Get file info for size and other details
-// 	fileInfo, err := file.Stat()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to stat file: %w", err)
-// 	}
-
-// 	// Define the chunk size
-// 	chunkSize := conf.AppConfig.ChunkSize
-
-// 	// Ensure the offset is valid
-// 	if offset < 0 || offset >= fileInfo.Size() {
-// 		return fmt.Errorf("invalid offset: %d", offset)
-// 	}
-
-// 	// Calculate how many bytes to move after removing the chunk
-// 	bytesAfterChunk := fileInfo.Size() - (offset + chunkSize)
-
-// 	if bytesAfterChunk > 0 {
-// 		// Create a buffer to hold the data after the chunk to be deleted
-// 		buffer := make([]byte, bytesAfterChunk)
-
-// 		// Read the data after the chunk into the buffer
-// 		_, err := file.ReadAt(buffer, offset+chunkSize)
-// 		if err != nil && err != io.EOF {
-// 			return fmt.Errorf("error reading after chunk: %w", err)
-// 		}
-
-// 		// Move the data after the chunk to the start of the chunk to overwrite the deleted chunk
-// 		_, err = file.WriteAt(buffer, offset)
-// 		if err != nil {
-// 			return fmt.Errorf("error writing to file after deleting chunk: %w", err)
-// 		}
-// 	}
-
-// 	// Truncate the file to remove the extra space left at the end
-// 	err = file.Truncate(fileInfo.Size() - chunkSize)
-// 	if err != nil {
-// 		return fmt.Errorf("error truncating file after chunk delete: %w", err)
-// 	}
-
-// 	// Update the metadata to reflect the chunk removal
-// 	f.meta.DeleteMetaData(filePath, offset)
-
-// 	log.Printf("Deleted chunk at offset %d from file %s", offset, filePath)
-// 	return nil
-// }
 
 func (f *FileData) SyncWithPeers() {
 	localFileList, err := f.buildLocalFileList()
@@ -408,50 +327,6 @@ func (f *FileData) getPeerfilelist(conn *grpc.ClientConn) (*pb.FileList, error) 
 	return resp.GetFileList(), nil
 }
 
-// sendBytesToPeer sends file data to peers using persistent streams.
-// func (f *FileData) sendBytesToPeer(fileName string, data []byte, offset int64, isNewFile bool, totalChunks int64) error {
-// 	f.mdns.mu.Lock()
-// 	defer f.mdns.mu.Unlock()
-
-// 	for _, conn := range f.mdns.Clients {
-// 		stream, err := clients.SyncConn(conn)
-// 		if err != nil {
-// 			log.Printf("Failed to initialize stream with peer %s: %v", conn.Target(), err)
-// 			continue
-// 		}
-// 		// Attempt to send the chunk with retries
-// 		const maxRetries = 3
-// 		for attempt := 1; attempt <= maxRetries; attempt++ {
-// 			err := stream.Send(&pb.FileSyncRequest{
-// 				Request: &pb.FileSyncRequest_FileChunk{
-// 					FileChunk: &pb.FileChunk{
-// 						FileName:    fileName,
-// 						ChunkData:   data,
-// 						Offset:      offset,
-// 						IsNewFile:   isNewFile,
-// 						TotalChunks: totalChunks,
-// 					},
-// 				},
-// 			})
-// 			if err != nil {
-// 				log.Printf("Attempt %d: Failed to send chunk to peer %s: %v", attempt, conn.Target(), err)
-// 				if attempt < maxRetries {
-// 					log.Printf("Retrying to send chunk to peer %s...", conn.Target())
-// 					time.Sleep(2 * time.Second) // Wait before retrying
-// 					continue
-// 				} else {
-// 					log.Printf("Exceeded max retries for peer %s. Skipping chunk.", conn.Target())
-// 				}
-// 			} else {
-// 				log.Printf("Successfully sent chunk to peer %s for file %s at offset %d", conn.Target(), fileName, offset)
-// 				break
-// 			}
-// 		}
-// 	}
-
-// 	return nil
-// }
-
 func (f *FileData) transferFile(filePath string, isNewFile bool) {
 	f.markFileAsInProgress(filePath)
 
@@ -483,21 +358,17 @@ func (f *FileData) transferFile(filePath string, isNewFile bool) {
 			break
 		}
 
-		// go f.sendBytesToPeer(filepath.Base(filePath), buf[:n], offset, isNewFile, totalChunks)
-
-		// f.meta.SendSaveToPeers(MetaData{
-		// 	filename: filePath,
-		// 	filesize: fileSize,
-		// 	offset:   offset,
-		// }, buf[:n], isNewFile)
-
-		f.conn.SendMessage(FileChunkPayload{
-			FileName:    filePath,
-			ChunkData:   buf[:n],
-			Offset:      offset,
-			IsNewFile:   isNewFile,
-			TotalSize:   fileSize,
-			TotalChunks: f.meta.Files[filePath].TotalChunks(),
+		f.conn.SendMessage(&pb.FileSyncRequest{
+			Request: &pb.FileSyncRequest_FileChunk{
+				FileChunk: &pb.FileChunk{
+					FileName:    filePath,
+					ChunkData:   buf[:n],
+					Offset:      offset,
+					IsNewFile:   isNewFile,
+					TotalChunks: f.meta.Files[filePath].TotalChunks(),
+					TotalSize:   fileSize,
+				} ,
+			},
 		})
 
 		offset += int64(n)

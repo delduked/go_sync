@@ -6,6 +6,5 @@ import (
 )
 
 type App interface {
-	Start() error
-	Scan(wg *sync.WaitGroup, ctx context.Context)
+	Start(wg *sync.WaitGroup, ctx context.Context) error
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/TypeTerrors/go_sync/conf"
 	"github.com/TypeTerrors/go_sync/pkg"
+	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/zeebo/xxh3"
@@ -71,7 +72,7 @@ func NewMeta(db *badger.DB, mdns *Mdns, conn *Conn) *Meta {
 	}
 }
 
-func (m *Meta) Start(ctx context.Context, wg *sync.WaitGroup) error {
+func (m *Meta) Scan() error {
 
 	// Walk through the sync folder and process existing files
 	err := filepath.Walk(conf.AppConfig.SyncFolder, func(path string, info os.FileInfo, err error) error {
@@ -91,7 +92,7 @@ func (m *Meta) Start(ctx context.Context, wg *sync.WaitGroup) error {
 	return err
 }
 
-func (m *Meta) Scan(wg *sync.WaitGroup, ctx context.Context) {
+func (m *Meta) Start(wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
 
 	ticker := time.NewTicker(conf.AppConfig.SyncInterval)
@@ -237,29 +238,21 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 		return nil
 	}
 
-	// oldMeta, err := m.GetMetaData(filename, offset)
-	// newWeakHash := pkg.NewRollingChecksum(chunk).Sum()
-	// newStrongHash := m.hashChunk(chunk)
-
-	// if err == nil {
-	// 	// Existing metadata found; compare hashes
-	// 	if oldMeta.Weakhash == newWeakHash && oldMeta.Stronghash == newStrongHash {
-	// 		// No change; skip processing
-	// 		return nil
-	// 	}
-	// }
-
 	// Save new metadata
 	m.saveMetaDataToMem(filename, chunk, offset)
 	m.saveMetaDataToDB(filename, chunk, offset)
 
-	m.conn.SendMessage(FileChunkPayload{
-		FileName:    filename,
-		ChunkData:   chunk,
-		Offset:      offset,
-		IsNewFile:   isNewFile,
-		TotalChunks: m.Files[filename].TotalChunks(),
-		TotalSize:   m.Files[filename].filesize,
+	m.conn.SendMessage(&pb.FileSyncRequest{
+		Request: &pb.FileSyncRequest_FileChunk{
+			FileChunk: &pb.FileChunk{
+				FileName:    filename,
+				ChunkData:   chunk,
+				Offset:      offset,
+				IsNewFile:   isNewFile,
+				TotalChunks: m.Files[filename].TotalChunks(),
+				TotalSize:   m.Files[filename].filesize,
+			},
+		},
 	})
 
 	return nil
@@ -390,9 +383,13 @@ func (m *Meta) DeleteMetaData(filename string, offset int64) (error, error) {
 		return nil, nil
 	}
 
-	m.conn.SendMessage(FileDeletePayload{
-		FileName: filename,
-		Offset:   offset,
+	m.conn.SendMessage(&pb.FileSyncRequest{
+		Request: &pb.FileSyncRequest_FileDelete{
+			FileDelete: &pb.FileDelete{
+				FileName: filename,
+				Offset:  offset,
+			},
+		},
 	})
 
 	var err1, err2 error

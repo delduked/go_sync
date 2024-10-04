@@ -29,6 +29,7 @@ type Grpc struct {
 	listener   net.Listener
 	syncDir    string
 	port       string
+	wg         *sync.WaitGroup
 }
 
 func NewGrpc(syncDir string, mdns *Mdns, meta *Meta, file *FileData, port string) *Grpc {
@@ -47,18 +48,20 @@ func NewGrpc(syncDir string, mdns *Mdns, meta *Meta, file *FileData, port string
 		file:       file,
 		listener:   listener,
 		port:       port,
+		wg: 	   &sync.WaitGroup{},
 	}
 }
 
-func (g *Grpc) Start(wg *sync.WaitGroup) {
-
-	defer wg.Done()
-	log.Printf("Starting gRPC server on port %s...", g.port)
-	pb.RegisterFileSyncServiceServer(g.grpcServer, g) // Registering on s.grpcServer
-	if err := g.grpcServer.Serve(g.listener); err != nil {
-		panic(fmt.Sprintf("failed to serve gRPC server: %v", err))
-	}
-
+func (g *Grpc) Start() {
+	g.wg.Add(1)
+	go func() {
+		defer g.wg.Done()
+		log.Printf("Starting gRPC server on port %s...", g.port)
+		pb.RegisterFileSyncServiceServer(g.grpcServer, g) // Registering on s.grpcServer
+		if err := g.grpcServer.Serve(g.listener); err != nil {
+			panic(fmt.Sprintf("failed to serve gRPC server: %v", err))
+		}
+	}()
 }
 
 // Stop gracefully stops the gRPC server

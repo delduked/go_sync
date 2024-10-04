@@ -22,7 +22,7 @@ type Conn struct {
 }
 
 // NewConnManager initializes a new ConnManager without peers.
-func NewConnManager() *Conn {
+func NewConn() *Conn {
     return &Conn{
         peers:    make(map[string]*Peer),
         sendChan: make(chan any, 1000),
