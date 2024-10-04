@@ -19,11 +19,11 @@ type Mdns struct {
 	LocalIP     string
 	Subnet      string
 	SyncedFiles map[string]bool // Set to track files being synchronized
-	connManager *ConnManager
+	connManager *Conn
 }
 
 // NewMdns initializes a new Mdns service with a reference to ConnManager.
-func NewMdns(connManager *ConnManager) *Mdns {
+func NewMdns(connManager *Conn) *Mdns {
 	localIP, subnet, err := pkg.GetLocalIPAndSubnet()
 	if err != nil {
 		log.Fatalf("Failed to get local IP and subnet: %v", err)

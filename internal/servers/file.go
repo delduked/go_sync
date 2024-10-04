@@ -21,12 +21,12 @@ type FileData struct {
 	meta           *Meta
 	mdns           *Mdns
 	mu             sync.RWMutex
-	conn           *ConnManager
+	conn           *Conn
 	debounceTimers map[string]*time.Timer
 	inProgress     map[string]bool
 }
 
-func NewFile(meta *Meta, mdns *Mdns, conn *ConnManager) *FileData {
+func NewFile(meta *Meta, mdns *Mdns, conn *Conn) *FileData {
 	return &FileData{
 		meta:           meta,
 		mdns:           mdns,

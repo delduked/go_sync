@@ -25,7 +25,7 @@ type Meta struct {
 	db        *badger.DB // BadgerDB instance
 	mu        sync.Mutex
 	done      chan struct{}
-	conn      *ConnManager
+	conn      *Conn
 }
 
 // Used for comparing metadata between old scan and new scan
@@ -60,7 +60,7 @@ func (h Hash) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func NewMeta(db *badger.DB, mdns *Mdns, conn *ConnManager) *Meta {
+func NewMeta(db *badger.DB, mdns *Mdns, conn *Conn) *Meta {
 	return &Meta{
 		Files: make(map[string]FileMetaData),
 		mdns:  mdns,
