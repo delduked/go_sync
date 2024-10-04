@@ -25,14 +25,14 @@ func main() {
 	defer db.Close()
 
 	// Initialize core services
-	mdns, meta, file, conn := initServices(db)
+	mdns, meta, file, conn, grpc := initServices(db)
 
 	// Create context and waitgroup for goroutine management
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
 	// Start services
-	startServices(ctx, &wg, mdns, meta, file, conn)
+	startServices(ctx, &wg, mdns, meta, file, conn, grpc)
 
 	// Wait for shutdown signal (e.g., CTRL+C)
 	waitForShutdownSignal(cancel)
@@ -93,17 +93,16 @@ func initDB() *badger.DB {
 	return db
 }
 
-func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileData, *servers.Conn) {
+func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileData, *servers.Conn, *servers.Grpc) {
 	conn := servers.NewConn()
 	mdns := servers.NewMdns(conn)
 	meta := servers.NewMeta(db, mdns, conn)
 	file := servers.NewFile(meta, mdns, conn)
-	return mdns, meta, file, conn
+	grpc := servers.NewGrpc(conf.AppConfig.SyncFolder, mdns, meta, file, conf.AppConfig.Port)
+	return mdns, meta, file, conn, grpc
 }
 
-func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn) {
-
-	grpc := servers.NewGrpc(conf.AppConfig.SyncFolder, mdns, meta, file, conf.AppConfig.Port)
+func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn, grpc *servers.Grpc) {
 
 	go grpc.Start()
 

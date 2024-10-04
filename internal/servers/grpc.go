@@ -48,7 +48,7 @@ func NewGrpc(syncDir string, mdns *Mdns, meta *Meta, file *FileData, port string
 		file:       file,
 		listener:   listener,
 		port:       port,
-		wg: 	   &sync.WaitGroup{},
+		wg:         &sync.WaitGroup{},
 	}
 }
 
@@ -348,6 +348,32 @@ func (g *Grpc) handleFileDelete(fileDelete *pb.FileDelete) error {
 	return nil
 }
 
+func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) error {
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			log.Errorf("Error receiving missing files request: %v", err)
+			return err
+		}
+
+		localFileList, err := g.file.buildLocalFileList()
+		if err != nil {
+			log.Errorf("Failed to build local file list: %v", err)
+			return err
+		}
+
+		missingFiles := g.file.CompareFileLists(localFileList, req)
+		if len(missingFiles) > 0 {
+			for _, fileName := range missingFiles {
+				g.transferFile(fileName, stream, true)
+			}
+		}
+	}
+}
+
 // handleFileTruncate truncates the specified file to the given size.
 func (g *Grpc) handleFileTruncate(fileTruncate *pb.FileTruncate) error {
 	filePath := filepath.Join(g.syncDir, filepath.Clean(fileTruncate.FileName))
@@ -429,4 +455,52 @@ func (g *Grpc) SaveMetaData(filename string, chunk []byte, offset int64) error {
 	g.meta.saveMetaDataToDB(filename, chunk, offset)
 
 	return nil
+}
+
+func (g *Grpc) transferFile(filePath string, stream pb.FileSyncService_GetMissingFilesServer, isNewFile bool) {
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Error opening file %s for transfer: %v", filePath, err)
+		return
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("Error getting file info for %s: %v", filePath, err)
+		return
+	}
+	fileSize := fileInfo.Size()
+
+	buf := make([]byte, conf.AppConfig.ChunkSize)
+	var offset int64 = 0
+
+	for {
+		n, err := file.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			log.Printf("Error reading file %s: %v", filePath, err)
+			return
+		}
+		if n == 0 {
+			break
+		}
+
+		stream.Send(&pb.FileChunk{
+			FileName:    filePath,
+			ChunkData:   buf[:n],
+			Offset:      offset,
+			IsNewFile:   isNewFile,
+			TotalChunks: g.meta.Files[filePath].TotalChunks(),
+			TotalSize:   fileSize,
+		})
+
+		offset += int64(n)
+
+		if isNewFile {
+			isNewFile = false
+		}
+	}
+
+	log.Printf("File %s transfer complete", filePath)
 }

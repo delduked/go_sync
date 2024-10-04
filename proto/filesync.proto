@@ -8,6 +8,8 @@ service FileSyncService {
     rpc RequestChunks(stream ChunkRequest) returns (stream ChunkResponse);
     rpc GetFileList(GetFileListRequest) returns (GetFileListResponse);
     rpc GetFile(RequestFileTransfer) returns (EmptyResponse);
+
+    rpc GetMissingFiles(stream FileList) returns (stream FileChunk);
 }
 
 message FileSyncRequest {

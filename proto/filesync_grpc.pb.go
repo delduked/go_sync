@@ -25,6 +25,7 @@ const (
 	FileSyncService_RequestChunks_FullMethodName    = "/FileSyncService/RequestChunks"
 	FileSyncService_GetFileList_FullMethodName      = "/FileSyncService/GetFileList"
 	FileSyncService_GetFile_FullMethodName          = "/FileSyncService/GetFile"
+	FileSyncService_GetMissingFiles_FullMethodName  = "/FileSyncService/GetMissingFiles"
 )
 
 // FileSyncServiceClient is the client API for FileSyncService service.
@@ -37,6 +38,7 @@ type FileSyncServiceClient interface {
 	RequestChunks(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ChunkRequest, ChunkResponse], error)
 	GetFileList(ctx context.Context, in *GetFileListRequest, opts ...grpc.CallOption) (*GetFileListResponse, error)
 	GetFile(ctx context.Context, in *RequestFileTransfer, opts ...grpc.CallOption) (*EmptyResponse, error)
+	GetMissingFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileList, FileChunk], error)
 }
 
 type fileSyncServiceClient struct {
@@ -119,6 +121,19 @@ func (c *fileSyncServiceClient) GetFile(ctx context.Context, in *RequestFileTran
 	return out, nil
 }
 
+func (c *fileSyncServiceClient) GetMissingFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileList, FileChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[4], FileSyncService_GetMissingFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[FileList, FileChunk]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_GetMissingFilesClient = grpc.BidiStreamingClient[FileList, FileChunk]
+
 // FileSyncServiceServer is the server API for FileSyncService service.
 // All implementations must embed UnimplementedFileSyncServiceServer
 // for forward compatibility.
@@ -129,6 +144,7 @@ type FileSyncServiceServer interface {
 	RequestChunks(grpc.BidiStreamingServer[ChunkRequest, ChunkResponse]) error
 	GetFileList(context.Context, *GetFileListRequest) (*GetFileListResponse, error)
 	GetFile(context.Context, *RequestFileTransfer) (*EmptyResponse, error)
+	GetMissingFiles(grpc.BidiStreamingServer[FileList, FileChunk]) error
 	mustEmbedUnimplementedFileSyncServiceServer()
 }
 
@@ -156,6 +172,9 @@ func (UnimplementedFileSyncServiceServer) GetFileList(context.Context, *GetFileL
 }
 func (UnimplementedFileSyncServiceServer) GetFile(context.Context, *RequestFileTransfer) (*EmptyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFile not implemented")
+}
+func (UnimplementedFileSyncServiceServer) GetMissingFiles(grpc.BidiStreamingServer[FileList, FileChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method GetMissingFiles not implemented")
 }
 func (UnimplementedFileSyncServiceServer) mustEmbedUnimplementedFileSyncServiceServer() {}
 func (UnimplementedFileSyncServiceServer) testEmbeddedByValue()                         {}
@@ -242,6 +261,13 @@ func _FileSyncService_GetFile_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileSyncService_GetMissingFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(FileSyncServiceServer).GetMissingFiles(&grpc.GenericServerStream[FileList, FileChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_GetMissingFilesServer = grpc.BidiStreamingServer[FileList, FileChunk]
+
 // FileSyncService_ServiceDesc is the grpc.ServiceDesc for FileSyncService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -280,6 +306,12 @@ var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "RequestChunks",
 			Handler:       _FileSyncService_RequestChunks_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetMissingFiles",
+			Handler:       _FileSyncService_GetMissingFiles_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

@@ -223,6 +223,11 @@ func (f *FileData) handleDebouncedFileDeletion(filePath string) {
 	})
 }
 
+// i don't like this flow of information,
+// instead of sending a request for what files the peer has, waiting for the response
+// and running a comparison. I should send the files I have to the peer
+// and then the peer can calculate which files i am missing
+// and I can receive the files from the peer that I need
 func (f *FileData) SyncWithPeers() {
 	localFileList, err := f.buildLocalFileList()
 	if err != nil {
@@ -231,26 +236,29 @@ func (f *FileData) SyncWithPeers() {
 	}
 	// need to make a channel to receive response.
 	// can filter responses by type to determine fruther logic after response mssage is received
-	for _, conn := range f.conn.peers {
-		if conn.Conn.Target() == f.mdns.LocalIP {
-			continue
-		}
-		peerFileList, err := f.getPeerfilelist(conn.Conn)
-		if err != nil {
-			log.Errorf("Failed to get file list from %s: %v", conn.Conn.Target(), err)
-			continue
-		}
-		missingFiles := f.CompareFileLists(localFileList, peerFileList)
-		if len(missingFiles) > 0 {
-			// f.RequestMissingFiles(conn, missingFiles)
-			for _, fileName := range missingFiles {
-				f.conn.SendMessage(FileTransfer{
-					FileName: fileName,
-				})
-			}
-		}
-	}
+
+	// peerFileList, err := f.getPeerfilelist(conn.Conn)
+	// if err != nil {
+	// 	log.Errorf("Failed to get file list from %s: %v", conn.Conn.Target(), err)
+	// 	continue
+	// }
+
+	f.conn.SendMessage(&pb.FileList{
+		Files: localFileList.Files,
+	})
+
+	// missingFiles := f.CompareFileLists(localFileList, peerFileList)
+	// if len(missingFiles) > 0 {
+	// 	// f.RequestMissingFiles(conn, missingFiles)
+	// 	for _, fileName := range missingFiles {
+	// 		f.conn.SendMessage(FileTransfer{
+	// 			FileName: fileName,
+	// 		})
+	// 	}
+	// }
+
 }
+
 func (f *FileData) buildLocalFileList() (*pb.FileList, error) {
 	// Similar to buildFileList in the server implementation
 	// Reuse the code or refactor to a common utility function
@@ -327,6 +335,7 @@ func (f *FileData) getPeerfilelist(conn *grpc.ClientConn) (*pb.FileList, error) 
 	return resp.GetFileList(), nil
 }
 
+// this functino is obsolete, need to use new route GetMissingFiles to receive missing files from peer
 func (f *FileData) transferFile(filePath string, isNewFile bool) {
 	f.markFileAsInProgress(filePath)
 
@@ -367,7 +376,7 @@ func (f *FileData) transferFile(filePath string, isNewFile bool) {
 					IsNewFile:   isNewFile,
 					TotalChunks: f.meta.Files[filePath].TotalChunks(),
 					TotalSize:   fileSize,
-				} ,
+				},
 			},
 		})
 
