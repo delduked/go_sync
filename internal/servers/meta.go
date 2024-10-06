@@ -281,18 +281,11 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 	m.SaveMetaDataToMem(filename, chunk, offset)
 	m.SaveMetaDataToDB(filename, chunk, offset)
 
-	// Get the relative file path
-	relativePath, err := filepath.Rel(conf.AppConfig.SyncFolder, filename)
-	if err != nil {
-		log.Errorf("Error getting relative path for %s: %v", filename, err)
-		return err
-	}
-
-	log.Debugf("Sending file at path %s metadata to peers...", relativePath)
+	log.Debugf("Sending file at path %s metadata to peers...", filename)
 	m.conn.SendMessage(&pb.FileSyncRequest{
 		Request: &pb.FileSyncRequest_FileChunk{
 			FileChunk: &pb.FileChunk{
-				FileName:    relativePath, // Use relative path
+				FileName:    filename, // Use relative path
 				ChunkData:   chunk,
 				Offset:      offset,
 				IsNewFile:   isNewFile,

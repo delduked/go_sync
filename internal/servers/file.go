@@ -72,13 +72,13 @@ func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Wat
 
 				switch {
 				case event.Op&fsnotify.Create == fsnotify.Create:
-					log.Printf("File created: %s", event.Name)
+					log.Info("File created: %s", event.Name)
 					go f.HandleFileCreation(event.Name)
 				case event.Op&fsnotify.Write == fsnotify.Write:
-					log.Printf("File modified: %s", event.Name)
+					log.Info("File modified: %s", event.Name)
 					go f.HandleFileModification(event.Name)
 				case event.Op&fsnotify.Remove == fsnotify.Remove:
-					log.Printf("File deleted: %s", event.Name)
+					log.Info("File deleted: %s", event.Name)
 					go f.HandleFileDeletion(event.Name)
 				}
 
