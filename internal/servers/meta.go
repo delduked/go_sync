@@ -269,6 +269,7 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 	}
 
 	// Save new metadata
+	log.Debug("Saving metadata...")
 	m.SaveMetaDataToMem(filename, chunk, offset)
 	m.SaveMetaDataToDB(filename, chunk, offset)
 
@@ -279,6 +280,7 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 		return err
 	}
 
+	log.Debug("Sending file at path %s metadata to peers...", relativePath)
 	m.conn.SendMessage(&pb.FileSyncRequest{
 		Request: &pb.FileSyncRequest_FileChunk{
 			FileChunk: &pb.FileChunk{
