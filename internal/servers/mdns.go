@@ -32,17 +32,17 @@ type Mdns struct {
 
 // NewMdns initializes a new Mdns service with a reference to ConnManager.
 func NewMdns() *Mdns {
-	localIP, subnet, err := pkg.GetLocalIPAndSubnet()
-	if err != nil {
-		log.Fatalf("Failed to get local IP and subnet: %v", err)
-	}
+    localIP, subnet, err := pkg.GetLocalIPAndSubnet()
+    if err != nil {
+        log.Fatalf("Failed to get local IP and subnet: %v", err)
+    }
 
-	return &Mdns{
-		SyncedFiles: make(map[string]bool),
-		LocalIP:     localIP,
-		Subnet:      subnet,
-		// conn:        conn,
-	}
+    return &Mdns{
+        SyncedFiles: make(map[string]bool),
+        LocalIP:     localIP,
+        Subnet:      subnet,
+        wg:          &sync.WaitGroup{}, // Initialize the WaitGroup
+    }
 }
 func (m *Mdns) SetConn(conn ConnInterface) {
 	m.conn = conn
