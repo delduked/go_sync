@@ -141,10 +141,10 @@ func IsTemporaryFile(fileName string) bool {
 		strings.HasSuffix(baseName, ".tmp") ||
 		strings.HasSuffix(baseName, ".bak") ||
 		strings.Contains(baseName, ".DS_Store") {
-		log.Debug("Ignoring temporary file:", fileName)
+		log.Debugf("Ignoring temporary file:", fileName)
 		return true
 	}
-	log.Debug("Not a temporary file:", fileName)
+	log.Debugf("Not a temporary file:", fileName)
 	return false
 }
 

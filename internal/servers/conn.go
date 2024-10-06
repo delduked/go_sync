@@ -568,7 +568,7 @@ type Peer struct {
 
 // closeChannels closes all message channels for the peer.
 func (peer *Peer) closeChannels() {
-	log.Debug("Closing all message channels for peer %s", peer.ID)
+	log.Debugf("Closing all message channels for peer %s", peer.ID)
 	close(peer.FileSyncRequestChannel)
 	close(peer.HealthCheckChannel)
 	close(peer.MetadataRequestChannel)
@@ -578,40 +578,40 @@ func (peer *Peer) closeChannels() {
 
 // closeStreams closes all gRPC streams for the peer.
 func (peer *Peer) closeStreams() {
-	log.Debug("Closing all streams for peer %s", peer.ID)
+	log.Debugf("Closing all streams for peer %s", peer.ID)
 	if peer.SyncFileStream != nil {
 		peer.SyncFileStream.CloseSend()
 		peer.SyncFileStream = nil
-		log.Debug("SyncFileStream closed for peer %s", peer.ID)
+		log.Debugf("SyncFileStream closed for peer %s", peer.ID)
 	}
 	if peer.HealthCheckStream != nil {
 		peer.HealthCheckStream.CloseSend()
 		peer.HealthCheckStream = nil
-		log.Debug("HealthCheckStream closed for peer %s", peer.ID)
+		log.Debugf("HealthCheckStream closed for peer %s", peer.ID)
 	}
 	if peer.ExchangeMetadataStream != nil {
 		peer.ExchangeMetadataStream.CloseSend()
 		peer.ExchangeMetadataStream = nil
-		log.Debug("ExchangeMetadataStream closed for peer %s", peer.ID)
+		log.Debugf("ExchangeMetadataStream closed for peer %s", peer.ID)
 	}
 	if peer.RequestChunksStream != nil {
 		peer.RequestChunksStream.CloseSend()
 		peer.RequestChunksStream = nil
-		log.Debug("RequestChunksStream closed for peer %s", peer.ID)
+		log.Debugf("RequestChunksStream closed for peer %s", peer.ID)
 	}
 	if peer.GetMissingFileStream != nil {
 		peer.GetMissingFileStream.CloseSend()
 		peer.GetMissingFileStream = nil
-		log.Debug("GetMissingFileStream closed for peer %s", peer.ID)
+		log.Debugf("GetMissingFileStream closed for peer %s", peer.ID)
 	}
 }
 
 // closeConnections closes the gRPC connection for the peer.
 func (peer *Peer) closeConnections() {
-	log.Debug("Closing gRPC connection for peer %s", peer.ID)
+	log.Debugf("Closing gRPC connection for peer %s", peer.ID)
 	if peer.Conn != nil {
 		peer.Conn.Close()
 		peer.Conn = nil
-		log.Debug("gRPC connection closed for peer %s", peer.ID)
+		log.Debugf("gRPC connection closed for peer %s", peer.ID)
 	}
 }

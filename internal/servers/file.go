@@ -125,7 +125,7 @@ func (f *FileData) HandleFileCreation(filePath string) {
 	}
 
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-		log.Debug("Handling debounced file creation:", filePath)
+		log.Debugf("Handling debounced file creation:", filePath)
 		f.handleDebouncedFileCreation(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
@@ -138,7 +138,7 @@ func (f *FileData) handleDebouncedFileCreation(filePath string) {
 	defer f.markFileAsComplete(filePath)
 
 	// Initialize metadata with isNewFile = true
-	log.Debug("Creating metadata for new file:", filePath)
+	log.Debugf("Creating metadata for new file:", filePath)
 	err := f.meta.CreateFileMetaData(filePath, true)
 	if err != nil {
 		log.Errorf("Failed to initialize metadata for new file %s: %v", filePath, err)
@@ -161,9 +161,9 @@ func (f *FileData) HandleFileModification(filePath string) {
 	if timer, exists := f.debounceTimers[filePath]; exists {
 		timer.Stop()
 	}
-	log.Debug("Handling file modification:", filePath)
+	log.Debugf("Handling file modification:", filePath)
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-		log.Debug("Handling debounced file modification:", filePath)
+		log.Debugf("Handling debounced file modification:", filePath)
 		f.handleDebouncedFileModification(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
@@ -176,7 +176,7 @@ func (f *FileData) handleDebouncedFileModification(filePath string) {
 	defer f.markFileAsComplete(filePath)
 
 	// Update metadata with isNewFile = false
-	log.Debug("Updating metadata for modified file:", filePath)
+	log.Debugf("Updating metadata for modified file:", filePath)
 	err := f.meta.CreateFileMetaData(filePath, false)
 	if err != nil {
 		log.Errorf("Failed to update metadata for %s: %v", filePath, err)
@@ -340,20 +340,20 @@ func (m *Meta) CompareMetadata(prev, curr *FileMetaData) (bool, []string) {
 func (f *FileData) markFileAsComplete(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	log.Debug("Marking file as complete:", fileName)
+	log.Debugf("Marking file as complete:", fileName)
 	delete(f.inProgress, fileName)
 }
 
 func (f *FileData) markFileAsInProgress(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	log.Debug("Marking file as in progress:", fileName)
+	log.Debugf("Marking file as in progress:", fileName)
 	f.inProgress[fileName] = true
 }
 func (f *FileData) IsFileInProgress(fileName string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	log.Debug("Checking if file is in progress:", fileName)
+	log.Debugf("Checking if file is in progress:", fileName)
 	_, exists := f.inProgress[fileName]
 	return exists
 }

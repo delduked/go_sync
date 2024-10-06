@@ -167,7 +167,7 @@ func (g *Grpc) ExchangeMetadata(stream pb.FileSyncService_ExchangeMetadataServer
 			log.Errorf("Error sending metadata response: %v", err)
 			return err
 		} else {
-			log.Debug("Sent metadata response for file", fileName)
+			log.Debugf("Sent metadata response for file", fileName)
 		}
 	}
 }
@@ -196,7 +196,7 @@ func (g *Grpc) RequestChunks(stream pb.FileSyncService_RequestChunksServer) erro
 
 		for _, offset := range offsets {
 			chunkData := make([]byte, conf.AppConfig.ChunkSize)
-			log.Debug("Reading chunk at offset %d for file %s", offset, fileName)
+			log.Debugf("Reading chunk at offset %d for file %s", offset, fileName)
 			n, err := file.ReadAt(chunkData, offset)
 			if err != nil && err != io.EOF {
 				log.Printf("Error reading file %s at offset %d: %v", filePath, offset, err)
@@ -287,7 +287,7 @@ func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
 		log.Printf("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
 		return err
 	} else {
-		log.Debug("Wrote chunk to file %s at offset %d", filePath, chunk.Offset)
+		log.Debugf("Wrote chunk to file %s at offset %d", filePath, chunk.Offset)
 	}
 
 	// Update the metadata

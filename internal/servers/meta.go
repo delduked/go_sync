@@ -87,7 +87,7 @@ func (m *Meta) Scan() error {
 			return err
 		}
 		if !info.IsDir() {
-			log.Debug("Processing file: %s", path)
+			log.Debugf("Processing file: %s", path)
 			err := m.CreateFileMetaData(path, false)
 			if err != nil {
 				log.Errorf("Failed to get metadata for file %s: %v", path, err)
@@ -130,7 +130,7 @@ func (m *Meta) ScanSyncFolder() error {
 			return err
 		}
 		if !info.IsDir() {
-			log.Debug("Scanning file: %s", path)
+			log.Debugf("Scanning file: %s", path)
 			err := m.CreateFileMetaData(path, false)
 			if err != nil {
 				log.Errorf("Failed to get metadata for file %s: %v", path, err)
@@ -147,12 +147,12 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	}
 
 	// Open the file
-	log.Debug("Opening file: %s", fileName)
+	log.Debugf("Opening file: %s", fileName)
 	file, err := os.Open(fileName)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", fileName, err)
 	} else {
-		log.Debug("Opened file: %s", fileName)
+		log.Debugf("Opened file: %s", fileName)
 	}
 	defer file.Close()
 
@@ -160,7 +160,7 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to get file info for %s: %w", fileName, err)
 	} else {
-		log.Debug("Got file info for: %s", fileName)
+		log.Debugf("Got file info for: %s", fileName)
 	}
 
 	m.mu.Lock()
@@ -175,18 +175,18 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 			filesize: fileInfo.Size(),
 		}
 		m.Files[fileName] = fileMeta
-		log.Debug("Initialized metadata for new file: %s", fileName)
+		log.Debugf("Initialized metadata for new file: %s", fileName)
 	}
 
 	if exists && fileMeta.lastModified.Equal(fileInfo.ModTime()) {
 		// File hasn't changed since last processing
-		log.Debug("File %s hasn't changed since last processing", fileName)
+		log.Debugf("File %s hasn't changed since last processing", fileName)
 		return nil
 	}
 
 	// Update lastModified
 	fileMeta.lastModified = fileInfo.ModTime()
-	log.Debug("Updated last modified time for file: %s", fileName)
+	log.Debugf("Updated last modified time for file: %s", fileName)
 
 	// Buffer to hold file chunks
 	buffer := make([]byte, conf.AppConfig.ChunkSize)
@@ -195,32 +195,32 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	for offset < fileInfo.Size() {
 		// Read the chunk from the current offset
 		bytesToRead := min(conf.AppConfig.ChunkSize, fileInfo.Size()-offset)
-		log.Debug("Reading chunk of %d bytes at offset %d", bytesToRead, offset)
+		log.Debugf("Reading chunk of %d bytes at offset %d", bytesToRead, offset)
 		bytesRead, err := file.ReadAt(buffer[:bytesToRead], offset)
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("error reading file %s at offset %d: %w", fileName, offset, err)
 		} else {
-			log.Debug("Read %d bytes at offset %d", bytesRead, offset)
+			log.Debugf("Read %d bytes at offset %d", bytesRead, offset)
 		}
 
 		if bytesRead == 0 {
-			log.Debug("End of file reached: %s", fileName)
+			log.Debugf("End of file reached: %s", fileName)
 			break // End of file
 		}
 
 		// Compute hashes
 		newWeakHash := pkg.NewRollingChecksum(buffer[:bytesRead]).Sum()
-		log.Debug("Weak hash: %d", newWeakHash)
+		log.Debugf("Weak hash: %d", newWeakHash)
 		newStrongHash := m.hashChunk(buffer[:bytesRead])
-		log.Debug("Strong hash: %s", newStrongHash)
+		log.Debugf("Strong hash: %s", newStrongHash)
 
 		// Compare with existing hash
 		oldHash, hasOldHash := fileMeta.hashes[offset]
-		log.Debug("Old hash: %v", oldHash)
+		log.Debugf("Old hash: %v", oldHash)
 		chunkModified := !hasOldHash || oldHash.Weakhash != newWeakHash || oldHash.Stronghash != newStrongHash
 
 		if chunkModified {
-			log.Debug("Chunk modified at offset %d", offset)
+			log.Debugf("Chunk modified at offset %d", offset)
 			// Update metadata
 			fileMeta.hashes[offset] = Hash{
 				Stronghash: newStrongHash,
@@ -232,11 +232,11 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 
 		// After the first chunk, set isNewFile to false
 		isNewFile = false
-		log.Debug("isNewFile set to false")
+		log.Debugf("isNewFile set to false")
 
 		// Move to the next chunk
 		offset += int64(bytesRead)
-		log.Debug("Moved to next chunk at offset %d", offset)
+		log.Debugf("Moved to next chunk at offset %d", offset)
 	}
 
 	// Remove any chunks beyond the current file size
@@ -249,7 +249,7 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	// Update file size
 	fileMeta.filesize = fileInfo.Size()
 	m.Files[fileName] = fileMeta
-	log.Debug("Updated file size for file %s: %d", fileName, fileInfo.Size())
+	log.Debugf("Updated file size for file %s: %d", fileName, fileInfo.Size())
 	return nil
 }
 
@@ -264,37 +264,36 @@ func min(a, b int64) int64 {
 // meta.go
 
 func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool) error {
-    if pkg.IsTemporaryFile(filename) {
-        return nil
-    }
+	if pkg.IsTemporaryFile(filename) {
+		return nil
+	}
 
-    // Save new metadata
-    m.SaveMetaDataToMem(filename, chunk, offset)
-    m.SaveMetaDataToDB(filename, chunk, offset)
+	// Save new metadata
+	m.SaveMetaDataToMem(filename, chunk, offset)
+	m.SaveMetaDataToDB(filename, chunk, offset)
 
-    // Get the relative file path
-    relativePath, err := filepath.Rel(conf.AppConfig.SyncFolder, filename)
-    if err != nil {
-        log.Errorf("Error getting relative path for %s: %v", filename, err)
-        return err
-    }
+	// Get the relative file path
+	relativePath, err := filepath.Rel(conf.AppConfig.SyncFolder, filename)
+	if err != nil {
+		log.Errorf("Error getting relative path for %s: %v", filename, err)
+		return err
+	}
 
-    m.conn.SendMessage(&pb.FileSyncRequest{
-        Request: &pb.FileSyncRequest_FileChunk{
-            FileChunk: &pb.FileChunk{
-                FileName:    relativePath, // Use relative path
-                ChunkData:   chunk,
-                Offset:      offset,
-                IsNewFile:   isNewFile,
-                TotalChunks: m.Files[filename].TotalChunks(),
-                TotalSize:   m.Files[filename].filesize,
-            },
-        },
-    })
+	m.conn.SendMessage(&pb.FileSyncRequest{
+		Request: &pb.FileSyncRequest_FileChunk{
+			FileChunk: &pb.FileChunk{
+				FileName:    relativePath, // Use relative path
+				ChunkData:   chunk,
+				Offset:      offset,
+				IsNewFile:   isNewFile,
+				TotalChunks: m.Files[filename].TotalChunks(),
+				TotalSize:   m.Files[filename].filesize,
+			},
+		},
+	})
 
-    return nil
+	return nil
 }
-
 
 // saveMetaDataToDB will save the metadata to the database using the filename and the offset to determine the chunk position
 func (m *Meta) SaveMetaDataToDB(filename string, chunk []byte, offset int64) error {
@@ -311,7 +310,7 @@ func (m *Meta) SaveMetaDataToDB(filename string, chunk []byte, offset int64) err
 	if err != nil {
 		return err
 	} else {
-		log.Debug("Saved metadata to BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Saved metadata to BadgerDB for file %s at offset %d", filename, offset)
 	}
 	return nil
 }
@@ -322,13 +321,13 @@ func (m *Meta) SaveMetaDataToMem(filename string, chunk []byte, offset int64) {
 	defer m.mu.Unlock()
 
 	if _, ok := m.Files[filename]; !ok {
-		log.Debug("File not found in metadata, creating new entry: %s", filename)
+		log.Debugf("File not found in metadata, creating new entry: %s", filename)
 		m.Files[filename] = FileMetaData{
 			hashes:   make(map[int64]Hash),
 			filesize: 0,
 		}
 	} else {
-		log.Debug("File found in metadata: %s", filename)
+		log.Debugf("File found in metadata: %s", filename)
 	}
 	m.Files[filename].hashes[offset] = Hash{
 		Stronghash: m.hashChunk(chunk),
@@ -347,13 +346,13 @@ func (m *Meta) GetMetaData(filename string, offset int64) (Hash, error) {
 	if err == nil {
 		return h, err
 	} else {
-		log.Debug("Metadata not found in memory for file %s at offset %d", filename, offset)
+		log.Debugf("Metadata not found in memory for file %s at offset %d", filename, offset)
 	}
 	h, err = m.getMetaDataFromDB(filename, offset)
 	if err != nil {
 		return h, fmt.Errorf("failed to get metadata for file %s: %v", filename, err)
 	} else {
-		log.Debug("Retrieved metadata from BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Retrieved metadata from BadgerDB for file %s at offset %d", filename, offset)
 	}
 	return h, nil
 }
@@ -366,7 +365,7 @@ func (m *Meta) getMetaDataFromDB(filename string, offset int64) (Hash, error) {
 		if err != nil {
 			return err
 		} else {
-			log.Debug("Found metadata in BadgerDB for file %s at offset %d", filename)
+			log.Debugf("Found metadata in BadgerDB for file %s at offset %d", filename)
 		}
 		return item.Value(func(val []byte) error {
 			dec := gob.NewDecoder(bytes.NewReader(val))
@@ -374,7 +373,7 @@ func (m *Meta) getMetaDataFromDB(filename string, offset int64) (Hash, error) {
 			if err != nil {
 				return err
 			} else {
-				log.Debug("Decoded metadata from BadgerDB for file %s at offset %d", filename, offset)
+				log.Debugf("Decoded metadata from BadgerDB for file %s at offset %d", filename, offset)
 			}
 			return nil
 		})
@@ -382,7 +381,7 @@ func (m *Meta) getMetaDataFromDB(filename string, offset int64) (Hash, error) {
 	if err != nil {
 		return h, fmt.Errorf("failed to get metadata from BadgerDB: %v", err)
 	} else {
-		log.Debug("Retrieved metadata from BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Retrieved metadata from BadgerDB for file %s at offset %d", filename, offset)
 	}
 	return h, nil
 }
@@ -397,12 +396,12 @@ func (m *Meta) getMetaDataFromMem(filename string, offset int64) (Hash, error) {
 	if _, ok := m.Files[filename]; !ok {
 		return h, fmt.Errorf("file not found in metadata")
 	} else {
-		log.Debug("Found file in metadata: %s", filename)
+		log.Debugf("Found file in metadata: %s", filename)
 	}
 	if _, ok := m.Files[filename].hashes[offset]; !ok {
 		return h, fmt.Errorf("offset not found in metadata for file %s", filename)
 	} else {
-		log.Debug("Found offset in metadata for file %s: %d", filename, offset)
+		log.Debugf("Found offset in metadata for file %s: %d", filename, offset)
 	}
 	h = m.Files[filename].hashes[offset]
 	return h, nil
@@ -416,7 +415,7 @@ func (m *Meta) DeleteEntireFileMetaData(filename string) (error, error) {
 		err1 = m.DeleteMetaDataFromDB(filename, offset)
 	}
 	if _, exists := m.Files[filename]; exists {
-		log.Debug("Deleting metadata from in-memory map for file %s", filename)
+		log.Debugf("Deleting metadata from in-memory map for file %s", filename)
 		delete(m.Files, filename)
 	} else {
 		err2 = fmt.Errorf("metadata for file %s not found in memory", filename)
@@ -432,7 +431,7 @@ func (m *Meta) GetEntireFileMetaData(filename string) (map[int64]Hash, error) {
 	if _, ok := m.Files[filename]; !ok {
 		return nil, fmt.Errorf("file not found in metadata")
 	} else {
-		log.Debug("Found file in metadata: %s", filename)
+		log.Debugf("Found file in metadata: %s", filename)
 	}
 	return m.Files[filename].hashes, nil
 }
@@ -456,12 +455,12 @@ func (m *Meta) DeleteMetaData(filename string, offset int64) (error, error) {
 	if err1 := m.DeleteMetaDataFromMem(filename, offset); err1 != nil {
 		log.Errorf("Failed to delete metadata from in-memory map: %v", err1)
 	} else {
-		log.Debug("Deleted metadata from in-memory map for file %s at offset %d", filename, offset)
+		log.Debugf("Deleted metadata from in-memory map for file %s at offset %d", filename, offset)
 	}
 	if err2 := m.DeleteMetaDataFromDB(filename, offset); err2 != nil {
 		log.Errorf("Failed to delete metadata from BadgerDB: %v", err2)
 	} else {
-		log.Debug("Deleted metadata from BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Deleted metadata from BadgerDB for file %s at offset %d", filename, offset)
 	}
 	return err1, err2
 }
@@ -474,7 +473,7 @@ func (m *Meta) DeleteMetaDataFromDB(filename string, offset int64) error {
 	if err != nil {
 		return err
 	} else {
-		log.Debug("Deleted metadata from BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Deleted metadata from BadgerDB for file %s at offset %d", filename, offset)
 	}
 	return nil
 }
@@ -487,12 +486,12 @@ func (m *Meta) DeleteMetaDataFromMem(filename string, offset int64) error {
 	if _, ok := m.Files[filename]; !ok {
 		return fmt.Errorf("file not found in metadata")
 	} else {
-		log.Debug("Found file in metadata: %s", filename)
+		log.Debugf("Found file in metadata: %s", filename)
 	}
 	if _, ok := m.Files[filename].hashes[offset]; !ok {
 		return fmt.Errorf("offset not found in metadata")
 	} else {
-		log.Debug("Found offset in metadata for file %s: %d", filename, offset)
+		log.Debugf("Found offset in metadata for file %s: %d", filename, offset)
 	}
 	delete(m.Files[filename].hashes, offset)
 	return nil
@@ -515,7 +514,7 @@ func (m *Meta) TotalChunks(filename string) (int64, error) {
 	if !exists {
 		return 0, fmt.Errorf("file %s not found in metadata", filename)
 	} else {
-		log.Debug("Found file in metadata: %s", filename)
+		log.Debugf("Found file in metadata: %s", filename)
 	}
 	return fileMeta.TotalChunks(), nil
 }
