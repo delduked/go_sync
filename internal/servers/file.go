@@ -161,8 +161,9 @@ func (f *FileData) HandleFileModification(filePath string) {
 	if timer, exists := f.debounceTimers[filePath]; exists {
 		timer.Stop()
 	}
-
+	log.Debug("Handling file modification:", filePath)
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
+		log.Debug("Handling debounced file modification:", filePath)
 		f.handleDebouncedFileModification(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
@@ -175,6 +176,7 @@ func (f *FileData) handleDebouncedFileModification(filePath string) {
 	defer f.markFileAsComplete(filePath)
 
 	// Update metadata with isNewFile = false
+	log.Debug("Updating metadata for modified file:", filePath)
 	err := f.meta.CreateFileMetaData(filePath, false)
 	if err != nil {
 		log.Errorf("Failed to update metadata for %s: %v", filePath, err)
