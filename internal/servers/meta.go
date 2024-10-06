@@ -147,6 +147,7 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	}
 
 	// Open the file
+	log.Debug("Opening file: %s", fileName)
 	file, err := os.Open(fileName)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", fileName, err)
