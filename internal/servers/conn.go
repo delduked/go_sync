@@ -90,11 +90,11 @@ func (c *Conn) AddPeer(addr string) {
 	peer := &Peer{
 		ID:                     addr,
 		Addr:                   addr,
-		FileSyncRequestChannel: make(chan *pb.FileSyncRequest),
+		FileSyncRequestChannel: make(chan *pb.FileSyncRequest, 2000),
 		HealthCheckChannel:     make(chan *pb.Ping, 100),
-		MetadataRequestChannel: make(chan *pb.MetadataRequest),
-		ChunkRequestChannel:    make(chan *pb.ChunkRequest),
-		GetMissingFileChannel:  make(chan *pb.FileList),
+		MetadataRequestChannel: make(chan *pb.MetadataRequest, 2000),
+		ChunkRequestChannel:    make(chan *pb.ChunkRequest, 2000),
+		GetMissingFileChannel:  make(chan *pb.FileList, 2000),
 		doneChan:               make(chan struct{}),
 	}
 	c.peers[peer.ID] = peer
