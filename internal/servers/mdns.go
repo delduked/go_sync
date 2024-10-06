@@ -79,7 +79,7 @@ func (m *Mdns) Start(ctx context.Context, wg *sync.WaitGroup) {
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		for entry := range results {
 			if entry.Instance == instance {
-				log.Infof("Skipping own service instance: %s", entry.Instance)
+				log.Debug("Skipping own service instance: %s", entry.Instance)
 				continue // Skip own service
 			}
 			for _, ip := range entry.AddrIPv4 {

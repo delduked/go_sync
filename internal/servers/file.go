@@ -336,20 +336,20 @@ func (m *Meta) CompareMetadata(prev, curr *FileMetaData) (bool, []string) {
 func (f *FileData) markFileAsComplete(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-
+	log.Debug("Marking file as complete:", fileName)
 	delete(f.inProgress, fileName)
 }
 
 func (f *FileData) markFileAsInProgress(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-
+	log.Debug("Marking file as in progress:", fileName)
 	f.inProgress[fileName] = true
 }
 func (f *FileData) IsFileInProgress(fileName string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-
+	log.Debug("Checking if file is in progress:", fileName)
 	_, exists := f.inProgress[fileName]
 	return exists
 }
