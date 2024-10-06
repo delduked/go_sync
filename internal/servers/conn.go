@@ -41,7 +41,7 @@ func NewConn() *Conn {
 	return &Conn{
 
 		peers:    make(map[string]*Peer),
-		sendChan: make(chan any, 1000),
+		sendChan: make(chan any),
 	}
 }
 
@@ -90,11 +90,11 @@ func (c *Conn) AddPeer(addr string) {
 	peer := &Peer{
 		ID:                     addr,
 		Addr:                   addr,
-		FileSyncRequestChannel: make(chan *pb.FileSyncRequest, 100),
+		FileSyncRequestChannel: make(chan *pb.FileSyncRequest),
 		HealthCheckChannel:     make(chan *pb.Ping, 100),
-		MetadataRequestChannel: make(chan *pb.MetadataRequest, 100),
-		ChunkRequestChannel:    make(chan *pb.ChunkRequest, 100),
-		GetMissingFileChannel:  make(chan *pb.FileList, 100),
+		MetadataRequestChannel: make(chan *pb.MetadataRequest),
+		ChunkRequestChannel:    make(chan *pb.ChunkRequest),
+		GetMissingFileChannel:  make(chan *pb.FileList),
 		doneChan:               make(chan struct{}),
 	}
 	c.peers[peer.ID] = peer
