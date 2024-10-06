@@ -270,32 +270,32 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 
 // Handler for FileChunk messages
 func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
-	filePath := filepath.Join(g.syncDir, chunk.FileName)
-	defer g.file.markFileAsComplete(filePath)
+    filePath := filepath.Join(g.syncDir, chunk.FileName)
+    defer g.file.markFileAsComplete(chunk.FileName)
 
-	// Open the file for writing
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Printf("Failed to open file %s: %v", filePath, err)
-		return err
-	}
-	defer file.Close()
+    // Get the open file from FileData
+    file, err := g.file.getOpenFile(chunk.FileName)
+    if err != nil {
+        log.Printf("Failed to get open file %s: %v", filePath, err)
+        return err
+    }
 
-	// Write the chunk data at the specified offset
-	_, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
-	if err != nil {
-		log.Printf("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
-		return err
-	} else {
-		log.Debugf("Wrote chunk to file %s at offset %d", filePath, chunk.Offset)
-	}
+    // Write the chunk data at the specified offset
+    _, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
+    if err != nil {
+        log.Printf("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
+        return err
+    } else {
+        log.Debugf("Wrote chunk to file %s at offset %d", chunk.FileName, chunk.Offset)
+    }
 
-	// Update the metadata
-	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
+    // Update the metadata
+    g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
 
-	log.Printf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
-	return nil
+    log.Printf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
+    return nil
 }
+
 
 // handleFileDelete deletes the specified file.
 func (g *Grpc) handleFileDelete(fileDelete *pb.FileDelete) error {

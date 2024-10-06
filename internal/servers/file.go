@@ -23,6 +23,7 @@ type FileDataInterface interface {
 	CompareFileLists(localList, peerList *pb.FileList) []string
 	BuildLocalFileList() (*pb.FileList, error)
 	SetConn(conn ConnInterface)
+	getOpenFile(fileName string) (*os.File, error)
 }
 
 type FileData struct {
@@ -31,6 +32,7 @@ type FileData struct {
 	conn           ConnInterface
 	debounceTimers map[string]*time.Timer
 	inProgress     map[string]bool
+	openFiles      map[string]*os.File
 }
 
 func NewFile(meta MetaInterface, mdns MdnsInterface) *FileData {
@@ -39,6 +41,7 @@ func NewFile(meta MetaInterface, mdns MdnsInterface) *FileData {
 		// conn:           conn,
 		debounceTimers: make(map[string]*time.Timer),
 		inProgress:     make(map[string]bool),
+		openFiles:      make(map[string]*os.File),
 	}
 }
 func (f *FileData) SetConn(conn ConnInterface) {
@@ -340,20 +343,47 @@ func (m *Meta) CompareMetadata(prev, curr *FileMetaData) (bool, []string) {
 func (f *FileData) markFileAsComplete(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	log.Debugf("Marking file as complete:", fileName)
+	log.Debugf("Marking file as complete: %s", fileName)
 	delete(f.inProgress, fileName)
+
+	// Close the file if it's open
+	if file, exists := f.openFiles[fileName]; exists {
+		file.Close()
+		delete(f.openFiles, fileName)
+	}
 }
 
 func (f *FileData) markFileAsInProgress(fileName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	log.Debugf("Marking file as in progress:", fileName)
+	log.Debugf("Marking file as in progress: %s", fileName)
 	f.inProgress[fileName] = true
+
+	// Open the file for writing if not already open
+	if _, exists := f.openFiles[fileName]; !exists {
+		filePath := filepath.Join(conf.AppConfig.SyncFolder, fileName)
+		file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			log.Printf("Failed to open file %s: %v", filePath, err)
+			return
+		}
+		f.openFiles[fileName] = file
+	}
 }
+
 func (f *FileData) IsFileInProgress(fileName string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	log.Debugf("Checking if file is in progress:", fileName)
 	_, exists := f.inProgress[fileName]
 	return exists
+}
+
+func (f *FileData) getOpenFile(fileName string) (*os.File, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if file, exists := f.openFiles[fileName]; exists {
+		return file, nil
+	}
+	return nil, fmt.Errorf("file %s is not open", fileName)
 }

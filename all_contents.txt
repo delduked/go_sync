@@ -1651,9 +1651,6 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Get existing file metadata
 	fileMeta, exists := m.Files[fileName]
 	if !exists {
 		// File is new, initialize metadata
@@ -1664,6 +1661,7 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 		m.Files[fileName] = fileMeta
 		log.Debugf("Initialized metadata for new file: %s", fileName)
 	}
+	m.mu.Unlock()
 
 	if exists && fileMeta.lastModified.Equal(fileInfo.ModTime()) {
 		// File hasn't changed since last processing
@@ -1672,7 +1670,10 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	}
 
 	// Update lastModified
+	m.mu.Lock()
 	fileMeta.lastModified = fileInfo.ModTime()
+	m.Files[fileName] = fileMeta
+	m.mu.Unlock()
 	log.Debugf("Updated last modified time for file: %s", fileName)
 
 	// Buffer to hold file chunks
@@ -1702,10 +1703,12 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 		log.Debugf("Strong hash: %s", newStrongHash)
 
 		// Compare with existing hash
+		m.mu.Lock()
 		oldHash, hasOldHash := fileMeta.hashes[offset]
+		m.mu.Unlock()
 		log.Debugf("Old hash: %v", oldHash)
-		chunkModified := !hasOldHash || oldHash.Weakhash != newWeakHash || oldHash.Stronghash != newStrongHash
 
+		chunkModified := !hasOldHash || oldHash.Weakhash != newWeakHash || oldHash.Stronghash != newStrongHash
 		if chunkModified {
 			log.Debugf("Chunk modified at offset %d", offset)
 			// Update metadata
@@ -1714,7 +1717,10 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 				Weakhash:   newWeakHash,
 			}
 			// Save metadata to DB
-			m.SaveMetaData(fileName, buffer[:bytesRead], offset, isNewFile)
+			err := m.SaveMetaData(fileName, buffer[:bytesRead], offset, isNewFile)
+			if err != nil {
+				return fmt.Errorf("failed to save metadata: %w", err)
+			}
 		}
 
 		// After the first chunk, set isNewFile to false
@@ -1727,15 +1733,17 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 	}
 
 	// Remove any chunks beyond the current file size
+	m.mu.Lock()
 	for oldOffset := range fileMeta.hashes {
 		if oldOffset >= fileInfo.Size() {
 			m.DeleteMetaData(fileName, oldOffset)
 		}
 	}
-
 	// Update file size
 	fileMeta.filesize = fileInfo.Size()
 	m.Files[fileName] = fileMeta
+	m.mu.Unlock()
+
 	log.Debugf("Updated file size for file %s: %d", fileName, fileInfo.Size())
 	return nil
 }
