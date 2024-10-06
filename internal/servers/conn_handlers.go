@@ -1,7 +1,7 @@
 package servers
 
 import (
-	"log"
+	"github.com/charmbracelet/log"
 
 	pb "github.com/TypeTerrors/go_sync/proto"
 )
@@ -13,7 +13,8 @@ func (c *Conn) handleFileSyncResponse(peer *Peer, msg *pb.FileSyncResponse) {
 }
 func (c *Conn) handleHealthCheckResponse(msg *pb.Pong) {
 	// Implement your logic here
-	log.Printf(msg.Message)
+	log.Info(msg.Message)
+	
 }
 
 func (c *Conn) handleMetadataResponse(peer *Peer, msg *pb.MetadataResponse) {
