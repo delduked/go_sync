@@ -59,7 +59,7 @@ func (g *Grpc) Start() {
 	g.wg.Add(1)
 	go func() {
 		defer g.wg.Done()
-		log.Printf("Starting gRPC server on port %s...", g.port)
+		log.Infof("Starting gRPC server on port %s...", g.port)
 		pb.RegisterFileSyncServiceServer(g.grpcServer, g) // Registering on s.grpcServer
 		if err := g.grpcServer.Serve(g.listener); err != nil {
 			panic(fmt.Sprintf("failed to serve gRPC server: %v", err))
@@ -189,7 +189,7 @@ func (g *Grpc) RequestChunks(stream pb.FileSyncService_RequestChunksServer) erro
 		filePath := filepath.Join(g.syncDir, fileName)
 		file, err := os.Open(filePath)
 		if err != nil {
-			log.Printf("Error opening file %s: %v", filePath, err)
+			log.Infof("Error opening file %s: %v", filePath, err)
 			continue
 		}
 		defer file.Close()
@@ -199,7 +199,7 @@ func (g *Grpc) RequestChunks(stream pb.FileSyncService_RequestChunksServer) erro
 			log.Debugf("Reading chunk at offset %d for file %s", offset, fileName)
 			n, err := file.ReadAt(chunkData, offset)
 			if err != nil && err != io.EOF {
-				log.Printf("Error reading file %s at offset %d: %v", filePath, offset, err)
+				log.Infof("Error reading file %s at offset %d: %v", filePath, offset, err)
 				continue
 			}
 
@@ -270,32 +270,31 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 
 // Handler for FileChunk messages
 func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
-    filePath := chunk.FileName
-    defer g.file.markFileAsComplete(filePath)
+	filePath := chunk.FileName
+	defer g.file.markFileAsComplete(filePath)
 
-    // Get the open file from FileData
-    file, err := g.file.getOpenFile(filePath)
-    if err != nil {
-        log.Printf("Failed to get open file %s: %v", filePath, err)
-        return err
-    }
+	// Get the open file from FileData
+	file, err := g.file.getOpenFile(filePath)
+	if err != nil {
+		log.Infof("Failed to get open file %s: %v", filePath, err)
+		return err
+	}
 
-    // Write the chunk data at the specified offset
-    _, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
-    if err != nil {
-        log.Printf("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
-        return err
-    } else {
-        log.Debugf("Wrote chunk to file %s at offset %d", filePath, chunk.Offset)
-    }
+	// Write the chunk data at the specified offset
+	_, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
+	if err != nil {
+		log.Infof("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
+		return err
+	} else {
+		log.Debugf("Wrote chunk to file %s at offset %d", filePath, chunk.Offset)
+	}
 
-    // Update the metadata
-    g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
+	// Update the metadata
+	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
 
-    log.Printf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
-    return nil
+	log.Infof("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
+	return nil
 }
-
 
 // handleFileDelete deletes the specified file.
 func (g *Grpc) handleFileDelete(fileDelete *pb.FileDelete) error {
@@ -304,15 +303,15 @@ func (g *Grpc) handleFileDelete(fileDelete *pb.FileDelete) error {
 		// Delete specific chunk
 		err := g.DeleteFileChunk(filePath, fileDelete.Offset)
 		if err != nil {
-			log.Printf("Error deleting chunk at offset %d in file %s: %v", fileDelete.Offset, filePath, err)
+			log.Infof("Error deleting chunk at offset %d in file %s: %v", fileDelete.Offset, filePath, err)
 			return err
 		}
-		log.Printf("Deleted chunk at offset %d in file %s as per request", fileDelete.Offset, filePath)
+		log.Infof("Deleted chunk at offset %d in file %s as per request", fileDelete.Offset, filePath)
 	} else {
 		// Delete entire file
 		err := os.Remove(filePath)
 		if err != nil {
-			log.Printf("Error deleting file %s: %v", filePath, err)
+			log.Infof("Error deleting file %s: %v", filePath, err)
 			return err
 		}
 
@@ -320,7 +319,7 @@ func (g *Grpc) handleFileDelete(fileDelete *pb.FileDelete) error {
 
 		g.file.markFileAsComplete(filePath)
 
-		log.Printf("Deleted file %s as per request", filePath)
+		log.Infof("Deleted file %s as per request", filePath)
 	}
 
 	return nil
@@ -357,10 +356,10 @@ func (g *Grpc) handleFileTruncate(fileTruncate *pb.FileTruncate) error {
 	filePath := filepath.Join(g.syncDir, filepath.Clean(fileTruncate.FileName))
 	err := os.Truncate(filePath, fileTruncate.Size)
 	if err != nil {
-		log.Printf("Error truncating file %s to size %d: %v", filePath, fileTruncate.Size, err)
+		log.Infof("Error truncating file %s to size %d: %v", filePath, fileTruncate.Size, err)
 		return err
 	}
-	log.Printf("Truncated file %s to size %d as per request", filePath, fileTruncate.Size)
+	log.Infof("Truncated file %s to size %d as per request", filePath, fileTruncate.Size)
 	return nil
 }
 
@@ -417,7 +416,7 @@ func (g *Grpc) DeleteFileChunk(filePath string, offset int64) error {
 		return fmt.Errorf("error deleting metadata: %v, %v", err1, err2)
 	}
 
-	log.Printf("Deleted chunk at offset %d from file %s", offset, filePath)
+	log.Infof("Deleted chunk at offset %d from file %s", offset, filePath)
 	return nil
 }
 
@@ -439,14 +438,14 @@ func (g *Grpc) transferFile(filePath string, stream pb.FileSyncService_GetMissin
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		log.Printf("Error opening file %s for transfer: %v", filePath, err)
+		log.Infof("Error opening file %s for transfer: %v", filePath, err)
 		return
 	}
 	defer file.Close()
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		log.Printf("Error getting file info for %s: %v", filePath, err)
+		log.Infof("Error getting file info for %s: %v", filePath, err)
 		return
 	}
 	fileSize := fileInfo.Size()
@@ -457,7 +456,7 @@ func (g *Grpc) transferFile(filePath string, stream pb.FileSyncService_GetMissin
 	for {
 		n, err := file.ReadAt(buf, offset)
 		if err != nil && err != io.EOF {
-			log.Printf("Error reading file %s: %v", filePath, err)
+			log.Infof("Error reading file %s: %v", filePath, err)
 			return
 		}
 		if n == 0 {
@@ -466,7 +465,7 @@ func (g *Grpc) transferFile(filePath string, stream pb.FileSyncService_GetMissin
 
 		totalchunks, err := g.meta.TotalChunks(filePath)
 		if err != nil {
-			log.Printf("Error getting total chunks for file %s: %v", filePath, err)
+			log.Infof("Error getting total chunks for file %s: %v", filePath, err)
 			return
 		}
 
@@ -486,5 +485,5 @@ func (g *Grpc) transferFile(filePath string, stream pb.FileSyncService_GetMissin
 		}
 	}
 
-	log.Printf("File %s transfer complete", filePath)
+	log.Infof("File %s transfer complete", filePath)
 }

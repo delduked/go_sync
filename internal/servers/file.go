@@ -54,7 +54,7 @@ func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Wat
 		return nil, err
 	}
 
-	log.Printf("Watching directory: %s", conf.AppConfig.SyncFolder)
+	log.Infof("Watching directory: %s", conf.AppConfig.SyncFolder)
 	err = watcher.Add(conf.AppConfig.SyncFolder)
 	if err != nil {
 		return nil, err
@@ -72,13 +72,13 @@ func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Wat
 
 				switch {
 				case event.Op&fsnotify.Create == fsnotify.Create:
-					log.Info("File created: %s", event.Name)
+					log.Infof("File created: %s", event.Name)
 					go f.HandleFileCreation(event.Name)
 				case event.Op&fsnotify.Write == fsnotify.Write:
-					log.Info("File modified: %s", event.Name)
+					log.Infof("File modified: %s", event.Name)
 					go f.HandleFileModification(event.Name)
 				case event.Op&fsnotify.Remove == fsnotify.Remove:
-					log.Info("File deleted: %s", event.Name)
+					log.Infof("File deleted: %s", event.Name)
 					go f.HandleFileDeletion(event.Name)
 				}
 
@@ -363,7 +363,7 @@ func (f *FileData) markFileAsInProgress(fileName string) {
 	if _, exists := f.openFiles[fileName]; !exists {
 		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
-			log.Printf("Failed to open file %s: %v", fileName, err)
+			log.Infof("Failed to open file %s: %v", fileName, err)
 			return
 		}
 		f.openFiles[fileName] = file
