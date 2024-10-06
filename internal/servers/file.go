@@ -3,7 +3,6 @@ package servers
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -14,26 +13,36 @@ import (
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"github.com/fsnotify/fsnotify"
-	"google.golang.org/grpc"
 )
 
+// FileDataInterface defines methods that other services need from FileData
+type FileDataInterface interface {
+	markFileAsInProgress(fileName string)
+	markFileAsComplete(fileName string)
+	IsFileInProgress(fileName string) bool
+	CompareFileLists(localList, peerList *pb.FileList) []string
+	BuildLocalFileList() (*pb.FileList, error)
+	SetConn(conn ConnInterface)
+}
+
 type FileData struct {
-	meta           *Meta
-	mdns           *Mdns
+	meta           MetaInterface
 	mu             sync.RWMutex
-	conn           *Conn
+	conn           ConnInterface
 	debounceTimers map[string]*time.Timer
 	inProgress     map[string]bool
 }
 
-func NewFile(meta *Meta, mdns *Mdns, conn *Conn) *FileData {
+func NewFile(meta MetaInterface, mdns MdnsInterface) *FileData {
 	return &FileData{
-		meta:           meta,
-		mdns:           mdns,
-		conn:           conn,
+		meta: meta,
+		// conn:           conn,
 		debounceTimers: make(map[string]*time.Timer),
 		inProgress:     make(map[string]bool),
 	}
+}
+func (f *FileData) SetConn(conn ConnInterface) {
+	f.conn = conn
 }
 
 func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Watcher, error) {
@@ -229,37 +238,18 @@ func (f *FileData) handleDebouncedFileDeletion(filePath string) {
 // and then the peer can calculate which files i am missing
 // and I can receive the files from the peer that I need
 func (f *FileData) SyncWithPeers() {
-	localFileList, err := f.buildLocalFileList()
+	localFileList, err := f.BuildLocalFileList()
 	if err != nil {
 		log.Errorf("Failed to build local file list: %v", err)
 		return
 	}
-	// need to make a channel to receive response.
-	// can filter responses by type to determine fruther logic after response mssage is received
-
-	// peerFileList, err := f.getPeerfilelist(conn.Conn)
-	// if err != nil {
-	// 	log.Errorf("Failed to get file list from %s: %v", conn.Conn.Target(), err)
-	// 	continue
-	// }
 
 	f.conn.SendMessage(&pb.FileList{
 		Files: localFileList.Files,
 	})
-
-	// missingFiles := f.CompareFileLists(localFileList, peerFileList)
-	// if len(missingFiles) > 0 {
-	// 	// f.RequestMissingFiles(conn, missingFiles)
-	// 	for _, fileName := range missingFiles {
-	// 		f.conn.SendMessage(FileTransfer{
-	// 			FileName: fileName,
-	// 		})
-	// 	}
-	// }
-
 }
 
-func (f *FileData) buildLocalFileList() (*pb.FileList, error) {
+func (f *FileData) BuildLocalFileList() (*pb.FileList, error) {
 	// Similar to buildFileList in the server implementation
 	// Reuse the code or refactor to a common utility function
 	files, err := pkg.GetFileList() // Function to get local file paths
@@ -285,22 +275,7 @@ func (f *FileData) buildLocalFileList() (*pb.FileList, error) {
 		Files: fileEntries,
 	}, nil
 }
-func (f *FileData) RequestMissingFiles(conn *grpc.ClientConn, missingFiles []string) {
-	client := pb.NewFileSyncServiceClient(conn)
-	for _, fileName := range missingFiles {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 
-		_, err := client.GetFile(ctx, &pb.RequestFileTransfer{
-			FileName: fileName,
-		})
-		if err != nil {
-			log.Errorf("Failed to request file %s from %s: %v", fileName, conn.Target(), err)
-		} else {
-			log.Infof("Requested file %s from %s", fileName, conn.Target())
-		}
-	}
-}
 func (f *FileData) CompareFileLists(localList, peerList *pb.FileList) []string {
 	localFiles := make(map[string]*pb.FileEntry)
 	for _, entry := range localList.Files {
@@ -320,75 +295,6 @@ func (f *FileData) CompareFileLists(localList, peerList *pb.FileList) []string {
 	}
 
 	return missingFiles
-}
-
-func (f *FileData) getPeerfilelist(conn *grpc.ClientConn) (*pb.FileList, error) {
-	client := pb.NewFileSyncServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	resp, err := client.GetFileList(ctx, &pb.GetFileListRequest{})
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.GetFileList(), nil
-}
-
-// this functino is obsolete, need to use new route GetMissingFiles to receive missing files from peer
-func (f *FileData) transferFile(filePath string, isNewFile bool) {
-	f.markFileAsInProgress(filePath)
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Printf("Error opening file %s for transfer: %v", filePath, err)
-		return
-	}
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		log.Printf("Error getting file info for %s: %v", filePath, err)
-		return
-	}
-	fileSize := fileInfo.Size()
-	// totalChunks := (fileSize + conf.AppConfig.ChunkSize - 1) / conf.AppConfig.ChunkSize
-
-	buf := make([]byte, conf.AppConfig.ChunkSize)
-	var offset int64 = 0
-
-	for {
-		n, err := file.ReadAt(buf, offset)
-		if err != nil && err != io.EOF {
-			log.Printf("Error reading file %s: %v", filePath, err)
-			return
-		}
-		if n == 0 {
-			break
-		}
-
-		f.conn.SendMessage(&pb.FileSyncRequest{
-			Request: &pb.FileSyncRequest_FileChunk{
-				FileChunk: &pb.FileChunk{
-					FileName:    filePath,
-					ChunkData:   buf[:n],
-					Offset:      offset,
-					IsNewFile:   isNewFile,
-					TotalChunks: f.meta.Files[filePath].TotalChunks(),
-					TotalSize:   fileSize,
-				},
-			},
-		})
-
-		offset += int64(n)
-
-		if isNewFile {
-			isNewFile = false
-		}
-	}
-
-	f.markFileAsComplete(filePath)
-	log.Printf("File %s transfer complete", filePath)
 }
 
 // CompareMetadata compares previous and current metadata.

@@ -19,22 +19,30 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
+// MetaInterface defines methods that other services need from Meta
+type MetaInterface interface {
+	CreateFileMetaData(fileName string, isNewFile bool) error
+	DeleteEntireFileMetaData(filename string) (error, error)
+	GetEntireFileMetaData(filename string) (map[int64]Hash, error)
+	SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool) error // ... other methods as needed
+	SaveMetaDataToDB(filename string, chunk []byte, offset int64) error
+	SaveMetaDataToMem(filename string, chunk []byte, offset int64)
+	DeleteMetaDataFromDB(filename string, offset int64) error
+	DeleteMetaDataFromMem(filename string, offset int64) error
+
+	// Other services need access to the Files map, so we need to expose it using a method
+	TotalChunks(filename string) (int64, error)
+	SetConn(conn ConnInterface)
+}
+
 type Meta struct {
 	ChunkSize int64
 	Files     map[string]FileMetaData // map[filename][offset]Hash
-	mdns      *Mdns
-	db        *badger.DB // BadgerDB instance
-	mu        sync.Mutex
-	done      chan struct{}
-	conn      *Conn
-}
-
-// Used for comparing metadata between old scan and new scan
-// If the metadata was found to be different
-type MetaData struct {
-	filename string
-	offset   int64
-	filesize int64
+	// mdns      *Mdns
+	db   *badger.DB // BadgerDB instance
+	mu   sync.Mutex
+	done chan struct{}
+	conn ConnInterface
 }
 
 type FileMetaData struct {
@@ -61,14 +69,13 @@ func (h Hash) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func NewMeta(db *badger.DB, mdns *Mdns, conn *Conn) *Meta {
+func NewMeta(db *badger.DB, mdns *Mdns) *Meta {
 	return &Meta{
 		Files: make(map[string]FileMetaData),
-		mdns:  mdns,
 		db:    db,
 		mu:    sync.Mutex{},
-		conn:  conn,
-		done:  make(chan struct{}), // Initialize the done channel
+		// conn:  conn,
+		done: make(chan struct{}), // Initialize the done channel
 	}
 }
 
@@ -111,6 +118,10 @@ func (m *Meta) Start(wg *sync.WaitGroup, ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (m *Meta) SetConn(conn ConnInterface) {
+	m.conn = conn
 }
 
 func (m *Meta) ScanSyncFolder() error {
@@ -156,7 +167,7 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 		// File is new, initialize metadata
 		fileMeta = FileMetaData{
 			hashes:   make(map[int64]Hash),
-			filesize: 0,
+			filesize: fileInfo.Size(),
 		}
 		m.Files[fileName] = fileMeta
 	}
@@ -239,8 +250,8 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 	}
 
 	// Save new metadata
-	m.saveMetaDataToMem(filename, chunk, offset)
-	m.saveMetaDataToDB(filename, chunk, offset)
+	m.SaveMetaDataToMem(filename, chunk, offset)
+	m.SaveMetaDataToDB(filename, chunk, offset)
 
 	m.conn.SendMessage(&pb.FileSyncRequest{
 		Request: &pb.FileSyncRequest_FileChunk{
@@ -259,7 +270,7 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 }
 
 // saveMetaDataToDB will save the metadata to the database using the filename and the offset to determine the chunk position
-func (m *Meta) saveMetaDataToDB(filename string, chunk []byte, offset int64) error {
+func (m *Meta) SaveMetaDataToDB(filename string, chunk []byte, offset int64) error {
 
 	err := m.db.Update(func(txn *badger.Txn) error {
 		return txn.SetEntry(&badger.Entry{
@@ -277,7 +288,7 @@ func (m *Meta) saveMetaDataToDB(filename string, chunk []byte, offset int64) err
 }
 
 // saveMetaDataToMem will save the metadata to the in-memory map using the filename and the offset to determine the chunk position
-func (m *Meta) saveMetaDataToMem(filename string, chunk []byte, offset int64) {
+func (m *Meta) SaveMetaDataToMem(filename string, chunk []byte, offset int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -356,7 +367,7 @@ func (m *Meta) DeleteEntireFileMetaData(filename string) (error, error) {
 	defer m.mu.Unlock()
 	var err1, err2 error
 	for offset := range m.Files[filename].hashes {
-		err1 = m.deleteMetaDataFromDB(filename, offset)
+		err1 = m.DeleteMetaDataFromDB(filename, offset)
 	}
 	if _, exists := m.Files[filename]; exists {
 		delete(m.Files, filename)
@@ -387,23 +398,23 @@ func (m *Meta) DeleteMetaData(filename string, offset int64) (error, error) {
 		Request: &pb.FileSyncRequest_FileDelete{
 			FileDelete: &pb.FileDelete{
 				FileName: filename,
-				Offset:  offset,
+				Offset:   offset,
 			},
 		},
 	})
 
 	var err1, err2 error
-	if err1 := m.deleteMetaDataFromMem(filename, offset); err1 != nil {
+	if err1 := m.DeleteMetaDataFromMem(filename, offset); err1 != nil {
 		log.Errorf("Failed to delete metadata from in-memory map: %v", err1)
 	}
-	if err2 := m.deleteMetaDataFromDB(filename, offset); err2 != nil {
+	if err2 := m.DeleteMetaDataFromDB(filename, offset); err2 != nil {
 		log.Errorf("Failed to delete metadata from BadgerDB: %v", err2)
 	}
 	return err1, err2
 }
 
 // deleteMetaDataFromDB will delete the metadata from the database using the filename and the offset to determine the chunk position
-func (m *Meta) deleteMetaDataFromDB(filename string, offset int64) error {
+func (m *Meta) DeleteMetaDataFromDB(filename string, offset int64) error {
 	err := m.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete([]byte(fmt.Sprintf("%s_%d", filename, offset)))
 	})
@@ -414,7 +425,7 @@ func (m *Meta) deleteMetaDataFromDB(filename string, offset int64) error {
 }
 
 // deleteMetaDataFromMem will delete the metadata from the in-memory map using the filename and the offset to determine the chunk position
-func (m *Meta) deleteMetaDataFromMem(filename string, offset int64) error {
+func (m *Meta) DeleteMetaDataFromMem(filename string, offset int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -434,4 +445,16 @@ func (m *Meta) hashChunk(chunk []byte) string {
 	hash := xxh3.Hash128(chunk)
 	// Format the 128-bit hash into a hexadecimal string
 	return fmt.Sprintf("%016x%016x", hash.Lo, hash.Hi)
+}
+
+// In MetaInterface
+func (m *Meta) TotalChunks(filename string) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	fileMeta, exists := m.Files[filename]
+	if !exists {
+		return 0, fmt.Errorf("file %s not found in metadata", filename)
+	}
+	return fileMeta.TotalChunks(), nil
 }

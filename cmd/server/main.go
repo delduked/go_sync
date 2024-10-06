@@ -94,30 +94,44 @@ func initDB() *badger.DB {
 }
 
 func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileData, *servers.Conn, *servers.Grpc) {
-	conn := servers.NewConn()
-	mdns := servers.NewMdns(conn)
-	meta := servers.NewMeta(db, mdns, conn)
-	file := servers.NewFile(meta, mdns, conn)
+	// Initialize services without dependencies that cause circular references
+	mdns := servers.NewMdns()
+	meta := servers.NewMeta(db, mdns)
+	file := servers.NewFile(meta, mdns)
 	grpc := servers.NewGrpc(conf.AppConfig.SyncFolder, mdns, meta, file, conf.AppConfig.Port)
+
+	// Now initialize conn, passing in required interfaces
+	conn := servers.NewConn()
+
+	// Set conn in services that need it via setter methods
+	mdns.SetConn(conn)
+	meta.SetConn(conn)
+	file.SetConn(conn)
+
 	return mdns, meta, file, conn, grpc
 }
 
+
 func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn, grpc *servers.Grpc) {
+	// Start Grpc
+	grpc.Start()
 
-	go grpc.Start()
-
+	// Scan existing files
 	meta.Scan()
 
+	// Start Mdns
 	wg.Add(1)
 	go mdns.Start(ctx, wg)
 
-	go conn.Start()
+	// Start Conn
+	conn.Start()
 
+	// Start Mdns Ping
 	go mdns.Ping(ctx, wg)
 
+	// Start FileData
 	wg.Add(1)
 	go file.Start(ctx, wg)
-
 }
 
 func waitForShutdownSignal(cancel context.CancelFunc) {

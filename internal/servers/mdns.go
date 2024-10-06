@@ -16,17 +16,22 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
+type MdnsInterface interface {
+	LocalIp() string
+	SetConn(conn ConnInterface)
+}
+
 // Mdns handles mDNS service discovery and integrates with ConnManager.
 type Mdns struct {
 	LocalIP     string
 	Subnet      string
 	SyncedFiles map[string]bool // Set to track files being synchronized
-	conn        *Conn
+	conn        ConnInterface
 	wg          *sync.WaitGroup
 }
 
 // NewMdns initializes a new Mdns service with a reference to ConnManager.
-func NewMdns(conn *Conn) *Mdns {
+func NewMdns() *Mdns {
 	localIP, subnet, err := pkg.GetLocalIPAndSubnet()
 	if err != nil {
 		log.Fatalf("Failed to get local IP and subnet: %v", err)
@@ -36,8 +41,11 @@ func NewMdns(conn *Conn) *Mdns {
 		SyncedFiles: make(map[string]bool),
 		LocalIP:     localIP,
 		Subnet:      subnet,
-		conn:        conn,
+		// conn:        conn,
 	}
+}
+func (m *Mdns) SetConn(conn ConnInterface) {
+	m.conn = conn
 }
 
 // Start begins the mDNS service discovery.
@@ -136,4 +144,8 @@ func (m *Mdns) Ping(ctx context.Context, wg *sync.WaitGroup) {
 			}
 		}
 	}()
+}
+
+func (m *Mdns) LocalIp() string {
+	return m.LocalIP
 }

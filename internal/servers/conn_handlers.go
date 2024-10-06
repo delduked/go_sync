@@ -26,8 +26,8 @@ func (c *Conn) handleGetMissingFileResponse(peer *Peer, msg *pb.FileChunk) {
 	log.Printf("Received ChunkResponse from peer %s for file %s at offset %d", peer.ID, msg.FileName, msg.Offset)
 	// Write the chunk data to file, verify integrity, etc.
 
-	c.grpc.file.markFileAsInProgress(msg.FileName)
-	c.grpc.handleFileChunk(msg)
+	c.file.markFileAsInProgress(msg.FileName)
+	c.handleFileChunk(msg)
 }
 
 func (c *Conn) handleChunkResponse(peer *Peer, msg *pb.ChunkResponse) {

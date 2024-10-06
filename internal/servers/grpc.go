@@ -1,7 +1,6 @@
 package servers
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -11,28 +10,32 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
-	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/charmbracelet/log"
 )
 
+// GrpcInterface defines methods that other services need from Grpc
+type GrpcInterface interface {
+	Start()
+	Stop()
+	HandleFileChunk(chunk *pb.FileChunk) error
+}
+
 type Grpc struct {
 	pb.UnimplementedFileSyncServiceServer
 	grpcServer *grpc.Server
-	mdns       *Mdns
-	meta       *Meta
-	file       *FileData
+	mdns       MdnsInterface
+	meta       MetaInterface
+	file       FileDataInterface
 	listener   net.Listener
 	syncDir    string
 	port       string
 	wg         *sync.WaitGroup
 }
 
-func NewGrpc(syncDir string, mdns *Mdns, meta *Meta, file *FileData, port string) *Grpc {
+func NewGrpc(syncDir string, mdns *Mdns, meta MetaInterface, file FileDataInterface, port string) *Grpc {
 
 	// Create TCP listener
 	listener, err := net.Listen("tcp", ":"+port)
@@ -99,11 +102,11 @@ func (g *Grpc) SyncFile(stream pb.FileSyncService_SyncFileServer) error {
 			}
 			if req.FileDelete.Offset != 0 {
 				stream.Send(&pb.FileSyncResponse{
-					Message: fmt.Sprintf("Chunk %s deleted in file %v on peer %v", req.FileDelete.FileName, req.FileDelete.Offset, g.mdns.LocalIP),
+					Message: fmt.Sprintf("Chunk %s deleted in file %v on peer %v", req.FileDelete.FileName, req.FileDelete.Offset, g.mdns.LocalIp()),
 				})
 			} else {
 				stream.Send(&pb.FileSyncResponse{
-					Message: fmt.Sprintf("File %s deleted on peer %v", req.FileDelete.FileName, g.mdns.LocalIP),
+					Message: fmt.Sprintf("File %s deleted on peer %v", req.FileDelete.FileName, g.mdns.LocalIp()),
 				})
 			}
 		case *pb.FileSyncRequest_FileTruncate:
@@ -210,40 +213,40 @@ func (g *Grpc) RequestChunks(stream pb.FileSyncService_RequestChunksServer) erro
 	}
 }
 
-func (g *Grpc) GetFileList(ctx context.Context, req *pb.GetFileListRequest) (*pb.GetFileListResponse, error) {
-	fileList, err := g.buildFileList()
-	if err != nil {
-		return nil, err
-	}
-	return &pb.GetFileListResponse{
-		FileList: fileList,
-	}, nil
-}
+// func (g *Grpc) GetFileList(ctx context.Context, req *pb.GetFileListRequest) (*pb.GetFileListResponse, error) {
+// 	fileList, err := g.buildFileList()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &pb.GetFileListResponse{
+// 		FileList: fileList,
+// 	}, nil
+// }
 
-func (g *Grpc) buildFileList() (*pb.FileList, error) {
-	files, err := pkg.GetFileList() // Function to get local file paths
-	if err != nil {
-		return nil, err
-	}
+// func (g *Grpc) buildFileList() (*pb.FileList, error) {
+// 	files, err := pkg.GetFileList() // Function to get local file paths
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	var fileEntries []*pb.FileEntry
-	for _, filePath := range files {
-		fileInfo, err := os.Stat(filePath)
-		if err != nil {
-			continue // Skip if unable to stat file
-		}
+// 	var fileEntries []*pb.FileEntry
+// 	for _, filePath := range files {
+// 		fileInfo, err := os.Stat(filePath)
+// 		if err != nil {
+// 			continue // Skip if unable to stat file
+// 		}
 
-		fileEntries = append(fileEntries, &pb.FileEntry{
-			FileName:     filepath.Base(filePath),
-			FileSize:     fileInfo.Size(),
-			LastModified: fileInfo.ModTime().Unix(),
-		})
-	}
+// 		fileEntries = append(fileEntries, &pb.FileEntry{
+// 			FileName:     filepath.Base(filePath),
+// 			FileSize:     fileInfo.Size(),
+// 			LastModified: fileInfo.ModTime().Unix(),
+// 		})
+// 	}
 
-	return &pb.FileList{
-		Files: fileEntries,
-	}, nil
-}
+// 	return &pb.FileList{
+// 		Files: fileEntries,
+// 	}, nil
+// }
 
 func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 	for {
@@ -257,39 +260,9 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 		// log.Infof(recv.Message)
 
 		stream.Send(&pb.Pong{
-			Message: fmt.Sprintf("Pong from %v at %v", g.mdns.LocalIP, time.Now().Unix()),
+			Message: fmt.Sprintf("Pong from %v at %v", g.mdns.LocalIp(), time.Now().Unix()),
 		})
 	}
-}
-
-func (g *Grpc) GetFile(ctx context.Context, req *pb.RequestFileTransfer) (*pb.EmptyResponse, error) {
-	fileName := req.GetFileName()
-	filePath := filepath.Join(g.syncDir, fileName)
-
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return nil, status.Errorf(codes.NotFound, "File %s not found", fileName)
-	}
-
-	// Start transferring the file to the requester
-	go g.file.transferFile(filePath, true) // Assuming transferFile sends to all peers, modify if needed
-
-	return &pb.EmptyResponse{}, nil
-}
-
-func (g *Grpc) RequestFileTransfer(ctx context.Context, req *pb.RequestFileTransfer) (*pb.EmptyResponse, error) {
-	fileName := req.GetFileName()
-	filePath := filepath.Join(g.syncDir, fileName)
-
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return nil, status.Errorf(codes.NotFound, "File %s not found", fileName)
-	}
-
-	// Start transferring the file to the requester
-	go g.file.transferFile(filePath, true) // Assuming transferFile sends to all peers, modify if needed
-
-	return &pb.EmptyResponse{}, nil
 }
 
 // Handler for FileChunk messages
@@ -359,7 +332,7 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 			return err
 		}
 
-		localFileList, err := g.file.buildLocalFileList()
+		localFileList, err := g.file.BuildLocalFileList()
 		if err != nil {
 			log.Errorf("Failed to build local file list: %v", err)
 			return err
@@ -444,15 +417,15 @@ func (g *Grpc) DeleteFileChunk(filePath string, offset int64) error {
 }
 
 func (g *Grpc) DeleteMetadata(filePath string, offset int64) (error, error) {
-	err1 := g.meta.deleteMetaDataFromMem(filePath, offset)
-	err2 := g.meta.deleteMetaDataFromDB(filePath, offset)
+	err1 := g.meta.DeleteMetaDataFromMem(filePath, offset)
+	err2 := g.meta.DeleteMetaDataFromDB(filePath, offset)
 	return err1, err2
 }
 
 func (g *Grpc) SaveMetaData(filename string, chunk []byte, offset int64) error {
 	// Save new metadata
-	g.meta.saveMetaDataToMem(filename, chunk, offset)
-	g.meta.saveMetaDataToDB(filename, chunk, offset)
+	g.meta.SaveMetaDataToMem(filename, chunk, offset)
+	g.meta.SaveMetaDataToDB(filename, chunk, offset)
 
 	return nil
 }
@@ -486,12 +459,18 @@ func (g *Grpc) transferFile(filePath string, stream pb.FileSyncService_GetMissin
 			break
 		}
 
+		totalchunks, err := g.meta.TotalChunks(filePath)
+		if err != nil {
+			log.Printf("Error getting total chunks for file %s: %v", filePath, err)
+			return
+		}
+
 		stream.Send(&pb.FileChunk{
 			FileName:    filePath,
 			ChunkData:   buf[:n],
 			Offset:      offset,
 			IsNewFile:   isNewFile,
-			TotalChunks: g.meta.Files[filePath].TotalChunks(),
+			TotalChunks: totalchunks,
 			TotalSize:   fileSize,
 		})
 

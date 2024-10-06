@@ -4,9 +4,12 @@ import (
 	"context"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/TypeTerrors/go_sync/conf"
 	pb "github.com/TypeTerrors/go_sync/proto"
 
 	"google.golang.org/grpc"
@@ -14,19 +17,29 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+// ConnInterface defines methods that other services need from Conn
+type ConnInterface interface {
+	RemovePeer(peerID string)
+	SendMessage(msg any)
+	AddPeer(addr string)
+	Close()
+	Start()
+}
+
 // Conn manages connections and communication with peers.
 type Conn struct {
 	mu       sync.Mutex
-	grpc     *Grpc
+	file     FileDataInterface
+	meta     MetaInterface
 	peers    map[string]*Peer
 	sendChan chan any // Use empty interface to allow any type
 	wg       sync.WaitGroup
 }
 
 // NewConn initializes a new Conn without peers.
-func NewConn(grpc *Grpc) *Conn {
+func NewConn() *Conn {
 	return &Conn{
-		grpc:     grpc,
+
 		peers:    make(map[string]*Peer),
 		sendChan: make(chan any, 1000),
 	}
@@ -56,6 +69,12 @@ func (c *Conn) Close() {
 	c.mu.Unlock()
 	c.wg.Wait()
 }
+
+// func (c *Conn) SetGrpc(grpc GrpcInterface) {
+// 	c.mu.Lock()
+// 	defer c.mu.Unlock()
+// 	c.grpc = grpc
+// }
 
 // AddPeer adds a new peer and starts managing it.
 func (c *Conn) AddPeer(addr string) {
@@ -489,6 +508,39 @@ func (c *Conn) dispatchMessages() {
 		}
 		c.mu.Unlock()
 	}
+}
+
+func (c *Conn) handleFileChunk(chunk *pb.FileChunk) error {
+	filePath := filepath.Join(conf.AppConfig.SyncFolder, chunk.FileName)
+	defer c.file.markFileAsComplete(filePath)
+
+	// Open the file for writing
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Failed to open file %s: %v", filePath, err)
+		return err
+	}
+	defer file.Close()
+
+	// Write the chunk data at the specified offset
+	_, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
+	if err != nil {
+		log.Printf("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
+		return err
+	}
+
+	// Update the metadata
+	c.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
+
+	log.Printf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
+	return nil
+}
+func (c *Conn) SaveMetaData(filename string, chunk []byte, offset int64) error {
+	// Save new metadata
+	c.meta.SaveMetaDataToMem(filename, chunk, offset)
+	c.meta.SaveMetaDataToDB(filename, chunk, offset)
+
+	return nil
 }
 
 // Peer represents a connection to a peer with persistent streams.
