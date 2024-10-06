@@ -15,8 +15,10 @@ import (
 	"github.com/charmbracelet/log"
 	badger "github.com/dgraph-io/badger/v3"
 )
+
 // hook test
 func main() {
+	log.SetLevel(log.DebugLevel)
 	// Parse command-line flags and initialize configurations
 	parseFlags()
 
@@ -110,7 +112,6 @@ func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileDat
 
 	return mdns, meta, file, conn, grpc
 }
-
 
 func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn, grpc *servers.Grpc) {
 	// Start Grpc

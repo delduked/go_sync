@@ -261,31 +261,40 @@ func min(a, b int64) int64 {
 	return b
 }
 
-// SaveMetaData will save the metadata to both in-memory map and the database
+// meta.go
+
 func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool) error {
-	if pkg.IsTemporaryFile(filename) {
-		return nil
-	}
+    if pkg.IsTemporaryFile(filename) {
+        return nil
+    }
 
-	// Save new metadata
-	m.SaveMetaDataToMem(filename, chunk, offset)
-	m.SaveMetaDataToDB(filename, chunk, offset)
+    // Save new metadata
+    m.SaveMetaDataToMem(filename, chunk, offset)
+    m.SaveMetaDataToDB(filename, chunk, offset)
 
-	m.conn.SendMessage(&pb.FileSyncRequest{
-		Request: &pb.FileSyncRequest_FileChunk{
-			FileChunk: &pb.FileChunk{
-				FileName:    filename,
-				ChunkData:   chunk,
-				Offset:      offset,
-				IsNewFile:   isNewFile,
-				TotalChunks: m.Files[filename].TotalChunks(),
-				TotalSize:   m.Files[filename].filesize,
-			},
-		},
-	})
+    // Get the relative file path
+    relativePath, err := filepath.Rel(conf.AppConfig.SyncFolder, filename)
+    if err != nil {
+        log.Errorf("Error getting relative path for %s: %v", filename, err)
+        return err
+    }
 
-	return nil
+    m.conn.SendMessage(&pb.FileSyncRequest{
+        Request: &pb.FileSyncRequest_FileChunk{
+            FileChunk: &pb.FileChunk{
+                FileName:    relativePath, // Use relative path
+                ChunkData:   chunk,
+                Offset:      offset,
+                IsNewFile:   isNewFile,
+                TotalChunks: m.Files[filename].TotalChunks(),
+                TotalSize:   m.Files[filename].filesize,
+            },
+        },
+    })
+
+    return nil
 }
+
 
 // saveMetaDataToDB will save the metadata to the database using the filename and the offset to determine the chunk position
 func (m *Meta) SaveMetaDataToDB(filename string, chunk []byte, offset int64) error {
