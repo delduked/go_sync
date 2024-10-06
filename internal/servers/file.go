@@ -361,10 +361,9 @@ func (f *FileData) markFileAsInProgress(fileName string) {
 
 	// Open the file for writing if not already open
 	if _, exists := f.openFiles[fileName]; !exists {
-		filePath := filepath.Join(conf.AppConfig.SyncFolder, fileName)
-		file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
+		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
-			log.Printf("Failed to open file %s: %v", filePath, err)
+			log.Printf("Failed to open file %s: %v", fileName, err)
 			return
 		}
 		f.openFiles[fileName] = file
