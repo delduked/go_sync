@@ -15,7 +15,7 @@ import (
 	"github.com/charmbracelet/log"
 	badger "github.com/dgraph-io/badger/v3"
 )
-
+// hook test
 func main() {
 	// Parse command-line flags and initialize configurations
 	parseFlags()
