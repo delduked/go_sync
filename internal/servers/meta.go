@@ -322,6 +322,7 @@ func (m *Meta) SaveMetaDataToMem(filename string, chunk []byte, offset int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	log.Debug("Saving metadata to in-memory map...")
 	if _, ok := m.Files[filename]; !ok {
 		log.Debugf("File not found in metadata, creating new entry: %s", filename)
 		m.Files[filename] = FileMetaData{
@@ -331,6 +332,7 @@ func (m *Meta) SaveMetaDataToMem(filename string, chunk []byte, offset int64) {
 	} else {
 		log.Debugf("File found in metadata: %s", filename)
 	}
+	log.Debug("m.Files[filename].hashes[offset] = Hash{}")
 	m.Files[filename].hashes[offset] = Hash{
 		Stronghash: m.hashChunk(chunk),
 		Weakhash:   pkg.NewRollingChecksum(chunk).Sum(),
