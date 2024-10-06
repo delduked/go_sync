@@ -253,14 +253,14 @@ func (g *Grpc) RequestChunks(stream pb.FileSyncService_RequestChunksServer) erro
 
 func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 	for {
-		_, err := stream.Recv()
+		recv, err := stream.Recv()
 		if err == io.EOF {
 			return nil
 		}
 		if err != nil {
 			log.Errorf("Error receiving health check request: %v", err)
 		}
-		// log.Infof(recv.Message)
+		log.Infof(recv.Message)
 
 		stream.Send(&pb.Pong{
 			Message: fmt.Sprintf("Pong from %v at %v", g.mdns.LocalIp(), time.Now().Unix()),
