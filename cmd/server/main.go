@@ -116,23 +116,23 @@ func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileDat
 func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn, grpc *servers.Grpc) {
 	// Start Grpc
 	grpc.Start()
-
-	// Scan existing files
-	meta.Scan()
-
+	
 	// Start Mdns
 	wg.Add(1)
 	go mdns.Start(ctx, wg)
-
+	
 	// Start Conn
 	conn.Start()
-
+	
 	// Start Mdns Ping
 	go mdns.Ping(ctx, wg)
-
+	
 	// Start FileData
 	wg.Add(1)
 	go file.Start(ctx, wg)
+
+	// Scan existing files
+	meta.Scan()
 }
 
 func waitForShutdownSignal(cancel context.CancelFunc) {
