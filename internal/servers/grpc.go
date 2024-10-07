@@ -375,7 +375,7 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 		if len(missingFiles) > 0 {
 			for _, fileName := range missingFiles {
 				log.Debugf("Sending file %s to peer", fileName)
-				g.transferFile(fileName, stream, true)
+				g.transferFile(filepath.Join(g.syncDir, filepath.Clean(fileName)), stream, true)
 			}
 		} else {
 			log.Debug("Peer file list in sync with local file list")
