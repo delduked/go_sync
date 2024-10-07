@@ -324,7 +324,7 @@ func (m *Meta) SaveMetaDataToDB(filename string, stronghash string, weakHash uin
 	if err != nil {
 		return err
 	} else {
-		log.Debug("Saved StrongHash %s and WeakHash %d to badger at offset %s for file %s", stronghash, weakHash, offset, filename)
+		log.Debugf("Saved StrongHash %s and WeakHash %d to badger at offset %d for file %s", stronghash, weakHash, offset, filename)
 	}
 	return nil
 }
@@ -348,7 +348,7 @@ func (m *Meta) SaveMetaDataToMem(filename string, stronghash string, weakHash ui
 		Stronghash: stronghash,
 		Weakhash:   weakHash,
 	}
-	log.Debug("Saved StrongHash %s and WeakHash %d to memory at offset %s for file %s", stronghash, weakHash, offset, filename)
+	log.Debugf("Saved StrongHash %s and WeakHash %d to memory at offset %d for file %s", stronghash, weakHash, offset, filename)
 	// Do not use UpdateFileSize; set it to the actual file size elsewhere
 }
 
