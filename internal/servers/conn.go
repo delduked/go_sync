@@ -24,6 +24,7 @@ type ConnInterface interface {
 	AddPeer(addr string)
 	Close()
 	Start()
+	SetIP(ip string)
 }
 
 // Conn manages connections and communication with peers.
@@ -34,6 +35,7 @@ type Conn struct {
 	peers    map[string]*Peer
 	sendChan chan any // Use empty interface to allow any type
 	wg       sync.WaitGroup
+	localIp  string
 }
 
 // NewConn initializes a new Conn without peers.
@@ -49,6 +51,9 @@ func NewConn() *Conn {
 func (c *Conn) Start() {
 	c.wg.Add(1)
 	go c.dispatchMessages()
+}
+func (c *Conn) SetIP(ip string) {
+	c.localIp = ip
 }
 
 // SendMessage enqueues a message to be sent to all peers.
@@ -299,6 +304,8 @@ func (c *Conn) healthCheckMessageSender(peer *Peer) {
 			if !ok {
 				return // Channel closed
 			}
+			msg.To = peer.ID
+			msg.From = c.localIp
 			err := peer.HealthCheckStream.Send(msg)
 			if err != nil {
 				log.Infof("Failed to send HealthCheck to peer %s: %v", peer.ID, err)

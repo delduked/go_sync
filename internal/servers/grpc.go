@@ -12,6 +12,7 @@ import (
 	"github.com/TypeTerrors/go_sync/conf"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 
 	"github.com/charmbracelet/log"
 )
@@ -260,11 +261,25 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 		if err != nil {
 			log.Errorf("Error receiving health check request: %v", err)
 		}
-		log.Infof(recv.Message)
-
-		stream.Send(&pb.Pong{
-			Message: fmt.Sprintf("Pong from %v at %v", g.mdns.LocalIp(), time.Now().Unix()),
-		})
+		log.Debug("Received Ping sent from %s to %s at %v", recv.From, recv.To, recv.Time)
+		now := time.Now().Unix()
+		ctx, ok := peer.FromContext(stream.Context())
+		if !ok {
+			log.Errorf("Error getting peer from context: %v", err)
+			stream.Send(&pb.Pong{
+				Message: fmt.Sprintf("Sent pong from %v at %v", g.mdns.LocalIp(), now),
+				From:    g.mdns.LocalIp(),
+				To:      "",
+				Time:    now,
+			})
+		} else {
+			stream.Send(&pb.Pong{
+				Message: fmt.Sprintf("Sent pong from %v to %v at %v", g.mdns.LocalIp(), ctx.Addr.String(), now),
+				From:    g.mdns.LocalIp(),
+				To:      ctx.Addr.String(),
+				Time:    now,
+			})
+		}
 	}
 }
 
@@ -292,11 +307,11 @@ func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
 	// Update the metadata
 	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
 
-    // Check if all chunks have been received
-    if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
-        log.Printf("All chunks received for file %s", chunk.FileName)
-        g.file.markFileAsComplete(chunk.FileName)
-    }
+	// Check if all chunks have been received
+	if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
+		log.Printf("All chunks received for file %s", chunk.FileName)
+		g.file.markFileAsComplete(chunk.FileName)
+	}
 
 	log.Infof("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
 	return nil
