@@ -125,7 +125,7 @@ func (m *Mdns) Ping(ctx context.Context, wg *sync.WaitGroup) {
 
 	m.wg.Add(1)
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(20 * time.Second)
 		defer func() {
 			m.wg.Done()
 			ticker.Stop()
