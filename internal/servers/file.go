@@ -346,9 +346,14 @@ func (f *FileData) markFileAsComplete(fileName string) {
 	log.Debugf("Marking file as complete: %s", fileName)
 	delete(f.inProgress, fileName)
 
-	// Close the file if it's open
 	if file, exists := f.openFiles[fileName]; exists {
+		// Flush data to disk
+		err := file.Sync()
+		if err != nil {
+			log.Errorf("Failed to sync file %s: %v", fileName, err)
+		}
 		file.Close()
+		log.Debug("Flushed data to disk for file:", fileName)
 		delete(f.openFiles, fileName)
 	}
 }

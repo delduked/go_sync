@@ -292,10 +292,11 @@ func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
 	// Update the metadata
 	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
 
-	expectedLastOffset := (chunk.TotalChunks - 1) * conf.AppConfig.ChunkSize
-	if chunk.Offset == expectedLastOffset {
-		g.file.markFileAsComplete(chunk.FileName)
-	}
+    // Check if all chunks have been received
+    if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
+        log.Printf("All chunks received for file %s", chunk.FileName)
+        g.file.markFileAsComplete(chunk.FileName)
+    }
 
 	log.Infof("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
 	return nil

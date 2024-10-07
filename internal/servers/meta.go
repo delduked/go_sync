@@ -33,6 +33,7 @@ type MetaInterface interface {
 	// Other services need access to the Files map, so we need to expose it using a method
 	TotalChunks(filename string) (int64, error)
 	SetConn(conn ConnInterface)
+	allChunksReceived(fileName string, totalChunks int64) bool
 }
 
 type Meta struct {
@@ -40,7 +41,7 @@ type Meta struct {
 	Files     map[string]FileMetaData // map[filename][offset]Hash
 	// mdns      *Mdns
 	db   *badger.DB // BadgerDB instance
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	done chan struct{}
 	conn ConnInterface
 }
@@ -73,7 +74,7 @@ func NewMeta(db *badger.DB, mdns *Mdns) *Meta {
 	return &Meta{
 		Files: make(map[string]FileMetaData),
 		db:    db,
-		mu:    sync.Mutex{},
+		mu:    sync.RWMutex{},
 		// conn:  conn,
 		done: make(chan struct{}), // Initialize the done channel
 	}
@@ -522,4 +523,13 @@ func (m *Meta) TotalChunks(filename string) (int64, error) {
 		log.Debugf("Found file in metadata: %s", filename)
 	}
 	return fileMeta.TotalChunks(), nil
+}
+func (m *Meta) allChunksReceived(fileName string, totalChunks int64) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	fileMeta, exists := m.Files[fileName]
+	if !exists {
+		return false
+	}
+	return int64(len(fileMeta.hashes)) == totalChunks
 }
