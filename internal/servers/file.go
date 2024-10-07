@@ -71,16 +71,17 @@ func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Wat
 					return
 				}
 
-				switch {
-				case event.Op&fsnotify.Create == fsnotify.Create:
-					log.Infof("File created: %s", event.Name)
-					go f.HandleFileCreation(event.Name)
-				case event.Op&fsnotify.Write == fsnotify.Write:
-					log.Infof("File modified: %s", event.Name)
-					go f.HandleFileModification(event.Name)
-				case event.Op&fsnotify.Remove == fsnotify.Remove:
+				if event.Op&fsnotify.Remove == fsnotify.Remove {
 					log.Infof("File deleted: %s", event.Name)
 					go f.HandleFileDeletion(event.Name)
+				}
+				if event.Op&fsnotify.Create == fsnotify.Create {
+					log.Infof("File created: %s", event.Name)
+					go f.HandleFileCreation(event.Name)
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Infof("File modified: %s", event.Name)
+					go f.HandleFileModification(event.Name)
 				}
 
 			case err, ok := <-watcher.Errors:
@@ -165,9 +166,9 @@ func (f *FileData) HandleFileModification(filePath string) {
 	if timer, exists := f.debounceTimers[filePath]; exists {
 		timer.Stop()
 	}
-	log.Debugf("Handling file modification:", filePath)
+	log.Debugf("Handling file modification: %s", filePath)
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-		log.Debugf("Handling debounced file modification:", filePath)
+		log.Debugf("Handling debounced file modification: %s", filePath)
 		f.handleDebouncedFileModification(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
@@ -178,7 +179,7 @@ func (f *FileData) HandleFileModification(filePath string) {
 func (f *FileData) handleDebouncedFileModification(filePath string) {
 
 	// Update metadata with isNewFile = false
-	log.Debugf("Updating metadata for modified file:", filePath)
+	log.Debugf("Updating metadata for modified file: %s", filePath)
 	err := f.meta.CreateFileMetaData(filePath, false)
 	if err != nil {
 		log.Errorf("Failed to update metadata for %s: %v", filePath, err)
@@ -222,6 +223,16 @@ func (f *FileData) handleDebouncedFileDeletion(filePath string) {
 	f.mu.Unlock()
 
 	defer f.markFileAsComplete(filePath)
+
+	// Check if the file still exists
+	if _, err := os.Stat(filePath); err == nil {
+		// File still exists, so it's not actually deleted
+		log.Debugf("File %s still exists, skipping deletion", filePath)
+		return
+	}
+
+	// File does not exist, proceed to delete metadata and notify peers
+	log.Debugf("File %s does not exist, proceeding with deletion", filePath)
 
 	// Delete metadata and notify peers
 	err1, err2 := f.meta.DeleteEntireFileMetaData(filePath)
