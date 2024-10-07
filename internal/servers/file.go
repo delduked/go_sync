@@ -24,6 +24,7 @@ type FileDataInterface interface {
 	BuildLocalFileList() (*pb.FileList, error)
 	SetConn(conn ConnInterface)
 	getOpenFile(fileName string) (*os.File, error)
+	getOrOpenFile(fileName string) (*os.File, error)
 }
 
 type FileData struct {
@@ -153,7 +154,7 @@ func (f *FileData) HandleFileModification(filePath string) {
 	if pkg.IsTemporaryFile(filePath) {
 		return
 	}
-
+	f.markFileAsInProgress(filePath)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -175,8 +176,6 @@ func (f *FileData) HandleFileModification(filePath string) {
 }
 
 func (f *FileData) handleDebouncedFileModification(filePath string) {
-	f.markFileAsInProgress(filePath)
-	defer f.markFileAsComplete(filePath)
 
 	// Update metadata with isNewFile = false
 	log.Debugf("Updating metadata for modified file:", filePath)
@@ -185,6 +184,7 @@ func (f *FileData) handleDebouncedFileModification(filePath string) {
 		log.Errorf("Failed to update metadata for %s: %v", filePath, err)
 		return
 	}
+	f.markFileAsComplete(filePath)
 }
 
 func (f *FileData) HandleFileDeletion(filePath string) {
@@ -385,4 +385,17 @@ func (f *FileData) getOpenFile(fileName string) (*os.File, error) {
 		return file, nil
 	}
 	return nil, fmt.Errorf("file %s is not open", fileName)
+}
+func (f *FileData) getOrOpenFile(fileName string) (*os.File, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if file, exists := f.openFiles[fileName]; exists {
+		return file, nil
+	}
+	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, err
+	}
+	f.openFiles[fileName] = file
+	return file, nil
 }

@@ -271,12 +271,12 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 // Handler for FileChunk messages
 func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
 	filePath := chunk.FileName
-	defer g.file.markFileAsComplete(filePath)
+	g.file.markFileAsInProgress(filePath)
 
-	// Get the open file from FileData
-	file, err := g.file.getOpenFile(filePath)
+	// Open or get the file
+	file, err := g.file.getOrOpenFile(chunk.FileName)
 	if err != nil {
-		log.Infof("Failed to get open file %s: %v", filePath, err)
+		log.Printf("Failed to get or open file %s: %v", filePath, err)
 		return err
 	}
 
@@ -291,6 +291,11 @@ func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
 
 	// Update the metadata
 	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
+
+	expectedLastOffset := (chunk.TotalChunks - 1) * conf.AppConfig.ChunkSize
+	if chunk.Offset == expectedLastOffset {
+		g.file.markFileAsComplete(chunk.FileName)
+	}
 
 	log.Infof("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
 	return nil

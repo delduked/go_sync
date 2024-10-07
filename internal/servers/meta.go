@@ -24,7 +24,7 @@ type MetaInterface interface {
 	CreateFileMetaData(fileName string, isNewFile bool) error
 	DeleteEntireFileMetaData(filename string) (error, error)
 	GetEntireFileMetaData(filename string) (map[int64]Hash, error)
-	SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool) error // ... other methods as needed
+	SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool, fileSize int64) error // ... other methods as needed
 	SaveMetaDataToDB(filename string, chunk []byte, offset int64) error
 	SaveMetaDataToMem(filename string, chunk []byte, offset int64)
 	DeleteMetaDataFromDB(filename string, offset int64) error
@@ -230,7 +230,7 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 				Weakhash:   newWeakHash,
 			}
 			// Save metadata to DB
-			err := m.SaveMetaData(fileName, buffer[:bytesRead], offset, isNewFile)
+			err := m.SaveMetaData(fileName, buffer[:bytesRead], offset, isNewFile, fileInfo.Size())
 			if err != nil {
 				return fmt.Errorf("failed to save metadata: %w", err)
 			}
@@ -271,7 +271,7 @@ func min(a, b int64) int64 {
 
 // meta.go
 
-func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool) error {
+func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool, fileSize int64) error {
 	if pkg.IsTemporaryFile(filename) {
 		return nil
 	}
@@ -290,7 +290,7 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 				Offset:      offset,
 				IsNewFile:   isNewFile,
 				TotalChunks: m.Files[filename].TotalChunks(),
-				TotalSize:   m.Files[filename].filesize,
+				TotalSize:   fileSize,
 			},
 		},
 	})
