@@ -13,7 +13,7 @@ func (c *Conn) handleFileSyncResponse(peer *Peer, msg *pb.FileSyncResponse) {
 }
 func (c *Conn) handleHealthCheckResponse(msg *pb.Pong) {
 	// Implement your logic here
-	log.Debugf("Received pong sent from %s to %s at %v", msg.From, msg.To, msg.Time)
+	log.Debugf("Received pong sent from %s to %s at %v", msg.To, msg.From, msg.Time)
 }
 
 func (c *Conn) handleMetadataResponse(peer *Peer, msg *pb.MetadataResponse) {
