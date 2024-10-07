@@ -358,6 +358,13 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 			return err
 		}
 
+		ctx, ok := peer.FromContext(stream.Context())
+		if !ok {
+			log.Debugf("File list from peer: %v", req.Files)
+		} else {
+			log.Debugf("Peer %s file list %v", ctx.Addr.String(), req.Files)
+		}
+
 		localFileList, err := g.file.BuildLocalFileList()
 		if err != nil {
 			log.Errorf("Failed to build local file list: %v", err)
@@ -370,6 +377,8 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 				log.Debugf("Sending file %s to peer", fileName)
 				g.transferFile(fileName, stream, true)
 			}
+		} else {
+			log.Debug("Peer file list in sync with local file list")
 		}
 	}
 }
