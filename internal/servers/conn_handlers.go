@@ -24,7 +24,7 @@ func (c *Conn) handleMetadataResponse(peer *Peer, msg *pb.MetadataResponse) {
 
 func (c *Conn) handleGetMissingFileResponse(peer *Peer, chunk *pb.FileChunk) error {
 	filePath := chunk.FileName
-	c.file.markFileAsInProgress(filePath)
+	c.file.markFileAsInProgress(chunk.FileName)
 
 	log.Debugf("Received GetMissingFileResponse from peer %s for file %s at offset %d", peer.ID, chunk.FileName, chunk.Offset)
 
