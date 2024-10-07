@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 
@@ -544,8 +545,12 @@ func (c *Conn) handleFileChunk(chunk *pb.FileChunk) error {
 }
 func (c *Conn) SaveMetaData(filename string, chunk []byte, offset int64) error {
 	// Save new metadata
-	c.meta.SaveMetaDataToMem(filename, chunk, offset)
-	c.meta.SaveMetaDataToDB(filename, chunk, offset)
+
+	Stronghash := c.meta.hashChunk(chunk)
+	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
+
+	c.meta.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
+	c.meta.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
 
 	return nil
 }

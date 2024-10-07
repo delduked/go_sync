@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
@@ -449,9 +450,14 @@ func (g *Grpc) DeleteMetadata(filePath string, offset int64) (error, error) {
 }
 
 func (g *Grpc) SaveMetaData(filename string, chunk []byte, offset int64) error {
+
 	// Save new metadata
-	g.meta.SaveMetaDataToMem(filename, chunk, offset)
-	g.meta.SaveMetaDataToDB(filename, chunk, offset)
+	Stronghash := g.meta.hashChunk(chunk)
+	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
+
+	// Save new metadata
+	g.meta.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
+	g.meta.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
 
 	return nil
 }
