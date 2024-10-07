@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 
@@ -24,6 +25,7 @@ type ConnInterface interface {
 	AddPeer(addr string)
 	Close()
 	Start()
+	SetIP(ip string)
 }
 
 // Conn manages connections and communication with peers.
@@ -34,12 +36,14 @@ type Conn struct {
 	peers    map[string]*Peer
 	sendChan chan any // Use empty interface to allow any type
 	wg       sync.WaitGroup
+	localIp  string
 }
 
 // NewConn initializes a new Conn without peers.
-func NewConn() *Conn {
+func NewConn(file FileDataInterface, meta MetaInterface) *Conn {
 	return &Conn{
-
+		file:     file,
+		meta:     meta,
 		peers:    make(map[string]*Peer),
 		sendChan: make(chan any),
 	}
@@ -49,6 +53,9 @@ func NewConn() *Conn {
 func (c *Conn) Start() {
 	c.wg.Add(1)
 	go c.dispatchMessages()
+}
+func (c *Conn) SetIP(ip string) {
+	c.localIp = ip
 }
 
 // SendMessage enqueues a message to be sent to all peers.
@@ -236,6 +243,16 @@ func (c *Conn) connectPeer(peer *Peer) error {
 		conn.Close()
 		return err
 	}
+	
+	getMissingFiles, err := client.GetMissingFiles(context.Background())
+	if err != nil {
+		syncFileStream.CloseSend()
+		healthCheckStream.CloseSend()
+		exchangeMetadataStream.CloseSend()
+		requestChunksStream.CloseSend()
+		conn.Close()
+		return err
+	}
 
 	// Initialize other streams as needed
 
@@ -245,6 +262,7 @@ func (c *Conn) connectPeer(peer *Peer) error {
 	peer.HealthCheckStream = healthCheckStream
 	peer.ExchangeMetadataStream = exchangeMetadataStream
 	peer.RequestChunksStream = requestChunksStream
+	peer.GetMissingFileStream = getMissingFiles
 
 	return nil
 }
@@ -299,6 +317,8 @@ func (c *Conn) healthCheckMessageSender(peer *Peer) {
 			if !ok {
 				return // Channel closed
 			}
+			msg.To = peer.ID
+			msg.From = c.localIp
 			err := peer.HealthCheckStream.Send(msg)
 			if err != nil {
 				log.Infof("Failed to send HealthCheck to peer %s: %v", peer.ID, err)
@@ -420,7 +440,7 @@ func (c *Conn) getMissingFileSender(peer *Peer) {
 			}
 			err := peer.GetMissingFileStream.Send(msg)
 			if err != nil {
-				log.Infof("Failed to send ChunkRequest to peer %s: %v", peer.ID, err)
+				log.Warnf("Failed to send ChunkRequest to peer %s: %v", peer.ID, err)
 				return // Exit to trigger reconnection
 			}
 		case <-peer.doneChan:
@@ -537,8 +557,12 @@ func (c *Conn) handleFileChunk(chunk *pb.FileChunk) error {
 }
 func (c *Conn) SaveMetaData(filename string, chunk []byte, offset int64) error {
 	// Save new metadata
-	c.meta.SaveMetaDataToMem(filename, chunk, offset)
-	c.meta.SaveMetaDataToDB(filename, chunk, offset)
+
+	Stronghash := c.meta.hashChunk(chunk)
+	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
+
+	c.meta.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
+	c.meta.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
 
 	return nil
 }

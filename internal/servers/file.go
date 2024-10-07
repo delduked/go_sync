@@ -99,6 +99,7 @@ func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Wat
 	return watcher, nil
 }
 
+// Periodically check if each peer has the same list of files.
 func (f *FileData) Scan(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	ticker := time.NewTicker(conf.AppConfig.SyncInterval)
@@ -262,6 +263,7 @@ func (f *FileData) SyncWithPeers() {
 		return
 	}
 
+	log.Debugf("Sending local file list to peer: %v", localFileList)
 	f.conn.SendMessage(&pb.FileList{
 		Files: localFileList.Files,
 	})

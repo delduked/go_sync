@@ -103,7 +103,7 @@ func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileDat
 	grpc := servers.NewGrpc(conf.AppConfig.SyncFolder, mdns, meta, file, conf.AppConfig.Port)
 
 	// Now initialize conn, passing in required interfaces
-	conn := servers.NewConn()
+	conn := servers.NewConn(file, meta)
 
 	// Set conn in services that need it via setter methods
 	mdns.SetConn(conn)
@@ -116,9 +116,6 @@ func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileDat
 func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn, grpc *servers.Grpc) {
 	// Start Grpc
 	grpc.Start()
-
-	// Scan existing files
-	meta.Scan()
 
 	// Start Mdns
 	wg.Add(1)
@@ -133,6 +130,13 @@ func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, 
 	// Start FileData
 	wg.Add(1)
 	go file.Start(ctx, wg)
+	// Start FileData
+
+	wg.Add(1)
+	go file.Scan(ctx, wg)
+
+	// Scan existing files
+	meta.Scan()
 }
 
 func waitForShutdownSignal(cancel context.CancelFunc) {

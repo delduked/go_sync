@@ -53,6 +53,7 @@ func (m *Mdns) Start(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	log.Infof("Local IP: %s, Subnet: %s", m.LocalIP, m.Subnet)
+	m.conn.SetIP(m.LocalIP)
 
 	instance := fmt.Sprintf("filesync-%s", m.LocalIP)
 	serviceType := "_myapp_filesync._tcp"
@@ -124,7 +125,7 @@ func (m *Mdns) Ping(ctx context.Context, wg *sync.WaitGroup) {
 
 	m.wg.Add(1)
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(20 * time.Second)
 		defer func() {
 			m.wg.Done()
 			ticker.Stop()
@@ -136,9 +137,10 @@ func (m *Mdns) Ping(ctx context.Context, wg *sync.WaitGroup) {
 				log.Warn("Shutting down periodic metadata exchange...")
 				return
 			case <-ticker.C:
-
+				now := time.Now().Unix()
 				m.conn.SendMessage(&pb.Ping{
-					Message: fmt.Sprintf("Ping from %v at %v", m.LocalIP, time.Now().Unix()),
+					Message: fmt.Sprintf("Ping from %v at %v", m.LocalIP, now),
+					Time:    now,
 				})
 
 			}

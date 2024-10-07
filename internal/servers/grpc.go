@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 
 	"github.com/charmbracelet/log"
 )
@@ -167,7 +169,7 @@ func (g *Grpc) ExchangeMetadata(stream pb.FileSyncService_ExchangeMetadataServer
 			log.Errorf("Error sending metadata response: %v", err)
 			return err
 		} else {
-			log.Debugf("Sent metadata response for file", fileName)
+			log.Debugf("Sent metadata response for file %s", fileName)
 		}
 	}
 }
@@ -260,11 +262,25 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 		if err != nil {
 			log.Errorf("Error receiving health check request: %v", err)
 		}
-		log.Infof(recv.Message)
-
-		stream.Send(&pb.Pong{
-			Message: fmt.Sprintf("Pong from %v at %v", g.mdns.LocalIp(), time.Now().Unix()),
-		})
+		log.Debugf("Received ping sent from %s to %s at %v", recv.From, recv.To, recv.Time)
+		now := time.Now().Unix()
+		ctx, ok := peer.FromContext(stream.Context())
+		if !ok {
+			log.Errorf("Error getting peer from context: %v", err)
+			stream.Send(&pb.Pong{
+				Message: fmt.Sprintf("Sent pong from %v at %v", g.mdns.LocalIp(), now),
+				From:    g.mdns.LocalIp(),
+				To:      "",
+				Time:    now,
+			})
+		} else {
+			stream.Send(&pb.Pong{
+				Message: fmt.Sprintf("Sent pong from %v to %v at %v", g.mdns.LocalIp(), ctx.Addr.String(), now),
+				From:    g.mdns.LocalIp(),
+				To:      ctx.Addr.String(),
+				Time:    now,
+			})
+		}
 	}
 }
 
@@ -292,11 +308,11 @@ func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
 	// Update the metadata
 	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
 
-    // Check if all chunks have been received
-    if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
-        log.Printf("All chunks received for file %s", chunk.FileName)
-        g.file.markFileAsComplete(chunk.FileName)
-    }
+	// Check if all chunks have been received
+	if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
+		log.Printf("All chunks received for file %s", chunk.FileName)
+		g.file.markFileAsComplete(chunk.FileName)
+	}
 
 	log.Infof("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
 	return nil
@@ -342,17 +358,28 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 			return err
 		}
 
+		ctx, ok := peer.FromContext(stream.Context())
+		if !ok {
+			log.Debugf("File list from peer: %v", req.Files)
+		} else {
+			log.Debugf("Peer %s file list %v", ctx.Addr.String(), req.Files)
+		}
+
 		localFileList, err := g.file.BuildLocalFileList()
 		if err != nil {
 			log.Errorf("Failed to build local file list: %v", err)
 			return err
 		}
 
-		missingFiles := g.file.CompareFileLists(localFileList, req)
+		missingFiles := g.file.CompareFileLists(req, localFileList)
 		if len(missingFiles) > 0 {
 			for _, fileName := range missingFiles {
-				g.transferFile(fileName, stream, true)
+				cleanfile := filepath.Join(g.syncDir, filepath.Clean(fileName))
+				log.Debugf("Sending file %s to peer", cleanfile)
+				g.transferFile(cleanfile, stream, true)
 			}
+		} else {
+			log.Debug("Peer file list in sync with local file list")
 		}
 	}
 }
@@ -433,9 +460,14 @@ func (g *Grpc) DeleteMetadata(filePath string, offset int64) (error, error) {
 }
 
 func (g *Grpc) SaveMetaData(filename string, chunk []byte, offset int64) error {
+
 	// Save new metadata
-	g.meta.SaveMetaDataToMem(filename, chunk, offset)
-	g.meta.SaveMetaDataToDB(filename, chunk, offset)
+	Stronghash := g.meta.hashChunk(chunk)
+	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
+
+	// Save new metadata
+	g.meta.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
+	g.meta.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
 
 	return nil
 }
