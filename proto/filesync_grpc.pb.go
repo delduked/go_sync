@@ -23,8 +23,7 @@ const (
 	FileSyncService_HealthCheck_FullMethodName      = "/FileSyncService/HealthCheck"
 	FileSyncService_ExchangeMetadata_FullMethodName = "/FileSyncService/ExchangeMetadata"
 	FileSyncService_RequestChunks_FullMethodName    = "/FileSyncService/RequestChunks"
-	FileSyncService_GetFileList_FullMethodName      = "/FileSyncService/GetFileList"
-	FileSyncService_GetFile_FullMethodName          = "/FileSyncService/GetFile"
+	FileSyncService_GetMissingFiles_FullMethodName  = "/FileSyncService/GetMissingFiles"
 )
 
 // FileSyncServiceClient is the client API for FileSyncService service.
@@ -35,8 +34,7 @@ type FileSyncServiceClient interface {
 	HealthCheck(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Ping, Pong], error)
 	ExchangeMetadata(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MetadataRequest, MetadataResponse], error)
 	RequestChunks(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ChunkRequest, ChunkResponse], error)
-	GetFileList(ctx context.Context, in *GetFileListRequest, opts ...grpc.CallOption) (*GetFileListResponse, error)
-	GetFile(ctx context.Context, in *RequestFileTransfer, opts ...grpc.CallOption) (*EmptyResponse, error)
+	GetMissingFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileList, FileChunk], error)
 }
 
 type fileSyncServiceClient struct {
@@ -99,25 +97,18 @@ func (c *fileSyncServiceClient) RequestChunks(ctx context.Context, opts ...grpc.
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_RequestChunksClient = grpc.BidiStreamingClient[ChunkRequest, ChunkResponse]
 
-func (c *fileSyncServiceClient) GetFileList(ctx context.Context, in *GetFileListRequest, opts ...grpc.CallOption) (*GetFileListResponse, error) {
+func (c *fileSyncServiceClient) GetMissingFiles(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FileList, FileChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetFileListResponse)
-	err := c.cc.Invoke(ctx, FileSyncService_GetFileList_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[4], FileSyncService_GetMissingFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[FileList, FileChunk]{ClientStream: stream}
+	return x, nil
 }
 
-func (c *fileSyncServiceClient) GetFile(ctx context.Context, in *RequestFileTransfer, opts ...grpc.CallOption) (*EmptyResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EmptyResponse)
-	err := c.cc.Invoke(ctx, FileSyncService_GetFile_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_GetMissingFilesClient = grpc.BidiStreamingClient[FileList, FileChunk]
 
 // FileSyncServiceServer is the server API for FileSyncService service.
 // All implementations must embed UnimplementedFileSyncServiceServer
@@ -127,8 +118,7 @@ type FileSyncServiceServer interface {
 	HealthCheck(grpc.BidiStreamingServer[Ping, Pong]) error
 	ExchangeMetadata(grpc.BidiStreamingServer[MetadataRequest, MetadataResponse]) error
 	RequestChunks(grpc.BidiStreamingServer[ChunkRequest, ChunkResponse]) error
-	GetFileList(context.Context, *GetFileListRequest) (*GetFileListResponse, error)
-	GetFile(context.Context, *RequestFileTransfer) (*EmptyResponse, error)
+	GetMissingFiles(grpc.BidiStreamingServer[FileList, FileChunk]) error
 	mustEmbedUnimplementedFileSyncServiceServer()
 }
 
@@ -151,11 +141,8 @@ func (UnimplementedFileSyncServiceServer) ExchangeMetadata(grpc.BidiStreamingSer
 func (UnimplementedFileSyncServiceServer) RequestChunks(grpc.BidiStreamingServer[ChunkRequest, ChunkResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method RequestChunks not implemented")
 }
-func (UnimplementedFileSyncServiceServer) GetFileList(context.Context, *GetFileListRequest) (*GetFileListResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetFileList not implemented")
-}
-func (UnimplementedFileSyncServiceServer) GetFile(context.Context, *RequestFileTransfer) (*EmptyResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetFile not implemented")
+func (UnimplementedFileSyncServiceServer) GetMissingFiles(grpc.BidiStreamingServer[FileList, FileChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method GetMissingFiles not implemented")
 }
 func (UnimplementedFileSyncServiceServer) mustEmbedUnimplementedFileSyncServiceServer() {}
 func (UnimplementedFileSyncServiceServer) testEmbeddedByValue()                         {}
@@ -206,41 +193,12 @@ func _FileSyncService_RequestChunks_Handler(srv interface{}, stream grpc.ServerS
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_RequestChunksServer = grpc.BidiStreamingServer[ChunkRequest, ChunkResponse]
 
-func _FileSyncService_GetFileList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetFileListRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileSyncServiceServer).GetFileList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileSyncService_GetFileList_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileSyncServiceServer).GetFileList(ctx, req.(*GetFileListRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+func _FileSyncService_GetMissingFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(FileSyncServiceServer).GetMissingFiles(&grpc.GenericServerStream[FileList, FileChunk]{ServerStream: stream})
 }
 
-func _FileSyncService_GetFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestFileTransfer)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileSyncServiceServer).GetFile(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileSyncService_GetFile_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileSyncServiceServer).GetFile(ctx, req.(*RequestFileTransfer))
-	}
-	return interceptor(ctx, in, info, handler)
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_GetMissingFilesServer = grpc.BidiStreamingServer[FileList, FileChunk]
 
 // FileSyncService_ServiceDesc is the grpc.ServiceDesc for FileSyncService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -248,16 +206,7 @@ func _FileSyncService_GetFile_Handler(srv interface{}, ctx context.Context, dec 
 var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "FileSyncService",
 	HandlerType: (*FileSyncServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "GetFileList",
-			Handler:    _FileSyncService_GetFileList_Handler,
-		},
-		{
-			MethodName: "GetFile",
-			Handler:    _FileSyncService_GetFile_Handler,
-		},
-	},
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "SyncFile",
@@ -280,6 +229,12 @@ var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "RequestChunks",
 			Handler:       _FileSyncService_RequestChunks_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetMissingFiles",
+			Handler:       _FileSyncService_GetMissingFiles_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

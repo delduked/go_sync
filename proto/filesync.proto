@@ -6,8 +6,10 @@ service FileSyncService {
     rpc HealthCheck(stream Ping) returns (stream Pong);
     rpc ExchangeMetadata(stream MetadataRequest) returns (stream MetadataResponse);
     rpc RequestChunks(stream ChunkRequest) returns (stream ChunkResponse);
-    rpc GetFileList(GetFileListRequest) returns (GetFileListResponse);
-    rpc GetFile(RequestFileTransfer) returns (EmptyResponse);
+    // rpc GetFileList(GetFileListRequest) returns (GetFileListResponse);
+    // rpc GetFile(RequestFileTransfer) returns (EmptyResponse);
+
+    rpc GetMissingFiles(stream FileList) returns (stream FileChunk);
 }
 
 message FileSyncRequest {
@@ -25,9 +27,9 @@ message Pong {
     string message = 1;
 }
 
-message RequestFileTransfer {
-    string file_name = 1;
-}
+// message RequestFileTransfer {
+//     string file_name = 1;
+// }
 
 message FileSyncResponse {
     string message = 1;
@@ -44,6 +46,7 @@ message FileChunk {
 
 message FileDelete {
     string file_name = 1;
+    int64 offset = 2;
 }
 
 message FileTruncate {
@@ -88,10 +91,10 @@ message FileList {
     repeated FileEntry files = 1;
 }
 
-message GetFileListRequest {}
+// message GetFileListRequest {}
 
-message GetFileListResponse {
-    FileList file_list = 1;
-}
+// message GetFileListResponse {
+//     FileList file_list = 1;
+// }
 
-message EmptyResponse {}
+// message EmptyResponse {}

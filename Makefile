@@ -23,7 +23,7 @@ clean:
 
 # Run the Go application
 run: generate_proto
-	go run main.go
+	go run ./cmd/server/main.go -sync-folder ./sync_folder -port 50051
 
 # Default target
 all: generate_proto

@@ -16,7 +16,9 @@ import (
 	badger "github.com/dgraph-io/badger/v3"
 )
 
+// hook test
 func main() {
+	log.SetLevel(log.DebugLevel)
 	// Parse command-line flags and initialize configurations
 	parseFlags()
 
@@ -25,17 +27,14 @@ func main() {
 	defer db.Close()
 
 	// Initialize core services
-	peerData, metaData, fileWatcher := initServices(db)
-
-	// Pre-scan metadata
-	preScanMetadata(metaData)
+	mdns, meta, file, conn, grpc := initServices(db)
 
 	// Create context and waitgroup for goroutine management
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
 	// Start services
-	startServices(ctx, &wg, peerData, metaData, fileWatcher)
+	startServices(ctx, &wg, mdns, meta, file, conn, grpc)
 
 	// Wait for shutdown signal (e.g., CTRL+C)
 	waitForShutdownSignal(cancel)
@@ -51,7 +50,7 @@ func parseFlags() {
 	syncFolder := flag.String("sync-folder", "", "Folder to keep in sync (required)")
 	chunkSizeKB := flag.Int64("chunk-size", 64, "Chunk size in kilobytes (optional)")
 	syncInterval := flag.Duration("sync-interval", 1*time.Minute, "Synchronization interval (optional)")
-	portNumber := flag.String("port", "50051", "Synchronization interval (optional)")
+	portNumber := flag.String("port", "50051", "Port number for the gRPC server (optional)")
 
 	// Parse the flags
 	flag.Parse()
@@ -63,7 +62,7 @@ func parseFlags() {
 		os.Exit(1)
 	}
 
-	if portNumber == nil {
+	if *portNumber == "" {
 		fmt.Println("Error: --port is required")
 		flag.Usage()
 		os.Exit(1)
@@ -73,10 +72,10 @@ func parseFlags() {
 	chunkSize := *chunkSizeKB * 1024
 
 	// Output the configurations
-	fmt.Printf("Sync Folder  : %s\n", *syncFolder)
-	fmt.Printf("Chunk Size   : %d bytes\n", chunkSize)
-	fmt.Printf("Sync Interval: %v\n", *syncInterval)
-	fmt.Printf("Port Number  : %v\n", *syncInterval)
+	log.Infof("Sync Folder  : %s", *syncFolder)
+	log.Infof("Chunk Size   : %d bytes", chunkSize)
+	log.Infof("Sync Interval: %v", *syncInterval)
+	log.Infof("Port Number  : %s", *portNumber)
 
 	// Initialize the configuration
 	conf.AppConfig = conf.Config{
@@ -96,56 +95,44 @@ func initDB() *badger.DB {
 	return db
 }
 
-func initServices(db *badger.DB) (*servers.PeerData, *servers.Meta, *servers.FileWatcher) {
-	peerData := servers.NewPeerData()
-	metaData := servers.NewMeta(peerData, db)
-	fileWatcher := servers.NewFileWatcher(peerData, metaData)
-	return peerData, metaData, fileWatcher
+func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileData, *servers.Conn, *servers.Grpc) {
+	// Initialize services without dependencies that cause circular references
+	mdns := servers.NewMdns()
+	meta := servers.NewMeta(db, mdns)
+	file := servers.NewFile(meta, mdns)
+	grpc := servers.NewGrpc(conf.AppConfig.SyncFolder, mdns, meta, file, conf.AppConfig.Port)
+
+	// Now initialize conn, passing in required interfaces
+	conn := servers.NewConn()
+
+	// Set conn in services that need it via setter methods
+	mdns.SetConn(conn)
+	meta.SetConn(conn)
+	file.SetConn(conn)
+
+	return mdns, meta, file, conn, grpc
 }
 
-func preScanMetadata(metaData *servers.Meta) {
-	if err := metaData.PreScanAndStoreMetaData(conf.AppConfig.SyncFolder); err != nil {
-		log.Fatalf("Failed to perform pre-scan and store metadata: %v", err)
-	}
-}
+func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn, grpc *servers.Grpc) {
+	// Start Grpc
+	grpc.Start()
 
-func startServices(ctx context.Context, wg *sync.WaitGroup, peerData *servers.PeerData, metaData *servers.Meta, fileWatcher *servers.FileWatcher) {
-	// Start mDNS scanning
+	// Scan existing files
+	meta.Scan()
+
+	// Start Mdns
 	wg.Add(1)
-	go peerData.ScanMdns(ctx, wg)
+	go mdns.Start(ctx, wg)
 
-	// Initialize streams
-	peerData.InitializeStreams()
+	// Start Conn
+	conn.Start()
 
-	// Start scanning local metadata periodically
+	// Start Mdns Ping
+	go mdns.Ping(ctx, wg)
+
+	// Start FileData
 	wg.Add(1)
-	go metaData.ScanLocalMetaData(wg, ctx)
-
-	// Create and start the server
-	server, err := servers.StateServer(metaData, peerData, "50051", conf.AppConfig.SyncFolder)
-	if err != nil {
-		log.Fatalf("Failed to create sync server: %v", err)
-	}
-
-	// Start periodic metadata exchange
-	wg.Add(1)
-	go server.PeriodicMetadataExchange(ctx, wg)
-
-	wg.Add(1)
-	go peerData.HealthCheck(ctx, wg)
-
-	// Start the server (and watch the sync folder)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := server.Start(wg, ctx, peerData, metaData, fileWatcher); err != nil {
-			log.Fatalf("Failed to start server: %v", err)
-		}
-	}()
-
-	// Start periodic synchronization
-	wg.Add(1)
-	go peerData.StartPeriodicSync(ctx, wg)
+	go file.Start(ctx, wg)
 }
 
 func waitForShutdownSignal(cancel context.CancelFunc) {
