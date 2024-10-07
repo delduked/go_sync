@@ -230,6 +230,12 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 				Stronghash: newStrongHash,
 				Weakhash:   newWeakHash,
 			}
+
+			// is this going to fix corrupt files on the peer?
+			// Copy the chunk data to a new slice
+			chunkData := make([]byte, bytesRead)
+			copy(chunkData, buffer[:bytesRead])
+			
 			// Save metadata to DB
 			err := m.SaveMetaData(fileName, buffer[:bytesRead], offset, isNewFile, fileInfo.Size())
 			if err != nil {

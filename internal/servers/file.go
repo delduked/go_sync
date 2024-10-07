@@ -129,7 +129,7 @@ func (f *FileData) HandleFileCreation(filePath string) {
 	}
 
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-		log.Debugf("Handling debounced file creation:", filePath)
+		log.Debugf("Handling debounced file creation: %s", filePath)
 		f.handleDebouncedFileCreation(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
@@ -142,7 +142,7 @@ func (f *FileData) handleDebouncedFileCreation(filePath string) {
 	defer f.markFileAsComplete(filePath)
 
 	// Initialize metadata with isNewFile = true
-	log.Debugf("Creating metadata for new file:", filePath)
+	log.Debugf("Creating metadata for new file: %s", filePath)
 	err := f.meta.CreateFileMetaData(filePath, true)
 	if err != nil {
 		log.Errorf("Failed to initialize metadata for new file %s: %v", filePath, err)
