@@ -117,23 +117,27 @@ func initServices(db *badger.DB) (*servers.Mdns, *servers.Meta, *servers.FileDat
 func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, meta *servers.Meta, file *servers.FileData, conn *servers.Conn, grpc *servers.Grpc) {
 	// Start Grpc
 	grpc.Start()
-
-	// Scan existing files
-	meta.Scan()
-
+	
 	// Start Mdns
 	wg.Add(1)
 	go mdns.Start(ctx, wg)
-
+	
 	// Start Conn
 	conn.Start()
-
+	
 	// Start Mdns Ping
 	go mdns.Ping(ctx, wg)
-
+	
 	// Start FileData
 	wg.Add(1)
 	go file.Start(ctx, wg)
+	// Start FileData
+	
+	wg.Add(1)
+	go file.Scan(ctx, wg)
+
+	// Scan existing files
+	meta.Scan()
 }
 
 func waitForShutdownSignal(cancel context.CancelFunc) {
@@ -173,9 +177,15 @@ message FileSyncRequest {
 
 message Ping {
     string message = 1;
+    string from = 2;
+    string to = 3;
+    int64 time = 4;
 }
 message Pong {
     string message = 1;
+    string from = 2;
+    string to = 3;
+    int64 time = 4;
 }
 
 // message RequestFileTransfer {
@@ -442,8 +452,7 @@ func (c *Conn) handleFileSyncResponse(peer *Peer, msg *pb.FileSyncResponse) {
 }
 func (c *Conn) handleHealthCheckResponse(msg *pb.Pong) {
 	// Implement your logic here
-	log.Info(msg.Message)
-
+	log.Debugf("Received pong sent from %s to %s at %v", msg.To, msg.From, msg.Time)
 }
 
 func (c *Conn) handleMetadataResponse(peer *Peer, msg *pb.MetadataResponse) {
@@ -451,13 +460,40 @@ func (c *Conn) handleMetadataResponse(peer *Peer, msg *pb.MetadataResponse) {
 	log.Infof("Received MetadataResponse from peer %s for file %s", peer.ID, msg.FileName)
 	// Process the metadata, compare with local data, etc.
 }
-func (c *Conn) handleGetMissingFileResponse(peer *Peer, msg *pb.FileChunk) {
-	// Implement your logic here
-	log.Infof("Received ChunkResponse from peer %s for file %s at offset %d", peer.ID, msg.FileName, msg.Offset)
-	// Write the chunk data to file, verify integrity, etc.
 
-	c.file.markFileAsInProgress(msg.FileName)
-	c.handleFileChunk(msg)
+func (c *Conn) handleGetMissingFileResponse(peer *Peer, chunk *pb.FileChunk) error {
+	filePath := chunk.FileName
+	c.file.markFileAsInProgress(filePath)
+
+	log.Debugf("Received GetMissingFileResponse from peer %s for file %s at offset %d", peer.ID, chunk.FileName, chunk.Offset)
+
+	// Open or get the file
+	file, err := c.file.getOrOpenFile(chunk.FileName)
+	if err != nil {
+		log.Errorf("Failed to get or open file %s: %v", filePath, err)
+		return err
+	}
+
+	// Write the chunk data at the specified offset
+	_, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
+	if err != nil {
+		log.Errorf("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
+		return err
+	} else {
+		log.Debugf("Wrote chunk to file %s at offset %d", filePath, chunk.Offset)
+	}
+
+	// Update the metadata
+	c.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
+
+	// Check if all chunks have been received
+	if c.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
+		log.Debugf("All chunks received for file %s", chunk.FileName)
+		c.file.markFileAsComplete(chunk.FileName)
+	}
+
+	log.Debugf("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
+	return nil
 }
 
 func (c *Conn) handleChunkResponse(peer *Peer, msg *pb.ChunkResponse) {
@@ -479,8 +515,10 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 
 	"github.com/charmbracelet/log"
 )
@@ -636,7 +674,7 @@ func (g *Grpc) ExchangeMetadata(stream pb.FileSyncService_ExchangeMetadataServer
 			log.Errorf("Error sending metadata response: %v", err)
 			return err
 		} else {
-			log.Debugf("Sent metadata response for file", fileName)
+			log.Debugf("Sent metadata response for file %s", fileName)
 		}
 	}
 }
@@ -729,11 +767,25 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 		if err != nil {
 			log.Errorf("Error receiving health check request: %v", err)
 		}
-		log.Infof(recv.Message)
-
-		stream.Send(&pb.Pong{
-			Message: fmt.Sprintf("Pong from %v at %v", g.mdns.LocalIp(), time.Now().Unix()),
-		})
+		log.Debugf("Received ping sent from %s to %s at %v", recv.From, recv.To, recv.Time)
+		now := time.Now().Unix()
+		ctx, ok := peer.FromContext(stream.Context())
+		if !ok {
+			log.Errorf("Error getting peer from context: %v", err)
+			stream.Send(&pb.Pong{
+				Message: fmt.Sprintf("Sent pong from %v at %v", g.mdns.LocalIp(), now),
+				From:    g.mdns.LocalIp(),
+				To:      "",
+				Time:    now,
+			})
+		} else {
+			stream.Send(&pb.Pong{
+				Message: fmt.Sprintf("Sent pong from %v to %v at %v", g.mdns.LocalIp(), ctx.Addr.String(), now),
+				From:    g.mdns.LocalIp(),
+				To:      ctx.Addr.String(),
+				Time:    now,
+			})
+		}
 	}
 }
 
@@ -761,11 +813,11 @@ func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
 	// Update the metadata
 	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
 
-    // Check if all chunks have been received
-    if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
-        log.Printf("All chunks received for file %s", chunk.FileName)
-        g.file.markFileAsComplete(chunk.FileName)
-    }
+	// Check if all chunks have been received
+	if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
+		log.Printf("All chunks received for file %s", chunk.FileName)
+		g.file.markFileAsComplete(chunk.FileName)
+	}
 
 	log.Infof("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
 	return nil
@@ -811,6 +863,13 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 			return err
 		}
 
+		ctx, ok := peer.FromContext(stream.Context())
+		if !ok {
+			log.Debugf("File list from peer: %v", req.Files)
+		} else {
+			log.Debugf("Peer %s file list %v", ctx.Addr.String(), req.Files)
+		}
+
 		localFileList, err := g.file.BuildLocalFileList()
 		if err != nil {
 			log.Errorf("Failed to build local file list: %v", err)
@@ -820,8 +879,11 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 		missingFiles := g.file.CompareFileLists(localFileList, req)
 		if len(missingFiles) > 0 {
 			for _, fileName := range missingFiles {
+				log.Debugf("Sending file %s to peer", fileName)
 				g.transferFile(fileName, stream, true)
 			}
+		} else {
+			log.Debug("Peer file list in sync with local file list")
 		}
 	}
 }
@@ -902,9 +964,14 @@ func (g *Grpc) DeleteMetadata(filePath string, offset int64) (error, error) {
 }
 
 func (g *Grpc) SaveMetaData(filename string, chunk []byte, offset int64) error {
+
 	// Save new metadata
-	g.meta.SaveMetaDataToMem(filename, chunk, offset)
-	g.meta.SaveMetaDataToDB(filename, chunk, offset)
+	Stronghash := g.meta.hashChunk(chunk)
+	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
+
+	// Save new metadata
+	g.meta.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
+	g.meta.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
 
 	return nil
 }
@@ -1019,6 +1086,7 @@ func (m *Mdns) Start(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	log.Infof("Local IP: %s, Subnet: %s", m.LocalIP, m.Subnet)
+	m.conn.SetIP(m.LocalIP)
 
 	instance := fmt.Sprintf("filesync-%s", m.LocalIP)
 	serviceType := "_myapp_filesync._tcp"
@@ -1090,7 +1158,7 @@ func (m *Mdns) Ping(ctx context.Context, wg *sync.WaitGroup) {
 
 	m.wg.Add(1)
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(20 * time.Second)
 		defer func() {
 			m.wg.Done()
 			ticker.Stop()
@@ -1102,9 +1170,10 @@ func (m *Mdns) Ping(ctx context.Context, wg *sync.WaitGroup) {
 				log.Warn("Shutting down periodic metadata exchange...")
 				return
 			case <-ticker.C:
-
+				now := time.Now().Unix()
 				m.conn.SendMessage(&pb.Ping{
-					Message: fmt.Sprintf("Ping from %v at %v", m.LocalIP, time.Now().Unix()),
+					Message: fmt.Sprintf("Ping from %v at %v", m.LocalIP, now),
+					Time:    now,
 				})
 
 			}
@@ -1202,16 +1271,17 @@ func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Wat
 					return
 				}
 
-				switch {
-				case event.Op&fsnotify.Create == fsnotify.Create:
-					log.Infof("File created: %s", event.Name)
-					go f.HandleFileCreation(event.Name)
-				case event.Op&fsnotify.Write == fsnotify.Write:
-					log.Infof("File modified: %s", event.Name)
-					go f.HandleFileModification(event.Name)
-				case event.Op&fsnotify.Remove == fsnotify.Remove:
+				if event.Op&fsnotify.Remove == fsnotify.Remove {
 					log.Infof("File deleted: %s", event.Name)
 					go f.HandleFileDeletion(event.Name)
+				}
+				if event.Op&fsnotify.Create == fsnotify.Create {
+					log.Infof("File created: %s", event.Name)
+					go f.HandleFileCreation(event.Name)
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Infof("File modified: %s", event.Name)
+					go f.HandleFileModification(event.Name)
 				}
 
 			case err, ok := <-watcher.Errors:
@@ -1229,6 +1299,7 @@ func (f *FileData) Start(ctx context.Context, wg *sync.WaitGroup) (*fsnotify.Wat
 	return watcher, nil
 }
 
+// Periodically check if each peer has the same list of files.
 func (f *FileData) Scan(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	ticker := time.NewTicker(conf.AppConfig.SyncInterval)
@@ -1296,9 +1367,9 @@ func (f *FileData) HandleFileModification(filePath string) {
 	if timer, exists := f.debounceTimers[filePath]; exists {
 		timer.Stop()
 	}
-	log.Debugf("Handling file modification:", filePath)
+	log.Debugf("Handling file modification: %s", filePath)
 	f.debounceTimers[filePath] = time.AfterFunc(500*time.Millisecond, func() {
-		log.Debugf("Handling debounced file modification:", filePath)
+		log.Debugf("Handling debounced file modification: %s", filePath)
 		f.handleDebouncedFileModification(filePath)
 		f.mu.Lock()
 		delete(f.debounceTimers, filePath)
@@ -1309,7 +1380,7 @@ func (f *FileData) HandleFileModification(filePath string) {
 func (f *FileData) handleDebouncedFileModification(filePath string) {
 
 	// Update metadata with isNewFile = false
-	log.Debugf("Updating metadata for modified file:", filePath)
+	log.Debugf("Updating metadata for modified file: %s", filePath)
 	err := f.meta.CreateFileMetaData(filePath, false)
 	if err != nil {
 		log.Errorf("Failed to update metadata for %s: %v", filePath, err)
@@ -1354,6 +1425,16 @@ func (f *FileData) handleDebouncedFileDeletion(filePath string) {
 
 	defer f.markFileAsComplete(filePath)
 
+	// Check if the file still exists
+	if _, err := os.Stat(filePath); err == nil {
+		// File still exists, so it's not actually deleted
+		log.Debugf("File %s still exists, skipping deletion", filePath)
+		return
+	}
+
+	// File does not exist, proceed to delete metadata and notify peers
+	log.Debugf("File %s does not exist, proceeding with deletion", filePath)
+
 	// Delete metadata and notify peers
 	err1, err2 := f.meta.DeleteEntireFileMetaData(filePath)
 	if err1 != nil || err2 != nil {
@@ -1382,6 +1463,7 @@ func (f *FileData) SyncWithPeers() {
 		return
 	}
 
+	log.Debugf("Sending local file list to peer: %v", localFileList)
 	f.conn.SendMessage(&pb.FileList{
 		Files: localFileList.Files,
 	})
@@ -1564,10 +1646,11 @@ type MetaInterface interface {
 	DeleteEntireFileMetaData(filename string) (error, error)
 	GetEntireFileMetaData(filename string) (map[int64]Hash, error)
 	SaveMetaData(filename string, chunk []byte, offset int64, isNewFile bool, fileSize int64) error // ... other methods as needed
-	SaveMetaDataToDB(filename string, chunk []byte, offset int64) error
-	SaveMetaDataToMem(filename string, chunk []byte, offset int64)
+	SaveMetaDataToDB(filename string, stronghash string, weakHash uint32, offset int64) error
+	SaveMetaDataToMem(filename string, stronghash string, weakHash uint32, offset int64)
 	DeleteMetaDataFromDB(filename string, offset int64) error
 	DeleteMetaDataFromMem(filename string, offset int64) error
+	hashChunk(chunk []byte) string
 
 	// Other services need access to the Files map, so we need to expose it using a method
 	TotalChunks(filename string) (int64, error)
@@ -1772,11 +1855,12 @@ func (m *Meta) CreateFileMetaData(fileName string, isNewFile bool) error {
 
 			// is this going to fix corrupt files on the peer?
 			// Copy the chunk data to a new slice
+			// Copy the chunk data to a new slice
 			chunkData := make([]byte, bytesRead)
 			copy(chunkData, buffer[:bytesRead])
-			
+
 			// Save metadata to DB
-			err := m.SaveMetaData(fileName, buffer[:bytesRead], offset, isNewFile, fileInfo.Size())
+			err := m.SaveMetaData(fileName, chunkData, offset, isNewFile, fileInfo.Size())
 			if err != nil {
 				return fmt.Errorf("failed to save metadata: %w", err)
 			}
@@ -1823,9 +1907,11 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 	}
 
 	// Save new metadata
-	log.Debug("Saving metadata...")
-	m.SaveMetaDataToMem(filename, chunk, offset)
-	m.SaveMetaDataToDB(filename, chunk, offset)
+	Stronghash := m.hashChunk(chunk)
+	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
+
+	m.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
+	m.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
 
 	log.Debugf("Sending file at path %s metadata to peers...", filename)
 	m.conn.SendMessage(&pb.FileSyncRequest{
@@ -1845,33 +1931,33 @@ func (m *Meta) SaveMetaData(filename string, chunk []byte, offset int64, isNewFi
 }
 
 // saveMetaDataToDB will save the metadata to the database using the filename and the offset to determine the chunk position
-func (m *Meta) SaveMetaDataToDB(filename string, chunk []byte, offset int64) error {
+func (m *Meta) SaveMetaDataToDB(filename string, stronghash string, weakHash uint32, offset int64) error {
 
 	err := m.db.Update(func(txn *badger.Txn) error {
 		return txn.SetEntry(&badger.Entry{
 			Key: []byte(fmt.Sprintf("%s_%d", filename, offset)),
 			Value: Hash{
-				Stronghash: m.hashChunk(chunk),
-				Weakhash:   pkg.NewRollingChecksum(chunk).Sum(),
+				Stronghash: stronghash,
+				Weakhash:   weakHash,
 			}.Bytes(),
 		})
 	})
 	if err != nil {
 		return err
 	} else {
-		log.Debugf("Saved metadata to BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Saved StrongHash %s and WeakHash %d to badger at offset %d for file %s", stronghash, weakHash, offset, filename)
 	}
 	return nil
 }
 
 // saveMetaDataToMem will save the metadata to the in-memory map using the filename and the offset to determine the chunk position
-func (m *Meta) SaveMetaDataToMem(filename string, chunk []byte, offset int64) {
+func (m *Meta) SaveMetaDataToMem(filename string, stronghash string, weakHash uint32, offset int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	log.Debug("Saving metadata to in-memory map...")
+	log.Debug("Saving metadata to memory...")
 	if _, ok := m.Files[filename]; !ok {
-		log.Debugf("File not found in metadata, creating new entry: %s", filename)
+		log.Infof("File not found in metadata, creating new entry: %s", filename)
 		m.Files[filename] = FileMetaData{
 			hashes:   make(map[int64]Hash),
 			filesize: 0,
@@ -1879,11 +1965,11 @@ func (m *Meta) SaveMetaDataToMem(filename string, chunk []byte, offset int64) {
 	} else {
 		log.Debugf("File found in metadata: %s", filename)
 	}
-	log.Debug("m.Files[filename].hashes[offset] = Hash{}")
 	m.Files[filename].hashes[offset] = Hash{
-		Stronghash: m.hashChunk(chunk),
-		Weakhash:   pkg.NewRollingChecksum(chunk).Sum(),
+		Stronghash: stronghash,
+		Weakhash:   weakHash,
 	}
+	log.Debugf("Saved StrongHash %s and WeakHash %d to memory at offset %d for file %s", stronghash, weakHash, offset, filename)
 	// Do not use UpdateFileSize; set it to the actual file size elsewhere
 }
 
@@ -1897,7 +1983,7 @@ func (m *Meta) GetMetaData(filename string, offset int64) (Hash, error) {
 	if err == nil {
 		return h, err
 	} else {
-		log.Debugf("Metadata not found in memory for file %s at offset %d", filename, offset)
+		log.Warnf("Metadata not found in memory for file %s at offset %d", filename, offset)
 	}
 	h, err = m.getMetaDataFromDB(filename, offset)
 	if err != nil {
@@ -1916,7 +2002,7 @@ func (m *Meta) getMetaDataFromDB(filename string, offset int64) (Hash, error) {
 		if err != nil {
 			return err
 		} else {
-			log.Debugf("Found metadata in BadgerDB for file %s at offset %d", filename)
+			log.Debugf("Found metadata in BadgerDB for file %s at offset %d", filename, offset)
 		}
 		return item.Value(func(val []byte) error {
 			dec := gob.NewDecoder(bytes.NewReader(val))
@@ -2006,12 +2092,12 @@ func (m *Meta) DeleteMetaData(filename string, offset int64) (error, error) {
 	if err1 := m.DeleteMetaDataFromMem(filename, offset); err1 != nil {
 		log.Errorf("Failed to delete metadata from in-memory map: %v", err1)
 	} else {
-		log.Debugf("Deleted metadata from in-memory map for file %s at offset %d", filename, offset)
+		log.Debugf("Deleted metadata from memory for file %s at offset %d", filename, offset)
 	}
 	if err2 := m.DeleteMetaDataFromDB(filename, offset); err2 != nil {
 		log.Errorf("Failed to delete metadata from BadgerDB: %v", err2)
 	} else {
-		log.Debugf("Deleted metadata from BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Deleted metadata from badger for file %s at offset %d", filename, offset)
 	}
 	return err1, err2
 }
@@ -2024,7 +2110,7 @@ func (m *Meta) DeleteMetaDataFromDB(filename string, offset int64) error {
 	if err != nil {
 		return err
 	} else {
-		log.Debugf("Deleted metadata from BadgerDB for file %s at offset %d", filename, offset)
+		log.Debugf("Deleted metadata from badger for file %s at offset %d", filename, offset)
 	}
 	return nil
 }
@@ -2091,6 +2177,7 @@ import (
 	"time"
 
 	"github.com/TypeTerrors/go_sync/conf"
+	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 
@@ -2106,6 +2193,7 @@ type ConnInterface interface {
 	AddPeer(addr string)
 	Close()
 	Start()
+	SetIP(ip string)
 }
 
 // Conn manages connections and communication with peers.
@@ -2116,6 +2204,7 @@ type Conn struct {
 	peers    map[string]*Peer
 	sendChan chan any // Use empty interface to allow any type
 	wg       sync.WaitGroup
+	localIp  string
 }
 
 // NewConn initializes a new Conn without peers.
@@ -2131,6 +2220,9 @@ func NewConn() *Conn {
 func (c *Conn) Start() {
 	c.wg.Add(1)
 	go c.dispatchMessages()
+}
+func (c *Conn) SetIP(ip string) {
+	c.localIp = ip
 }
 
 // SendMessage enqueues a message to be sent to all peers.
@@ -2381,6 +2473,8 @@ func (c *Conn) healthCheckMessageSender(peer *Peer) {
 			if !ok {
 				return // Channel closed
 			}
+			msg.To = peer.ID
+			msg.From = c.localIp
 			err := peer.HealthCheckStream.Send(msg)
 			if err != nil {
 				log.Infof("Failed to send HealthCheck to peer %s: %v", peer.ID, err)
@@ -2502,7 +2596,7 @@ func (c *Conn) getMissingFileSender(peer *Peer) {
 			}
 			err := peer.GetMissingFileStream.Send(msg)
 			if err != nil {
-				log.Infof("Failed to send ChunkRequest to peer %s: %v", peer.ID, err)
+				log.Warnf("Failed to send ChunkRequest to peer %s: %v", peer.ID, err)
 				return // Exit to trigger reconnection
 			}
 		case <-peer.doneChan:
@@ -2619,8 +2713,12 @@ func (c *Conn) handleFileChunk(chunk *pb.FileChunk) error {
 }
 func (c *Conn) SaveMetaData(filename string, chunk []byte, offset int64) error {
 	// Save new metadata
-	c.meta.SaveMetaDataToMem(filename, chunk, offset)
-	c.meta.SaveMetaDataToDB(filename, chunk, offset)
+
+	Stronghash := c.meta.hashChunk(chunk)
+	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
+
+	c.meta.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
+	c.meta.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
 
 	return nil
 }

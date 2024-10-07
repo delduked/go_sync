@@ -242,6 +242,16 @@ func (c *Conn) connectPeer(peer *Peer) error {
 		conn.Close()
 		return err
 	}
+	
+	getMissingFiles, err := client.GetMissingFiles(context.Background())
+	if err != nil {
+		syncFileStream.CloseSend()
+		healthCheckStream.CloseSend()
+		exchangeMetadataStream.CloseSend()
+		requestChunksStream.CloseSend()
+		conn.Close()
+		return err
+	}
 
 	// Initialize other streams as needed
 
@@ -251,6 +261,7 @@ func (c *Conn) connectPeer(peer *Peer) error {
 	peer.HealthCheckStream = healthCheckStream
 	peer.ExchangeMetadataStream = exchangeMetadataStream
 	peer.RequestChunksStream = requestChunksStream
+	peer.GetMissingFileStream = getMissingFiles
 
 	return nil
 }
@@ -428,7 +439,7 @@ func (c *Conn) getMissingFileSender(peer *Peer) {
 			}
 			err := peer.GetMissingFileStream.Send(msg)
 			if err != nil {
-				log.Infof("Failed to send ChunkRequest to peer %s: %v", peer.ID, err)
+				log.Warnf("Failed to send ChunkRequest to peer %s: %v", peer.ID, err)
 				return // Exit to trigger reconnection
 			}
 		case <-peer.doneChan:
