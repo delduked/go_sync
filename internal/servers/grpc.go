@@ -261,7 +261,7 @@ func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 		if err != nil {
 			log.Errorf("Error receiving health check request: %v", err)
 		}
-		log.Debug("Received Ping sent from %s to %s at %v", recv.From, recv.To, recv.Time)
+		log.Debugf("Received ping sent from %s to %s at %v", recv.From, recv.To, recv.Time)
 		now := time.Now().Unix()
 		ctx, ok := peer.FromContext(stream.Context())
 		if !ok {
