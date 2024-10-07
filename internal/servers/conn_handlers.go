@@ -23,10 +23,9 @@ func (c *Conn) handleMetadataResponse(peer *Peer, msg *pb.MetadataResponse) {
 }
 
 func (c *Conn) handleGetMissingFileResponse(peer *Peer, chunk *pb.FileChunk) error {
+	log.Debugf("Received GetMissingFileResponse from peer %s for file %s at offset %d", peer.ID, chunk.FileName, chunk.Offset)
 	filePath := chunk.FileName
 	c.file.markFileAsInProgress(chunk.FileName)
-
-	log.Debugf("Received GetMissingFileResponse from peer %s for file %s at offset %d", peer.ID, chunk.FileName, chunk.Offset)
 
 	// Open or get the file
 	file, err := c.file.getOrOpenFile(chunk.FileName)

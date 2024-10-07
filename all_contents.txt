@@ -463,7 +463,7 @@ func (c *Conn) handleMetadataResponse(peer *Peer, msg *pb.MetadataResponse) {
 
 func (c *Conn) handleGetMissingFileResponse(peer *Peer, chunk *pb.FileChunk) error {
 	filePath := chunk.FileName
-	c.file.markFileAsInProgress(filePath)
+	c.file.markFileAsInProgress(chunk.FileName)
 
 	log.Debugf("Received GetMissingFileResponse from peer %s for file %s at offset %d", peer.ID, chunk.FileName, chunk.Offset)
 
@@ -876,11 +876,12 @@ func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) 
 			return err
 		}
 
-		missingFiles := g.file.CompareFileLists(localFileList, req)
+		missingFiles := g.file.CompareFileLists(req, localFileList)
 		if len(missingFiles) > 0 {
 			for _, fileName := range missingFiles {
-				log.Debugf("Sending file %s to peer", fileName)
-				g.transferFile(fileName, stream, true)
+				cleanfile := filepath.Join(g.syncDir, filepath.Clean(fileName))
+				log.Debugf("Sending file %s to peer", cleanfile)
+				g.transferFile(cleanfile, stream, true)
 			}
 		} else {
 			log.Debug("Peer file list in sync with local file list")
@@ -2410,6 +2411,16 @@ func (c *Conn) connectPeer(peer *Peer) error {
 		conn.Close()
 		return err
 	}
+	
+	getMissingFiles, err := client.GetMissingFiles(context.Background())
+	if err != nil {
+		syncFileStream.CloseSend()
+		healthCheckStream.CloseSend()
+		exchangeMetadataStream.CloseSend()
+		requestChunksStream.CloseSend()
+		conn.Close()
+		return err
+	}
 
 	// Initialize other streams as needed
 
@@ -2419,6 +2430,7 @@ func (c *Conn) connectPeer(peer *Peer) error {
 	peer.HealthCheckStream = healthCheckStream
 	peer.ExchangeMetadataStream = exchangeMetadataStream
 	peer.RequestChunksStream = requestChunksStream
+	peer.GetMissingFileStream = getMissingFiles
 
 	return nil
 }
