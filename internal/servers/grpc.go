@@ -168,7 +168,7 @@ func (g *Grpc) ExchangeMetadata(stream pb.FileSyncService_ExchangeMetadataServer
 			log.Errorf("Error sending metadata response: %v", err)
 			return err
 		} else {
-			log.Debugf("Sent metadata response for file", fileName)
+			log.Debugf("Sent metadata response for file %s", fileName)
 		}
 	}
 }
