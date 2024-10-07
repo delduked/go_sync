@@ -130,6 +130,10 @@ func startServices(ctx context.Context, wg *sync.WaitGroup, mdns *servers.Mdns, 
 	// Start FileData
 	wg.Add(1)
 	go file.Start(ctx, wg)
+	// Start FileData
+	
+	wg.Add(1)
+	go file.Scan(ctx, wg)
 
 	// Scan existing files
 	meta.Scan()
