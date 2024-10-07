@@ -40,9 +40,10 @@ type Conn struct {
 }
 
 // NewConn initializes a new Conn without peers.
-func NewConn() *Conn {
+func NewConn(file FileDataInterface, meta MetaInterface) *Conn {
 	return &Conn{
-
+		file:     file,
+		meta:     meta,
 		peers:    make(map[string]*Peer),
 		sendChan: make(chan any),
 	}
