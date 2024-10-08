@@ -45,7 +45,7 @@ jobs:
           DATE=$(date +'%Y%m%d')
           UNIX_TIME=$(date +%s)
           HEX_UNIX_TIME=$(printf '%x' $UNIX_TIME)
-          echo "tag=v_${HEX_UNIX_TIME}.${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "tag=v_${COMMIT_SHA}.${HEX_UNIX_TIME}" >> $GITHUB_OUTPUT
           echo "tagname=v_${COMMIT_SHA}.${DATE}" >> $GITHUB_OUTPUT
 
       - name: Create Release
