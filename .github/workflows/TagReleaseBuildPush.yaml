@@ -19,7 +19,6 @@ jobs:
 
       - name: Build MacOS binary
         run: |
-          go install
           go mod tidy
 
       - name: Build Windows binary
