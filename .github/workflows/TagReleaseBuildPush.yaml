@@ -1,0 +1,94 @@
+name: Go Build Tag and Release
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+
+jobs:
+  build-and-release:
+    runs-on: type-terrors-scale-set
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.0'
+
+      - name: Build MacOS binary
+        run: |
+          go mod tidy
+
+      - name: Build Windows binary
+        run: |
+          GOARCH=amd64 GOOS=linux go build -o go_sync_win.exe ./cmd/server/main.go
+
+      - name: Build Windows linux
+        run: |
+          GOARCH=amd64 GOOS=linux go build -o go_sync_linux ./cmd/server/main.go
+
+      - name: Build Mac binary
+        run: |
+          GOARCH=amd64 GOOS=darwin go build -o go_sync_mac ./cmd/server/main.go
+
+      - uses: benjlevesque/short-sha@v3.0
+        id: short-sha
+        with:
+          length: 6
+
+      - name: Calculate next tag
+        id: create_tag
+        run: |
+          COMMIT_SHA=${{ steps.short-sha.outputs.sha }}
+          DATE=$(date +'%Y%m%d')
+          UNIX_TIME=$(date +%s)
+          HEX_UNIX_TIME=$(printf '%x' $UNIX_TIME)
+          echo "tag=v_${HEX_UNIX_TIME}.${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "tagname=v_${COMMIT_SHA}.${DATE}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          tag_name: ${{ steps.create_tag.outputs.tag }}
+          release_name: ${{ steps.create_tag.outputs.tagname }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release for MacOS
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./go_sync_mac
+          asset_name: go_sync_mac
+          asset_content_type: application/octet-stream
+
+      - name: Upload Release for Windows
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./go_sync_win.exe
+          asset_name: go_sync_win.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload Release for Linux
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./go_sync_linux
+          asset_name: go_sync_linux
+          asset_content_type: application/octet-stream
