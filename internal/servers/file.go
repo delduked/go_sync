@@ -352,6 +352,9 @@ func (e *Engine) apply(entry, expected *pb.FileEntry, staged string, verifiedPre
 	if !shouldReceive(entry, current) {
 		return nil
 	}
+	if handled, err := e.retainDirectoryLocked(entry, current, staged); handled || err != nil {
+		return err
+	}
 	if current != nil && compare(entry, current) == concurrent {
 		if !sameContent(entry, current) {
 			if err := e.preserveConflictLocked(current); err != nil {

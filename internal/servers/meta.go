@@ -99,7 +99,7 @@ func (e *Engine) save(f *pb.FileEntry) error {
 	return nil
 }
 func (e *Engine) local(f *pb.FileEntry) error {
-	f.Version = vector(e.files[f.FileName])
+	f.Version = mergedVersion(f, e.files[f.FileName])
 	e.clock++
 	f.Revision = e.clock
 	f.Origin = e.id

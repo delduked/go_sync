@@ -38,6 +38,13 @@ func (e *Engine) preserveConflictLocked(loser *pb.FileEntry) error {
 	if loser == nil {
 		return nil
 	}
+	return e.preserveConflictFromLocked(loser, loser.FileName)
+}
+
+func (e *Engine) preserveConflictFromLocked(loser *pb.FileEntry, source string) error {
+	if loser == nil {
+		return nil
+	}
 	dir := path.Join(conflictDirectory, conflictID(loser))
 	if err := e.root.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -56,7 +63,7 @@ func (e *Engine) preserveConflictLocked(loser *pb.FileEntry) error {
 	if !loser.IsDeleted && !loser.IsDirectory {
 		name := path.Join(dir, "data")
 		if _, err := e.root.Lstat(name); errors.Is(err, os.ErrNotExist) {
-			original, err := e.root.Open(loser.FileName)
+			original, err := e.root.Open(source)
 			if err != nil {
 				return err
 			}
@@ -135,4 +142,37 @@ func (e *Engine) preserveConflictLocked(loser *pb.FileEntry) error {
 	}
 	hash := sha256.Sum256(data)
 	return e.save(&pb.FileEntry{FileName: name, FileSize: int64(len(data)), Hash: hex.EncodeToString(hash[:]), Mode: 0644, Origin: loser.Origin, Revision: loser.Revision, Version: vector(loser)})
+}
+
+// A parent deletion/type replacement cannot erase locally retained children.
+// Preserve the incoming operation and emit a causally newer retained directory.
+func (e *Engine) retainDirectoryLocked(incoming, current *pb.FileEntry, staged string) (bool, error) {
+	if current == nil || current.IsDeleted || !current.IsDirectory || (!incoming.IsDeleted && incoming.IsDirectory) {
+		return false, nil
+	}
+	dir, err := e.root.Open(current.FileName)
+	if err != nil {
+		return false, err
+	}
+	children, err := dir.ReadDir(1)
+	dir.Close()
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+	if len(children) == 0 {
+		return false, nil
+	}
+	source := incoming.FileName
+	if !incoming.IsDeleted && !incoming.IsDirectory {
+		source = staged
+	}
+	if err = e.preserveConflictFromLocked(incoming, source); err != nil {
+		return true, err
+	}
+	retained := copyEntry(current)
+	retained.Version = mergedVersion(current, incoming)
+	if incoming.Revision > e.clock {
+		e.clock = incoming.Revision
+	}
+	return true, e.local(retained)
 }

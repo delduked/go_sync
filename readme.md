@@ -161,6 +161,11 @@ revision in `details.json`. These conflict artifacts synchronize to every peer.
 Merged histories ensure that a later edit made after seeing both versions is a
 normal successor. Identical concurrent contents merge histories without creating
 extra copies. Older v2 records without vectors are treated conservatively.
+Edit/delete conflicts preserve either the edited bytes or a deletion notice.
+A directory deletion or file replacement cannot erase retained local children:
+the directory is kept as a causally newer revision and the incoming operation
+(or replacement file) is preserved in the conflict folder. Parent/type conflicts
+may need another reconciliation pass before their children can transfer.
 
 Ordinary overwritten/deleted file contents are also retained locally under
 `STATE/versions/SHA256(relative-path)-SHA256(contents)`.
