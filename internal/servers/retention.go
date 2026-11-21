@@ -60,6 +60,7 @@ func (e *Engine) Prune(cutoff time.Time) (PruneResult, error) {
 		e.graveyard[name] = copyEntry(f)
 		delete(e.files, name)
 		delete(e.deletedAt, name)
+		e.generation++
 		result.TombstonesCompacted++
 	}
 	backups, err := os.ReadDir(filepath.Join(e.stateDir, "versions"))

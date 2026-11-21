@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	FileSyncService_ListFiles_FullMethodName        = "/FileSyncService/ListFiles"
+	FileSyncService_Announce_FullMethodName         = "/FileSyncService/Announce"
 	FileSyncService_ExchangeManifest_FullMethodName = "/FileSyncService/ExchangeManifest"
 	FileSyncService_ReadFile_FullMethodName         = "/FileSyncService/ReadFile"
 	FileSyncService_ReadDelta_FullMethodName        = "/FileSyncService/ReadDelta"
@@ -33,6 +34,7 @@ const (
 // Protocol v2 deliberately does not accept the unsafe v1 push RPCs.
 type FileSyncServiceClient interface {
 	ListFiles(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*FileList, error)
+	Announce(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Announcement, error)
 	ExchangeManifest(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ManifestBatch, ManifestBatch], error)
 	ReadFile(ctx context.Context, in *FileEntry, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChunk], error)
 	ReadDelta(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DeltaRequest, FileChunk], error)
@@ -51,6 +53,16 @@ func (c *fileSyncServiceClient) ListFiles(ctx context.Context, in *Empty, opts .
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FileList)
 	err := c.cc.Invoke(ctx, FileSyncService_ListFiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileSyncServiceClient) Announce(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Announcement, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Announcement)
+	err := c.cc.Invoke(ctx, FileSyncService_Announce_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +134,7 @@ type FileSyncService_HealthCheckClient = grpc.BidiStreamingClient[Ping, Pong]
 // Protocol v2 deliberately does not accept the unsafe v1 push RPCs.
 type FileSyncServiceServer interface {
 	ListFiles(context.Context, *Empty) (*FileList, error)
+	Announce(context.Context, *Empty) (*Announcement, error)
 	ExchangeManifest(grpc.BidiStreamingServer[ManifestBatch, ManifestBatch]) error
 	ReadFile(*FileEntry, grpc.ServerStreamingServer[FileChunk]) error
 	ReadDelta(grpc.BidiStreamingServer[DeltaRequest, FileChunk]) error
@@ -138,6 +151,9 @@ type UnimplementedFileSyncServiceServer struct{}
 
 func (UnimplementedFileSyncServiceServer) ListFiles(context.Context, *Empty) (*FileList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFiles not implemented")
+}
+func (UnimplementedFileSyncServiceServer) Announce(context.Context, *Empty) (*Announcement, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Announce not implemented")
 }
 func (UnimplementedFileSyncServiceServer) ExchangeManifest(grpc.BidiStreamingServer[ManifestBatch, ManifestBatch]) error {
 	return status.Errorf(codes.Unimplemented, "method ExchangeManifest not implemented")
@@ -190,6 +206,24 @@ func _FileSyncService_ListFiles_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileSyncService_Announce_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileSyncServiceServer).Announce(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FileSyncService_Announce_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileSyncServiceServer).Announce(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _FileSyncService_ExchangeManifest_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(FileSyncServiceServer).ExchangeManifest(&grpc.GenericServerStream[ManifestBatch, ManifestBatch]{ServerStream: stream})
 }
@@ -232,6 +266,10 @@ var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListFiles",
 			Handler:    _FileSyncService_ListFiles_Handler,
+		},
+		{
+			MethodName: "Announce",
+			Handler:    _FileSyncService_Announce_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -340,3 +340,8 @@ Linux is runtime-tested in Docker. Windows amd64 and macOS arm64 are build-check
 watcher behavior, filesystem timestamp/mode differences and service installation
 on those systems still require native validation. Windows does not provide POSIX
 executable-bit semantics. This is regular-file mirroring, not a filesystem image.
+
+Peers exchange a small node/generation announcement each interval and fetch
+manifests when either side changes. Chunk retrieval remains a separate verified
+RPC. Generations include a process-session token, so a restart forces fresh
+reconciliation. Older v2 peers fall back to periodic full manifests.

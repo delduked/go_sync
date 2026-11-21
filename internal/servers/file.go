@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -77,7 +78,7 @@ func NewEngine(folder, state string, options ...Option) (*Engine, error) {
 		root.Close()
 		return nil, err
 	}
-	e := &Engine{root: &safeRoot{root}, db: db, stateDir: state, files: make(map[string]*pb.FileEntry), cache: make(map[string]fingerprintCache), graveyard: make(map[string]*pb.FileEntry), deletedAt: make(map[string]time.Time)}
+	e := &Engine{session: randomID(), root: &safeRoot{root}, db: db, stateDir: state, files: make(map[string]*pb.FileEntry), cache: make(map[string]fingerprintCache), graveyard: make(map[string]*pb.FileEntry), deletedAt: make(map[string]time.Time)}
 	for _, option := range options {
 		if err = option(e); err != nil {
 			e.Close()
@@ -166,7 +167,13 @@ func (e *Engine) scanLocked() error {
 	}
 	seen := make(map[string]bool)
 	folded := make(map[string]string)
+	oldUnsupported := e.unsupported
 	e.unsupported = make(map[string]string)
+	defer func() {
+		if !reflect.DeepEqual(oldUnsupported, e.unsupported) {
+			e.generation++
+		}
+	}()
 	err := fs.WalkDir(e.root.FS(), ".", func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

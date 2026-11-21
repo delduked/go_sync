@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 )
 
@@ -20,6 +21,9 @@ type ignoreRule struct {
 func (e *Engine) loadIgnoreLocked() error {
 	f, err := e.root.Open(ignoreFile)
 	if os.IsNotExist(err) {
+		if len(e.ignores) > 0 {
+			e.generation++
+		}
 		e.ignores = nil
 		return nil
 	}
@@ -61,6 +65,9 @@ func (e *Engine) loadIgnoreLocked() error {
 			}
 		}
 		rules = append(rules, r)
+	}
+	if !reflect.DeepEqual(e.ignores, rules) {
+		e.generation++
 	}
 	e.ignores = rules
 	return nil

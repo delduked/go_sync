@@ -16,6 +16,8 @@ import (
 // Engine serializes metadata changes and filesystem commits, never network I/O.
 // Records, including tombstones, survive restarts; the clock never goes backwards.
 type Engine struct {
+	session      string
+	generation   uint64
 	unsupported  map[string]string
 	contentPaths map[string]map[string]bool
 	ignores      []ignoreRule
@@ -160,6 +162,7 @@ func (e *Engine) save(f *pb.FileEntry) error {
 	}); err != nil {
 		return err
 	}
+	e.generation++
 	e.indexContent(e.files[f.FileName], f)
 	e.files[f.FileName] = copyEntry(f)
 	delete(e.graveyard, f.FileName)

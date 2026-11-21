@@ -11,6 +11,8 @@ import (
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Reconcile fetches durable state instead of enqueuing lossy filesystem events.
@@ -115,6 +117,7 @@ func (c *Connections) AddPeer(addr string) {
 		}
 		defer conn.Close()
 		client := pb.NewFileSyncServiceClient(conn)
+		var lastRemote, lastLocal string
 		timer := time.NewTimer(0)
 		defer timer.Stop()
 		for {
@@ -123,7 +126,17 @@ func (c *Connections) AddPeer(addr string) {
 				return
 			case <-timer.C:
 				callCtx, done := context.WithTimeout(ctx, 10*time.Minute)
-				err := c.engine.Reconcile(callCtx, client)
+				announcement, err := client.Announce(callCtx, &pb.Empty{})
+				localGeneration := c.engine.Generation()
+				if status.Code(err) == codes.Unimplemented {
+					err = c.engine.Reconcile(callCtx, client)
+				} else if err == nil && (announcement.Generation != lastRemote || localGeneration != lastLocal) {
+					err = c.engine.Reconcile(callCtx, client)
+					if err == nil {
+						lastRemote = announcement.Generation
+						lastLocal = c.engine.Generation()
+					}
+				}
 				done()
 				if err != nil && ctx.Err() == nil {
 					log.Debugf("peer %s: %v", addr, err)

@@ -65,7 +65,7 @@ Docker log: `/tmp/gosync-regression-5xpj5jne`.
 ## 4. Cascading distribution — in progress
 
 - [x] 4.1 Ten-peer baseline harness and measurements.
-- [ ] 4.2 Separate revision announcements from chunk retrieval.
+- [x] 4.2 Separate revision announcements from chunk retrieval.
 - [ ] 4.3 Limited fanout and duplicate suppression.
 - [ ] 4.4 Alternate routes/sources after relay failures.
 - [ ] 4.5 Bounded concurrency, bandwidth and fair scheduling.
