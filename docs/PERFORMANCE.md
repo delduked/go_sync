@@ -33,3 +33,14 @@ ext filesystem, which does not support reflinks. Linux reflink support is attemp
 and falls back automatically; successful clones are separately counted in
 `reflink_bytes`. The clone-isolation test is skipped when the filesystem rejects
 the ioctl, and no copy-on-write performance claim is made for this machine.
+
+## Ten-peer baseline (before cascading)
+
+`python3 integration/mesh.py` ran ten isolated Docker peers with an 8 MiB file,
+500 ms reconciliation, plaintext test transport and the existing full mesh.
+One run converged in 0.577 s. The origin sent 48 MiB; relays sent another 24 MiB,
+for the minimum 72 MiB total payload needed by nine new replicas. This already
+shows opportunistic reuse of relays, but source choice has no fanout limit.
+These are application payload counters on one machine, not LAN throughput.
+Logs: `/tmp/gosync-mesh-1ynzvf7o`. The harness records per-peer bytes and cleans
+up containers/networks while retaining its report and logs.
