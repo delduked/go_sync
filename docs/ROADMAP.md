@@ -62,18 +62,25 @@ project save bursts, exclusions, timestamps and directory moves. Windows amd64,
 macOS arm64 and Go 1.25.5 builds passed; native non-Linux runtime tests are deferred.
 Docker log: `/tmp/gosync-regression-5xpj5jne`.
 
-## 4. Cascading distribution — in progress
+## 4. Cascading distribution — complete
 
 - [x] 4.1 Ten-peer baseline harness and measurements.
 - [x] 4.2 Separate revision announcements from chunk retrieval.
 - [x] 4.3 Limited fanout and duplicate suppression.
 - [x] 4.4 Alternate routes/sources after relay failures.
 - [x] 4.5 Bounded concurrency, bandwidth and fair scheduling.
-- [ ] 4.6 Exercise changes from every host, including growing files.
+- [x] 4.6 Exercise changes from every host, including growing files.
 
 Accept: ten peers converge despite relay failures; measure origin upload reduction.
 
-## 5. Easy setup and operation
+Evidence: all ten origins transferred 8 MiB files with exactly two origin copies
+and nine total copies; shared edits and growing files passed from every origin.
+Every growing writer reached all nine replicas before finishing. A preferred
+relay outage recovered in 3.684 s, then the restarted relay caught up. Race suite,
+rate/quantum/deduplication tests, vet and all 43 Docker regression checks passed.
+Logs: `/tmp/gosync-mesh-x0ppj3o2`, `/tmp/gosync-regression-5hzdjx15`.
+
+## 5. Easy setup and operation — in progress
 
 - [ ] 5.1 Trusted pairing/certificate provisioning workflow.
 - [ ] 5.2 Persistent config and stable shared-folder identities.

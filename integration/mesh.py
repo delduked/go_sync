@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 import time
 
 
@@ -18,6 +19,7 @@ def main():
     parser.add_argument("--fanout", type=int, default=None)
     parser.add_argument("--all-origins", action="store_true")
     parser.add_argument("--relay-failure", action="store_true")
+    parser.add_argument("--growing", action="store_true")
     args = parser.parse_args()
     if not 2 <= args.peers <= 50 or not 1 <= args.size_mib <= 512:
         parser.error("use 2–50 peers and 1–512 MiB")
@@ -78,6 +80,42 @@ def main():
                       "origin_payload_sent": sent[origin], "total_payload_sent": sum(sent), "total_payload_received": sum(received), "per_peer_sent": sent}
             report["workloads"].append(result)
             print(json.dumps(result), flush=True)
+        if args.all_origins:
+            for origin in range(args.peers):
+                data = f"// edited on host {origin}\nexport const origin = {origin};\n".encode()
+                (folders[origin] / "shared.ts").write_bytes(data)
+                wait(lambda: all((p / "shared.ts").read_bytes() == data for p in folders))
+            report["shared_edits_from_every_origin"] = True
+        if args.growing:
+            growth_results = []
+            for origin in range(args.peers if args.all_origins else 1):
+                name = f"growing-{origin}.bin"
+                finished = threading.Event()
+                errors = []
+                def grow():
+                    try:
+                        with (folders[origin] / name).open("wb") as out:
+                            for index in range(80):
+                                out.write(bytes([(origin + index) % 256]) * 32768)
+                                out.flush()
+                                time.sleep(.04)
+                    except Exception as error:
+                        errors.append(str(error))
+                    finally:
+                        finished.set()
+                writer = threading.Thread(target=grow)
+                writer.start()
+                try:
+                    wait(lambda: not finished.is_set() and all((p / name).stat().st_size > 0 for i, p in enumerate(folders) if i != origin), timeout=3)
+                finally:
+                    writer.join()
+                if errors:
+                    raise AssertionError(errors)
+                expected = b"".join(bytes([(origin + index) % 256]) * 32768 for index in range(80))
+                wait(lambda: all((p / name).read_bytes() == expected for p in folders))
+                growth_results.append({"origin": origin, "all_replicas_progressed_before_completion": True, "final_bytes": len(expected)})
+                print(json.dumps(growth_results[-1]), flush=True)
+            report["growing_files"] = growth_results
         if args.relay_failure:
             identities = {name: re.search(r"node=([a-f0-9]{32})", compose("logs", name)).group(1) for name in names}
             relay = sorted(names[1:], key=lambda n: identities[n])[0]
