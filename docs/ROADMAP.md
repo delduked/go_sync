@@ -47,7 +47,7 @@ floors remain indefinitely to prevent resurrection. Docker log:
 
 ## 3. Complete project-folder mirroring — in progress
 
-- [ ] 3.1 Configurable exclusions.
+- [x] 3.1 Configurable exclusions.
 - [ ] 3.2 Efficient moves/renames with content reuse.
 - [ ] 3.3 Explicit permissions, timestamps, symlink and unsupported-file policies.
 - [ ] 3.4 Editor/build and many-small-file workload tests.

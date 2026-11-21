@@ -157,6 +157,9 @@ func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, erro
 	return r, nil
 }
 func (e *Engine) scanLocked() error {
+	if err := e.loadIgnoreLocked(); err != nil {
+		return err
+	}
 	seen := make(map[string]bool)
 	err := fs.WalkDir(e.root.FS(), ".", func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -165,7 +168,7 @@ func (e *Engine) scanLocked() error {
 		if name == "." {
 			return nil
 		}
-		if privateName(d.Name()) {
+		if privateName(d.Name()) || e.ignoredLocked(name, d.IsDir()) {
 			if d.IsDir() {
 				return fs.SkipDir
 			}
@@ -188,7 +191,7 @@ func (e *Engine) scanLocked() error {
 		return err
 	} // Never infer deletions from an incomplete scan.
 	for name, previous := range e.files {
-		if !seen[name] && !previous.IsDeleted {
+		if !seen[name] && !previous.IsDeleted && !e.ignoredLocked(name, previous.IsDirectory) {
 			delete(e.cache, name)
 			if err = e.local(&pb.FileEntry{FileName: name, IsDeleted: true, IsDirectory: previous.IsDirectory}); err != nil {
 				return err
@@ -206,7 +209,9 @@ func (e *Engine) Manifest() (*pb.FileList, error) {
 	}
 	list := &pb.FileList{}
 	for _, f := range e.files {
-		list.Files = append(list.Files, copyEntry(f))
+		if !e.ignoredLocked(f.FileName, f.IsDirectory) {
+			list.Files = append(list.Files, copyEntry(f))
+		}
 	}
 	return list, nil
 }
@@ -231,8 +236,14 @@ func (e *Engine) Watch(ctx context.Context, interval time.Duration) {
 			watched[p] = true
 		}
 		filepath.WalkDir(e.root.Name(), func(p string, d fs.DirEntry, err error) error {
-			if err == nil && d.IsDir() && p != e.root.Name() && privateName(d.Name()) {
-				return fs.SkipDir
+			if err == nil && d.IsDir() && p != e.root.Name() {
+				relative, relErr := filepath.Rel(e.root.Name(), p)
+				e.mu.Lock()
+				ignored := e.ignoredLocked(filepath.ToSlash(relative), true)
+				e.mu.Unlock()
+				if privateName(d.Name()) || relErr == nil && ignored {
+					return fs.SkipDir
+				}
 			}
 			if err == nil && d.IsDir() && !watched[p] {
 				if watcher.Add(p) == nil {
@@ -354,6 +365,12 @@ func (e *Engine) refreshLocked(name string) error {
 func (e *Engine) apply(entry, expected *pb.FileEntry, staged string, verifiedPrefix ...string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if err := e.loadIgnoreLocked(); err != nil {
+		return err
+	}
+	if e.ignoredLocked(entry.FileName, entry.IsDirectory) {
+		return fmt.Errorf("path is excluded by %s", ignoreFile)
+	}
 	// Detect local edits made while the download was in flight.
 	if err := e.refreshLocked(entry.FileName); err != nil {
 		return err

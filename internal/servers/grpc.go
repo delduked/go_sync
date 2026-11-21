@@ -74,6 +74,11 @@ func (s *Service) ReadFile(req *pb.FileEntry, stream pb.FileSyncService_ReadFile
 	if err := validateEntry(req); err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+	if excluded, err := s.Engine.excluded(req.FileName, req.IsDirectory); err != nil {
+		return err
+	} else if excluded {
+		return status.Error(codes.PermissionDenied, "excluded path")
+	}
 	if req.IsDeleted || req.IsDirectory {
 		return status.Error(codes.InvalidArgument, "not a regular file")
 	}

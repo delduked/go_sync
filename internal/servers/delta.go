@@ -30,6 +30,11 @@ func (s *Service) ReadDelta(stream pb.FileSyncService_ReadDeltaServer) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 	entry := first.File
+	if excluded, err := s.Engine.excluded(entry.FileName, entry.IsDirectory); err != nil {
+		return err
+	} else if excluded {
+		return status.Error(codes.PermissionDenied, "excluded path")
+	}
 	if entry.IsDeleted || entry.IsDirectory || first.BlockSize < 1024 || first.BlockSize > 1024*1024 {
 		return status.Error(codes.InvalidArgument, "invalid delta header")
 	}

@@ -17,9 +17,13 @@ import (
 // A failed transfer stays pending in the manifest and is retried next pass.
 func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient) error {
 	e.mu.Lock()
+	if err := e.loadIgnoreLocked(); err != nil {
+		e.mu.Unlock()
+		return err
+	}
 	var known []string
 	for name, f := range e.files {
-		if !f.IsDeleted {
+		if !f.IsDeleted && !e.ignoredLocked(name, f.IsDirectory) {
 			known = append(known, name)
 		}
 	}
@@ -35,6 +39,9 @@ func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient)
 	}
 	sort.Slice(remote.Files, func(i, j int) bool {
 		a, b := remote.Files[i], remote.Files[j]
+		if (a.FileName == ignoreFile) != (b.FileName == ignoreFile) {
+			return a.FileName == ignoreFile
+		}
 		if a.IsDeleted != b.IsDeleted {
 			return a.IsDeleted
 		} // Remove old paths before creating replacements.
@@ -51,6 +58,13 @@ func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient)
 	for _, f := range remote.Files {
 		if err = ctx.Err(); err != nil {
 			return err
+		}
+		excluded, excludeErr := e.excluded(f.FileName, f.IsDirectory)
+		if excludeErr != nil {
+			return excludeErr
+		}
+		if excluded {
+			continue
 		}
 		if err = e.RestoreDeletionFloors([]string{f.FileName}); err != nil {
 			return err

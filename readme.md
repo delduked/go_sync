@@ -276,3 +276,28 @@ causal context. When a returning peer mentions an old path, the deletion becomes
 active again and is sent to that peer. Thus an offline copy cannot silently
 resurrect just because retention ran. Deliberately recreating a file inherits its
 retained history and is treated as a new edit. Retention is not automatic by default.
+
+### Project exclusions
+
+Place a `.gosyncignore` in the shared root. It synchronizes before other changes.
+For example:
+
+```text
+node_modules/
+.git/
+/dist/
+**/*.tmp
+```
+
+Patterns without `/` match names at any depth. A leading `/` anchors at the root;
+other slash-containing patterns are also root-relative. `*`, `?`, character classes
+and whole-component `**` are supported; a trailing `/` matches directories and
+all descendants. Blank lines and `#` comments are ignored. Negation and backslash
+escapes are unsupported and reported as configuration errors. This is a small
+explicit glob language, not the full Git ignore language.
+
+Excluded paths stay on disk and are neither advertised, served nor overwritten.
+Adding a rule does not remove replicas already present. Removing a rule makes
+those local files eligible again; divergent edits can create conflicts. The
+policy and `.gosync-conflicts` cannot exclude themselves. Install the policy
+before starting peers if the excluded data must never be shared.
