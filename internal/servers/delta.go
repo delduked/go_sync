@@ -38,6 +38,11 @@ func (s *Service) ReadDelta(stream pb.FileSyncService_ReadDeltaServer) error {
 	if entry.IsDeleted || entry.IsDirectory || first.BlockSize < 1024 || first.BlockSize > 1024*1024 {
 		return status.Error(codes.InvalidArgument, "invalid delta header")
 	}
+	release, err := acquire(stream.Context(), s.Engine.limits.send)
+	if err != nil {
+		return err
+	}
+	defer release()
 	blockSize := first.BlockSize
 	basis := make(map[int64][]byte)
 	var last int64 = -1
@@ -107,11 +112,17 @@ func (s *Service) ReadDelta(stream pb.FileSyncService_ReadDeltaServer) error {
 			s.Engine.metrics.Reused.Add(n)
 			continue
 		}
+		if err = s.Engine.limits.waitBandwidth(stream.Context(), n); err != nil {
+			return err
+		}
 		if err = stream.Send(&pb.FileChunk{Offset: offset, ChunkData: chunk}); err != nil {
 			return err
 		}
 		sent += n
 		s.Engine.metrics.PayloadSent.Add(n)
+		if quantum := s.Engine.limits.payloadQuantum(blockSize); quantum > 0 && sent >= quantum && offset+n < entry.FileSize {
+			return status.Error(codes.Aborted, "transfer quantum reached; resume next pass")
+		}
 	}
 	if hex.EncodeToString(whole.Sum(nil)) != entry.Hash {
 		return status.Error(codes.Aborted, "source prefix changed; retry a newer revision")

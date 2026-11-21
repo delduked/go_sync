@@ -3,6 +3,9 @@ package conf
 import "time"
 
 type Config struct {
+	Transfers              int
+	UploadLimit            int64
+	TransferQuantum        int64
 	Fanout                 int
 	Bootstrap              string
 	SyncFolder             string

@@ -78,7 +78,7 @@ func NewEngine(folder, state string, options ...Option) (*Engine, error) {
 		root.Close()
 		return nil, err
 	}
-	e := &Engine{session: randomID(), root: &safeRoot{root}, db: db, stateDir: state, files: make(map[string]*pb.FileEntry), cache: make(map[string]fingerprintCache), graveyard: make(map[string]*pb.FileEntry), deletedAt: make(map[string]time.Time)}
+	e := &Engine{limits: newTransferLimits(2, 0, 8<<20), session: randomID(), root: &safeRoot{root}, db: db, stateDir: state, files: make(map[string]*pb.FileEntry), cache: make(map[string]fingerprintCache), graveyard: make(map[string]*pb.FileEntry), deletedAt: make(map[string]time.Time)}
 	for _, option := range options {
 		if err = option(e); err != nil {
 			e.Close()

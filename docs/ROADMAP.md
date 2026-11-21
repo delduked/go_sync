@@ -68,7 +68,7 @@ Docker log: `/tmp/gosync-regression-5xpj5jne`.
 - [x] 4.2 Separate revision announcements from chunk retrieval.
 - [x] 4.3 Limited fanout and duplicate suppression.
 - [x] 4.4 Alternate routes/sources after relay failures.
-- [ ] 4.5 Bounded concurrency, bandwidth and fair scheduling.
+- [x] 4.5 Bounded concurrency, bandwidth and fair scheduling.
 - [ ] 4.6 Exercise changes from every host, including growing files.
 
 Accept: ten peers converge despite relay failures; measure origin upload reduction.

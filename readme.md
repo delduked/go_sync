@@ -359,3 +359,13 @@ can use any authenticated holder. This supports departed origins, partitions and
 unequal discovery views. The configured fanout is a preferred topology, not a
 hard upload cap during recovery or membership changes. Metadata discovery still
 uses a full mesh; large populations require additional control-plane scaling.
+
+`--transfers 2` bounds concurrent uploads and downloads separately.
+`--upload-limit BYTES_PER_SECOND` caps aggregate outgoing file payload (zero is
+unlimited), with a burst of at most one configured chunk. Protocol overhead is
+not included. Updated delta senders yield after `--transfer-quantum` payload
+bytes (default 8 MiB), retaining the receiver's verified-on-reuse partial data.
+At low upload limits, the quantum shrinks to about two seconds of payload, with
+one chunk as the minimum. Small files are scheduled first within each directory
+depth, so a large transfer does not indefinitely hold a slot. Hashing and local
+I/O still cost time, and legacy full-file senders cannot yield this way.

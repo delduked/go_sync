@@ -126,16 +126,18 @@ func TestRewrittenPrefixAbortsWithoutPublishing(t *testing.T) {
 	original := bytes.Repeat([]byte("a"), defaultBlockSize*2)
 	write(t, a, "file", original)
 	pull(t, b, a)
+	extended := append(append([]byte{}, original...), bytes.Repeat([]byte("b"), defaultBlockSize)...)
+	write(t, a, "file", extended)
 	advertised := copyEntry(a.e.files["file"])
 	expected := copyEntry(b.e.files["file"])
-	write(t, a, "file", bytes.Repeat([]byte("x"), len(original)))
+	write(t, a, "file", bytes.Repeat([]byte("x"), len(extended)))
 	err := b.e.pull(context.Background(), client, advertised, expected)
 	if status.Code(err) != codes.Aborted {
 		t.Fatalf("expected stale-prefix abort, got %v", err)
 	}
 	equalFile(t, b, "file", original)
 	pull(t, b, a)
-	equalFile(t, b, "file", bytes.Repeat([]byte("x"), len(original)))
+	equalFile(t, b, "file", bytes.Repeat([]byte("x"), len(extended)))
 }
 
 type deltaStub struct {

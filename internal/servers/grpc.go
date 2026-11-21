@@ -85,6 +85,11 @@ func (s *Service) ReadFile(req *pb.FileEntry, stream pb.FileSyncService_ReadFile
 	if err := s.Engine.checkLocalPath(req.FileName); err != nil {
 		return status.Error(codes.FailedPrecondition, err.Error())
 	}
+	release, err := acquire(stream.Context(), s.Engine.limits.send)
+	if err != nil {
+		return err
+	}
+	defer release()
 	s.Engine.mu.Lock()
 	current := s.Engine.files[req.FileName]
 	if !sameVersion(req, current) {
@@ -114,6 +119,9 @@ func (s *Service) ReadFile(req *pb.FileEntry, stream pb.FileSyncService_ReadFile
 		n, err := file.Read(buf[:min(int64(len(buf)), req.FileSize-offset)])
 		s.Engine.metrics.SourceRead.Add(int64(n))
 		if n > 0 {
+			if err := s.Engine.limits.waitBandwidth(stream.Context(), int64(n)); err != nil {
+				return err
+			}
 			if sendErr := stream.Send(&pb.FileChunk{ChunkData: buf[:n], Offset: offset}); sendErr != nil {
 				return sendErr
 			}
@@ -159,6 +167,11 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	if entry.IsDeleted || entry.IsDirectory {
 		return e.apply(entry, expected, "")
 	}
+	release, err := acquire(ctx, e.limits.receive)
+	if err != nil {
+		return err
+	}
+	defer release()
 	temp, name, resumed, err := e.resumeStage(entry.FileName)
 	if err != nil {
 		return err

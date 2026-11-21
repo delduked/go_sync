@@ -40,6 +40,9 @@ func run() error {
 	var cfg conf.Config
 	var chunkKB int64
 	var debug bool
+	flag.IntVar(&cfg.Transfers, "transfers", 2, "Maximum concurrent transfers per direction (1–64)")
+	flag.Int64Var(&cfg.UploadLimit, "upload-limit", 0, "Aggregate outgoing file bytes/second (0 unlimited)")
+	flag.Int64Var(&cfg.TransferQuantum, "transfer-quantum", 8<<20, "Payload bytes before yielding a delta transfer (0 unlimited)")
 	flag.IntVar(&cfg.Fanout, "fanout", 2, "Preferred relay-tree fanout (0 for full mesh, 1–32)")
 	flag.StringVar(&cfg.SyncFolder, "sync-folder", "", "Folder to synchronize (required)")
 	flag.StringVar(&cfg.Bootstrap, "bootstrap", "", "For existing files without history: seed or join")
@@ -94,7 +97,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	engine, err := servers.NewEngine(folder, cfg.StateDir, servers.WithBootstrap(cfg.Bootstrap))
+	engine, err := servers.NewEngine(folder, cfg.StateDir, servers.WithBootstrap(cfg.Bootstrap), servers.WithTransferLimits(cfg.Transfers, cfg.UploadLimit, cfg.TransferQuantum))
 	if err != nil {
 		return err
 	}

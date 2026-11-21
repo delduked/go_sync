@@ -28,7 +28,9 @@ func newFixture(t testing.TB) *fixture {
 	t.Helper()
 	base := t.TempDir()
 	dir, state := filepath.Join(base, "files"), filepath.Join(base, "state")
-	e, err := NewEngine(dir, state)
+	// Most protocol tests exercise a single complete attempt; quantum scheduling
+	// has separate resumable-transfer tests and is enabled in the CLI suites.
+	e, err := NewEngine(dir, state, WithTransferLimits(2, 0, 0))
 	if err != nil {
 		t.Fatal(err)
 	}

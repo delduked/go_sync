@@ -57,6 +57,14 @@ func (e *Engine) reconcile(ctx context.Context, client pb.FileSyncServiceClient,
 			}
 			return da < db
 		}
+		if !a.IsDeleted {
+			if a.IsDirectory != b.IsDirectory {
+				return a.IsDirectory
+			}
+			if !a.IsDirectory && a.FileSize != b.FileSize {
+				return a.FileSize < b.FileSize
+			}
+		}
 		return a.FileName < b.FileName
 	})
 	var firstErr error
@@ -161,7 +169,7 @@ func (c *Connections) AddPeer(addr string) {
 					err = c.engine.reconcile(callCtx, client, c.route(addr))
 					if err == nil {
 						lastRemote = announcement.Generation
-						lastLocal = c.engine.Generation()
+						lastLocal = localGeneration
 					}
 				}
 				done()
