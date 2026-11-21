@@ -2,9 +2,10 @@
 
 GoSync is a Go service that mirrors a directory between trusted peers. Peers
 find one another with mDNS or explicitly configured addresses, and exchange
-files over gRPC. This branch repairs the original prototype's correctness and
-recovery behavior and adds incremental replication of growing files. Cascading
-distribution remains a separate planned feature.
+files over gRPC. It supports verified incremental growing-file transfers,
+bidirectional edits and conflict preservation, project exclusions, resumable
+recovery, and cascading distribution. Ten-peer operation and fault recovery are
+validated in Docker; physical-LAN and native non-Linux runtime tests are deferred.
 
 ## Build and test
 
@@ -16,6 +17,7 @@ make build
 make test         # unit/RPC tests with the race detector; requires a C compiler
 make benchmark    # repeatable append/overwrite/truncate payload and logical-I/O costs
 make integration  # isolated three-container regression suite; requires Docker Compose and Python 3
+make qualification # full Docker suites; also needs NET_ADMIN and kernel netem support
 ```
 
 The integration suite builds a static binary, starts three peers on an internal
@@ -79,8 +81,9 @@ Other flags:
 
 Local roots may differ. Wire paths are relative and accessed through `os.Root`,
 which confines operations even if a path is replaced with an escaping symlink.
-Symlinks and special files are not synchronized. Dotfiles are included. Only the
-reserved `.gosync-stage-` prefix is excluded from synchronization.
+Symlinks and special files are not synchronized. Dotfiles are included. The
+reserved `.gosync-stage-` and `.gosync-local-` prefixes are always excluded;
+`.gosyncignore` adds project-specific exclusions.
 
 ## Trusted LAN setup
 
@@ -91,7 +94,8 @@ Each peer needs its own certificate/key, a DNS SAN of `gosync`, and both server
 and client authentication usages. Mutual TLS requires TLS 1.3 and rejects peers
 without a trusted certificate. There is no interactive pairing UI yet.
 
-Example certificate setup using OpenSSL (keep the CA private key on the signing
+The `trust` commands below provide a built-in provisioning workflow. As an
+alternative, use OpenSSL (keep the CA private key on the signing
 machine; repeat the peer-key/CSR/signing commands with unique names for each peer):
 
 ```sh
@@ -118,8 +122,9 @@ preserves its timestamp or an event is missed. Startup begins with an empty cach
 Destination commits always rehash local contents and never trust this cache. Badger persists a logical
 revision and originating peer ID, independently of wall-clock time. Deletions
 are persistent tombstones, so a returning peer can learn that a file was removed.
-Renames currently synchronize as deletion of the old path plus creation of the
-new path, rather than a bandwidth-saving rename operation.
+Renames synchronize as deletion of the old path plus creation of the new path.
+Matching local or retained contents are reused, so unchanged moves can transfer
+zero content payload. Whole-directory moves are not globally atomic.
 
 Peers reconcile manifests repeatedly. For a newer revision, the receiver seeds
 an isolated staging file from its current local bytes and streams their block
@@ -489,3 +494,11 @@ are recovery aids, not a substitute for independent backups.
 `make integration` runs the file/mDNS suite; `python3 integration/operations.py`
 exercises real provisioned mutual TLS, configuration, namespace isolation,
 status, rescan, verification, history, restoration and clean lifecycle in Docker.
+
+The complete repeatable test entry point is `make qualification`. It runs race
+checks, mDNS/file regressions, secure operations, ten-peer/every-origin streaming,
+and the Docker network/resource fault suite, followed by vet. Network faults
+are confined to disposable container namespaces. An extended GitHub Actions
+workflow is available through manual `workflow_dispatch`; it uploads reports
+and logs, not generated test private keys. See `docs/PERFORMANCE.md` for measured
+costs, tuning decisions and the explicit validation limits.

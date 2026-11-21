@@ -1,0 +1,253 @@
+{
+  "environment": {
+    "platform": "Linux-6.17.0-1029-nvidia-aarch64-with-glibc2.39",
+    "logical_cpus": 20
+  },
+  "checks": [
+    {
+      "test": "fault-test peers start",
+      "passed": true,
+      "seconds": 0.902
+    },
+    {
+      "test": "latency loss and bandwidth impairment converges",
+      "passed": true
+    },
+    {
+      "test": "offline scenario base",
+      "passed": true,
+      "seconds": 0.402
+    },
+    {
+      "test": "online peers progress through a network partition",
+      "passed": true,
+      "seconds": 0.2
+    },
+    {
+      "test": "network rejoin merges edits and deletion",
+      "passed": true,
+      "seconds": 0.301
+    },
+    {
+      "test": "receiver has a partial transfer before crash",
+      "passed": true,
+      "seconds": 2.008
+    },
+    {
+      "test": "abrupt receiver restart resumes and verifies exact bytes",
+      "passed": true,
+      "seconds": 14.775
+    },
+    {
+      "test": "restart reuses retained payload",
+      "passed": true,
+      "seconds": 0.0
+    },
+    {
+      "test": "CPU and memory constrained peer converges",
+      "passed": true
+    },
+    {
+      "test": "storage scenario directory replicated",
+      "passed": true,
+      "seconds": 0.201
+    },
+    {
+      "test": "storage failure is visible",
+      "passed": true,
+      "seconds": 0.501
+    },
+    {
+      "test": "storage failure retries successfully",
+      "passed": true,
+      "seconds": 0.2
+    },
+    {
+      "test": "sixty rotating-origin overwrite cycles converge",
+      "passed": true
+    },
+    {
+      "test": "expired history is reclaimed",
+      "passed": true,
+      "seconds": 0.0
+    }
+  ],
+  "baseline": {
+    "bytes": 16777216,
+    "convergence_seconds": 0.835
+  },
+  "netem_configuration": "qdisc netem 8003: root refcnt 21 limit 1000 delay 40ms  10ms loss 0.5% rate 20Mbit seed 42\n Sent 1608 bytes 12 pkt (dropped 0, overlimits 0 requeues 0) \n backlog 78b 1p requeues 0\n",
+  "impaired_transfer": {
+    "bytes": 4194304,
+    "convergence_seconds": 3.83
+  },
+  "netem_counters": "qdisc netem 8003: root refcnt 21 limit 1000 delay 40ms  10ms loss 0.5% rate 20Mbit seed 42\n Sent 8797556 bytes 6001 pkt (dropped 1, overlimits 0 requeues 0) \n backlog 245b 3p requeues 0\n",
+  "before_crash_progress": [
+    {
+      "path": "resume.bin",
+      "target_bytes": 8388608,
+      "payload_received_this_attempt": 524288,
+      "started": "2026-11-21T23:01:07.444124788Z"
+    }
+  ],
+  "resumed_received_bytes": 7798784,
+  "limited_peer": {
+    "cpus": 0.25,
+    "memory_bytes": 268435456,
+    "convergence_seconds": 0.905
+  },
+  "resources_before_sustained": [
+    {
+      "BlockIO": "0B / 32.8kB",
+      "CPUPerc": "1.52%",
+      "Container": "000559a028e3d01896640fb965188b76872624149f54a24c195e92bca97dc30c",
+      "ID": "000559a028e3",
+      "MemPerc": "0.01%",
+      "MemUsage": "18.67MiB / 121.7GiB",
+      "Name": "gosync-faults-1361824-a-1",
+      "NetIO": "53.6kB / 4.25MB",
+      "PIDs": "12"
+    },
+    {
+      "BlockIO": "0B / 2.32MB",
+      "CPUPerc": "1.49%",
+      "Container": "542390b691a5ae60b9fe65410c1a84f4aa42a3e8e0f1d1212d64fc409b9d1cc4",
+      "ID": "542390b691a5",
+      "MemPerc": "3.24%",
+      "MemUsage": "33.13MiB / 1GiB",
+      "Name": "gosync-faults-1361824-b-1",
+      "NetIO": "10.1MB / 179kB",
+      "PIDs": "13"
+    },
+    {
+      "BlockIO": "0B / 31.8MB",
+      "CPUPerc": "1.73%",
+      "Container": "aaa71b6b9a654abdddc4b8a0ee57ab4855080f09fe9982a066e249468e46b7a5",
+      "ID": "aaa71b6b9a65",
+      "MemPerc": "0.03%",
+      "MemUsage": "37.06MiB / 121.7GiB",
+      "Name": "gosync-faults-1361824-c-1",
+      "NetIO": "31.8MB / 317kB",
+      "PIDs": "14"
+    }
+  ],
+  "storage_before_sustained": {
+    "a": {
+      "state_apparent_bytes": 51383762,
+      "state_allocated_bytes": 45056,
+      "backup_count": 0,
+      "backup_bytes": 0
+    },
+    "b": {
+      "state_apparent_bytes": 51383338,
+      "state_allocated_bytes": 45056,
+      "backup_count": 1,
+      "backup_bytes": 25
+    },
+    "c": {
+      "state_apparent_bytes": 51382119,
+      "state_allocated_bytes": 36864,
+      "backup_count": 1,
+      "backup_bytes": 25
+    }
+  },
+  "sustained": {
+    "cycles": 60,
+    "seconds": 12.758,
+    "median_convergence_seconds": 0.201,
+    "max_convergence_seconds": 0.402
+  },
+  "resources_after_sustained": [
+    {
+      "BlockIO": "0B / 4.69MB",
+      "CPUPerc": "1.91%",
+      "Container": "000559a028e3d01896640fb965188b76872624149f54a24c195e92bca97dc30c",
+      "ID": "000559a028e3",
+      "MemPerc": "0.03%",
+      "MemUsage": "34.44MiB / 121.7GiB",
+      "Name": "gosync-faults-1361824-a-1",
+      "NetIO": "2.04MB / 6.23MB",
+      "PIDs": "14"
+    },
+    {
+      "BlockIO": "0B / 6.91MB",
+      "CPUPerc": "1.91%",
+      "Container": "542390b691a5ae60b9fe65410c1a84f4aa42a3e8e0f1d1212d64fc409b9d1cc4",
+      "ID": "542390b691a5",
+      "MemPerc": "2.69%",
+      "MemUsage": "27.55MiB / 1GiB",
+      "Name": "gosync-faults-1361824-b-1",
+      "NetIO": "12.1MB / 2.16MB",
+      "PIDs": "13"
+    },
+    {
+      "BlockIO": "0B / 36.4MB",
+      "CPUPerc": "1.86%",
+      "Container": "aaa71b6b9a654abdddc4b8a0ee57ab4855080f09fe9982a066e249468e46b7a5",
+      "ID": "aaa71b6b9a65",
+      "MemPerc": "0.03%",
+      "MemUsage": "37.34MiB / 121.7GiB",
+      "Name": "gosync-faults-1361824-c-1",
+      "NetIO": "33.8MB / 2.29MB",
+      "PIDs": "14"
+    }
+  ],
+  "storage_after_sustained": {
+    "a": {
+      "state_apparent_bytes": 53022251,
+      "state_allocated_bytes": 1712128,
+      "backup_count": 40,
+      "backup_bytes": 1638400
+    },
+    "b": {
+      "state_apparent_bytes": 52956257,
+      "state_allocated_bytes": 1646592,
+      "backup_count": 40,
+      "backup_bytes": 1572889
+    },
+    "c": {
+      "state_apparent_bytes": 52955029,
+      "state_allocated_bytes": 1642496,
+      "backup_count": 40,
+      "backup_bytes": 1572889
+    }
+  },
+  "prune": {
+    "a": {
+      "tombstones_compacted": 1,
+      "backups_removed": 40,
+      "partials_removed": 0
+    },
+    "b": {
+      "tombstones_compacted": 1,
+      "backups_removed": 40,
+      "partials_removed": 0
+    },
+    "c": {
+      "tombstones_compacted": 1,
+      "backups_removed": 40,
+      "partials_removed": 0
+    }
+  },
+  "storage_after_prune": {
+    "a": {
+      "state_apparent_bytes": 1063942,
+      "state_allocated_bytes": 53248,
+      "backup_count": 0,
+      "backup_bytes": 0
+    },
+    "b": {
+      "state_apparent_bytes": 1063674,
+      "state_allocated_bytes": 49152,
+      "backup_count": 0,
+      "backup_bytes": 0
+    },
+    "c": {
+      "state_apparent_bytes": 1063421,
+      "state_allocated_bytes": 49152,
+      "backup_count": 0,
+      "backup_bytes": 0
+    }
+  },
+  "passed": true
+}

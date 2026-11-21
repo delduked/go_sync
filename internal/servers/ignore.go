@@ -19,7 +19,7 @@ type ignoreRule struct {
 // This deliberately small glob language is shared with the folder. Exclusions
 // never delete local contents; ignored paths cannot be served or overwritten.
 func (e *Engine) loadIgnoreLocked() error {
-	f, err := e.root.Open(ignoreFile)
+	info, err := e.root.Lstat(ignoreFile)
 	if os.IsNotExist(err) {
 		if len(e.ignores) > 0 {
 			e.generation++
@@ -30,14 +30,14 @@ func (e *Engine) loadIgnoreLocked() error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return err
-	}
 	if !info.Mode().IsRegular() || info.Size() > 1<<20 {
 		return fmt.Errorf("%s must be a regular file smaller than 1 MiB", ignoreFile)
 	}
+	f, err := e.root.Open(ignoreFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 	data, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
 	if err != nil {
 		return err

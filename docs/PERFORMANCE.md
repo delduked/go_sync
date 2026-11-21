@@ -83,3 +83,50 @@ disk use. The harness now records allocated and apparent bytes separately.
 The final small-operation sample retained the same logical I/O/payload costs as
 Epic 1.3; append/overwrite/truncate latencies were 22.65/31.95/26.09 ms. Timing
 samples vary and are not regression thresholds.
+
+## Final defaults and limits
+
+Badger now uses 8 MiB memtables (two), 16 MiB value-log files, a 16 MiB block
+cache and an 8 MiB index cache. In the repeated fault suite, running state files
+had about 51.4 MB apparent size before history accumulated, versus 2.28 GB with
+the original defaults. Actual allocated state storage was only 37–45 KiB before
+that workload and about 1.64–1.71 MB after its retained backups. These filesystem
+allocation figures exclude page cache and the mirrored data itself.
+
+The second run passed every fault/recovery check. Median/max overwrite latency
+remained 0.201/0.302 s. Observed post-workload container memory was 27–40 MiB
+versus 41–140 MiB in the initial run; these are short-run snapshots affected by
+GC and mmap residency, not guaranteed memory ceilings. Logs:
+`/tmp/gosync-faults-uuwcbbjj`.
+
+Keep the measured defaults of 64 KiB chunks, fanout two, two simultaneous transfers
+per direction, 8 MiB delta quanta and one-minute full repair scans. Upload-rate
+limits remain opt-in because appropriate bandwidth depends on the deployment.
+Fallback after three seconds favors recovery over strict fanout; on a slow link
+it can increase origin uploads while a relay is still downloading. Metadata
+announcements remain a full mesh, block caches scale with tracked file sizes,
+and compact deletion histories remain indefinitely. No unbounded-peer-count or
+constant-memory claim is made.
+
+Not covered: physical LAN/Wi-Fi throughput, native Windows/macOS filesystem and
+watcher behavior, true disk-full/slow-device faults, power-loss durability, or a
+multi-day soak. The storage fault test covers write permissions; the abrupt-crash
+test covers process death with the kernel/filesystem still running. Successful
+reflinks are untested here because the workspace filesystem rejects them.
+
+Final ten-peer repetitions exposed intermittent gRPC 1.66.0 flow-control window
+underflow errors (`received 4294967292-bytes data exceeding ...`). Recovery worked,
+but abandoned streams added payload. Upstream gRPC 1.66.3 explicitly fixes this
+issue ([release notes](https://github.com/grpc/grpc-go/releases/tag/v1.66.3), #7667).
+The dependency is upgraded to that patch release, preserving Go 1.25 compatibility;
+the extended harness now fails on unexpected Internal transport errors. Static
+measurement inputs are atomically published so deliberate growing snapshots are
+measured separately. All qualification suites are rerun after the patch.
+
+
+The final post-patch `make qualification` run passed. Across all ten static origins,
+8 MiB revisions converged in 0.841–1.516 s, with exactly 16 MiB sent by each origin
+and 72 MiB total payload per workload. Every growing origin reached all nine
+replicas before its writer finished. Preferred-relay failure recovered in 3.612 s.
+No Internal transport errors appeared. Final reports are retained in `results/`,
+including the complete network/resource suite and a machine-readable summary.

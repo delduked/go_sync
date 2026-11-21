@@ -73,7 +73,11 @@ func NewEngine(folder, state string, options ...Option) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := badger.Open(badger.DefaultOptions(state).WithLogger(nil).WithSyncWrites(true))
+	// Only metadata is stored here. Bound caches and mmap preallocation for
+	// small/medium project peers instead of Badger's bulk-database defaults.
+	db, err := badger.Open(badger.DefaultOptions(state).WithLogger(nil).WithSyncWrites(true).
+		WithMemTableSize(8 << 20).WithNumMemtables(2).WithValueLogFileSize(16 << 20).
+		WithBlockCacheSize(16 << 20).WithIndexCacheSize(8 << 20))
 	if err != nil {
 		root.Close()
 		return nil, err

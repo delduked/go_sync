@@ -25,7 +25,7 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := run(); err != nil && err != flag.ErrHelp {
 		log.Error(err)
 		os.Exit(1)
 	}
@@ -53,6 +53,10 @@ func run() error {
 		return completionCommand(os.Args[1], os.Args[2:])
 	}
 	flags := flag.NewFlagSet("gosync", flag.ContinueOnError)
+	flags.Usage = func() {
+		fmt.Fprintln(flags.Output(), "Usage: gosync --config FILE [options]\nCommands: init, trust, status, rescan, inspect, verify, history, restore, prune, complete, verify-complete")
+		flags.PrintDefaults()
+	}
 	var configPath string
 	flags.StringVar(&configPath, "config", "", "JSON configuration file; explicit flags override it")
 	var cfg conf.Config

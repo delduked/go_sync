@@ -1,0 +1,174 @@
+[
+  {
+    "test": "mDNS discovery with different ports",
+    "passed": true
+  },
+  {
+    "test": "create",
+    "passed": true
+  },
+  {
+    "test": "shrink from peer B",
+    "passed": true
+  },
+  {
+    "test": "no stale contents echoed back",
+    "passed": true
+  },
+  {
+    "test": "resize to 200000 bytes from C",
+    "passed": true
+  },
+  {
+    "test": "resize to 5 bytes from C",
+    "passed": true
+  },
+  {
+    "test": "resize to 0 bytes from C",
+    "passed": true
+  },
+  {
+    "test": "binary including partial last chunk",
+    "passed": true
+  },
+  {
+    "test": "executable permissions",
+    "passed": true
+  },
+  {
+    "test": "empty file",
+    "passed": true
+  },
+  {
+    "test": "dotfile",
+    "passed": true
+  },
+  {
+    "test": "new nested directories and file",
+    "passed": true
+  },
+  {
+    "test": "directory rename removes old tree",
+    "passed": true
+  },
+  {
+    "test": "file rename removes old name",
+    "passed": true
+  },
+  {
+    "test": "atomic editor save",
+    "passed": true
+  },
+  {
+    "test": "remaining peers survive disconnect",
+    "passed": true
+  },
+  {
+    "test": "delete while peer offline",
+    "passed": true
+  },
+  {
+    "test": "restart recovers existing-file updates",
+    "passed": true
+  },
+  {
+    "test": "persistent tombstones prevent resurrection",
+    "passed": true
+  },
+  {
+    "test": "deletion stays deleted",
+    "passed": true
+  },
+  {
+    "test": "replicas receive bytes while download is still writing",
+    "passed": true
+  },
+  {
+    "test": "replicas keep growing before writer finishes",
+    "passed": true
+  },
+  {
+    "test": "completed download has exact bytes on every peer",
+    "passed": true
+  },
+  {
+    "test": "growth reuses existing bytes",
+    "passed": true
+  },
+  {
+    "test": "same-size binary patch propagates from B",
+    "passed": true
+  },
+  {
+    "test": "explicit completion marker validates on all peers",
+    "passed": true
+  },
+  {
+    "test": "common base before offline conflict",
+    "passed": true
+  },
+  {
+    "test": "offline concurrent edits converge at main path",
+    "passed": true
+  },
+  {
+    "test": "every concurrent version preserved on all peers",
+    "passed": true
+  },
+  {
+    "test": "subsequent resolution propagates",
+    "passed": true
+  },
+  {
+    "test": "retention test base replicated",
+    "passed": true
+  },
+  {
+    "test": "retention deletion reaches online peer",
+    "passed": true
+  },
+  {
+    "test": "deletion history compacted through CLI",
+    "passed": true
+  },
+  {
+    "test": "offline copy cannot resurrect compacted deletion",
+    "passed": true
+  },
+  {
+    "test": "shared project exclusions",
+    "passed": true
+  },
+  {
+    "test": "many-file project propagates",
+    "passed": true
+  },
+  {
+    "test": "dependency and build output stay local",
+    "passed": true
+  },
+  {
+    "test": "project editor save burst",
+    "passed": true
+  },
+  {
+    "test": "regular file timestamp propagates",
+    "passed": true
+  },
+  {
+    "test": "project directory move converges",
+    "passed": true
+  },
+  {
+    "test": "complete final directory equality",
+    "passed": true
+  },
+  {
+    "test": "metrics exported on shutdown",
+    "passed": true
+  },
+  {
+    "test": "all peers shut down cleanly",
+    "passed": true
+  }
+]

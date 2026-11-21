@@ -23,3 +23,10 @@ install-service:
 	install -Dm644 deploy/gosync@.service "$(DESTDIR)$(HOME)/.config/systemd/user/gosync@.service"
 dist:
 	./scripts/build-release.sh
+
+.PHONY: qualification
+qualification: test integration
+	python3 integration/operations.py
+	python3 integration/mesh.py --fanout 2 --all-origins --growing --relay-failure
+	python3 integration/faults.py
+	go vet ./...

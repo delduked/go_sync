@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Work is performed sequentially, with tests and a local commit for each story.
+Work is performed sequentially, with tests and reviewable local commits.
 An epic is merged locally after its acceptance checks pass. Nothing is pushed
 without a request. The user selected Docker-only validation; physical LAN testing
 is explicitly deferred and is not a completion requirement for this run.
@@ -96,12 +96,25 @@ Docker image built; six OS/architecture binaries compiled; systemd user unit
 passed `systemd-analyze verify` and deployment Compose parsed. Native background
 service installation outside Linux remains documented as unvalidated.
 
-## 6. Docker validation and tuning (physical LAN deferred by user) — in progress
+## 6. Docker validation and tuning (physical LAN deferred by user) — complete
 
 - [x] 6.1 Reproducible throughput/convergence baseline.
 - [x] 6.2 Latency/loss/disconnect/bandwidth fault scenarios.
 - [x] 6.3 Uneven peer/storage/CPU scenarios within available facilities.
 - [x] 6.4 Sustained workloads and resource/history growth checks.
-- [ ] 6.5 Tune defaults from results; document physical-LAN and OS validation gaps.
+- [x] 6.5 Tune defaults from results; document physical-LAN and OS validation gaps.
 
 Accept: repeatable reports distinguish tested results from simulations and untested platforms.
+
+
+Evidence: `make qualification` passed with gRPC 1.66.3: race tests, 43 file/mDNS
+checks, 13 secure-operation checks, ten static and ten growing origins, relay
+failure recovery, 14 fault/resource/history checks, and vet. Six release binaries,
+a Go 1.25.5 build and the production Docker image built successfully. Reduced
+Badger cache/allocation defaults were validated by repeating the full fault suite.
+The final transport patch eliminated the observed flow-control Internal errors;
+all ten static workloads sent exactly two origin copies and nine total copies.
+Durable machine-readable evidence is in `docs/results/`; measured costs and
+validation limits are in `docs/PERFORMANCE.md`. All six planned epics are complete
+for the agreed Docker-only scope. Physical-LAN/native-platform/long-soak work is
+explicitly deferred rather than represented as tested.

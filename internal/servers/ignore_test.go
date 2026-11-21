@@ -92,3 +92,16 @@ func TestIgnoreRulesAndInvalidPolicy(t *testing.T) {
 		t.Fatal("invalid policy accepted")
 	}
 }
+
+func TestIgnorePolicyCannotBeASymlink(t *testing.T) {
+	f := newFixture(t)
+	if err := os.WriteFile(filepath.Join(f.dir, "policy"), []byte("private/"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("policy", filepath.Join(f.dir, ignoreFile)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.e.Manifest(); err == nil {
+		t.Fatal("symlink policy accepted but could not be shared")
+	}
+}

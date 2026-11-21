@@ -69,7 +69,9 @@ def main():
             digest = hashlib.sha256(data).digest()
             name = f"origin-{origin}.bin"
             started = time.monotonic()
-            (folders[origin] / name).write_bytes(data)
+            temporary = folders[origin] / ".gosync-local-measurement"
+            temporary.write_bytes(data)
+            temporary.replace(folders[origin] / name)
             wait(lambda: all(hashlib.sha256((p / name).read_bytes()).digest() == digest for p in folders))
             elapsed = time.monotonic() - started
             time.sleep(1.2)  # Atomic counters are exported once per second.
@@ -77,7 +79,7 @@ def main():
             sent = [a["payload_sent_bytes"] - b["payload_sent_bytes"] for a, b in zip(after, before)]
             received = [a["payload_received_bytes"] - b["payload_received_bytes"] for a, b in zip(after, before)]
             result = {"origin": origin, "bytes": len(data), "convergence_seconds": round(elapsed, 3),
-                      "origin_payload_sent": sent[origin], "total_payload_sent": sum(sent), "total_payload_received": sum(received), "per_peer_sent": sent}
+                      "origin_payload_sent": sent[origin], "total_payload_sent": sum(sent), "total_payload_received": sum(received), "minimum_payload_bytes": len(data) * (args.peers - 1), "payload_overhead_bytes": sum(sent) - len(data) * (args.peers - 1), "per_peer_sent": sent}
             report["workloads"].append(result)
             print(json.dumps(result), flush=True)
         if args.all_origins:
@@ -131,6 +133,8 @@ def main():
             wait(lambda: all(hashlib.sha256((p / "relay-failure.bin").read_bytes()).digest() == digest for p in folders))
             report["relay_failure"] = {"stopped_relay": relay, "online_convergence_seconds": round(elapsed, 3), "rejoined": True}
             print(json.dumps(report["relay_failure"]), flush=True)
+        if "code = Internal" in compose("logs"):
+            raise AssertionError("unexpected transport internal error; see compose.log")
         compose("stop")
         states = [json.loads(line) for line in compose("ps", "-a", "--format", "json").splitlines() if line]
         if len(states) != args.peers or any(s["ExitCode"] != 0 for s in states):

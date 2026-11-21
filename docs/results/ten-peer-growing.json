@@ -1,0 +1,63 @@
+{
+  "peers": 10,
+  "fanout": 2,
+  "shared_edits_from_every_origin": true,
+  "growing_files": [
+    {
+      "origin": 0,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 1,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 2,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 3,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 4,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 5,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 6,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 7,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 8,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    },
+    {
+      "origin": 9,
+      "all_replicas_progressed_before_completion": true,
+      "final_bytes": 2621440
+    }
+  ],
+  "relay_failure": {
+    "stopped_relay": "p8",
+    "online_convergence_seconds": 3.612,
+    "rejoined": true
+  },
+  "passed": true
+}

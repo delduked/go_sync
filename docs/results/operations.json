@@ -1,0 +1,54 @@
+[
+  {
+    "test": "configured TLS services report running status",
+    "passed": true
+  },
+  {
+    "test": "mutually authenticated peers synchronize",
+    "passed": true
+  },
+  {
+    "test": "different folder namespace is rejected",
+    "passed": true
+  },
+  {
+    "test": "online full rescan acknowledged",
+    "passed": true
+  },
+  {
+    "test": "reverse edit creates retained history",
+    "passed": true
+  },
+  {
+    "test": "shutdown status is persisted",
+    "passed": true
+  },
+  {
+    "test": "offline inspection reports saved revision",
+    "passed": true
+  },
+  {
+    "test": "retained versions are listed",
+    "passed": true
+  },
+  {
+    "test": "verification detects changed bytes without adopting them",
+    "passed": true
+  },
+  {
+    "test": "restored contents pass verification",
+    "passed": true
+  },
+  {
+    "test": "restored version propagates as a new edit",
+    "passed": true
+  },
+  {
+    "test": "restart retains peer and folder identity",
+    "passed": true
+  },
+  {
+    "test": "all configured services stop cleanly",
+    "passed": true
+  }
+]

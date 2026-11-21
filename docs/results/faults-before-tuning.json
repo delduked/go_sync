@@ -1,0 +1,244 @@
+{
+  "environment": {
+    "platform": "Linux-6.17.0-1029-nvidia-aarch64-with-glibc2.39",
+    "logical_cpus": 20
+  },
+  "checks": [
+    {
+      "test": "fault-test peers start",
+      "passed": true,
+      "seconds": 0.904
+    },
+    {
+      "test": "latency loss and bandwidth impairment converges",
+      "passed": true
+    },
+    {
+      "test": "offline scenario base",
+      "passed": true,
+      "seconds": 0.301
+    },
+    {
+      "test": "online peers progress through a network partition",
+      "passed": true,
+      "seconds": 0.2
+    },
+    {
+      "test": "network rejoin merges edits and deletion",
+      "passed": true,
+      "seconds": 0.401
+    },
+    {
+      "test": "receiver has a partial transfer before crash",
+      "passed": true,
+      "seconds": 1.909
+    },
+    {
+      "test": "abrupt receiver restart resumes and verifies exact bytes",
+      "passed": true,
+      "seconds": 14.821
+    },
+    {
+      "test": "restart reuses retained payload",
+      "passed": true,
+      "seconds": 0.0
+    },
+    {
+      "test": "CPU and memory constrained peer converges",
+      "passed": true
+    },
+    {
+      "test": "storage scenario directory replicated",
+      "passed": true,
+      "seconds": 0.2
+    },
+    {
+      "test": "storage failure is visible",
+      "passed": true,
+      "seconds": 0.401
+    },
+    {
+      "test": "storage failure retries successfully",
+      "passed": true,
+      "seconds": 0.101
+    },
+    {
+      "test": "sixty rotating-origin overwrite cycles converge",
+      "passed": true
+    },
+    {
+      "test": "expired history is reclaimed",
+      "passed": true,
+      "seconds": 0.0
+    }
+  ],
+  "baseline": {
+    "bytes": 16777216,
+    "convergence_seconds": 0.838
+  },
+  "netem_configuration": "qdisc netem 8001: root refcnt 21 limit 1000 delay 40ms  10ms loss 0.5% rate 20Mbit seed 286222468962699259\n Sent 1377 bytes 12 pkt (dropped 0, overlimits 0 requeues 0) \n backlog 196b 2p requeues 0\n",
+  "impaired_transfer": {
+    "bytes": 4194304,
+    "convergence_seconds": 3.94
+  },
+  "netem_counters": "qdisc netem 8001: root refcnt 21 limit 1000 delay 40ms  10ms loss 0.5% rate 20Mbit seed 286222468962699259\n Sent 8802515 bytes 6069 pkt (dropped 2, overlimits 0 requeues 0) \n backlog 366b 3p requeues 0\n",
+  "before_crash_progress": [
+    {
+      "path": "resume.bin",
+      "target_bytes": 8388608,
+      "payload_received_this_attempt": 524288,
+      "started": "2026-11-21T22:49:01.747884476Z"
+    }
+  ],
+  "resumed_received_bytes": 7864320,
+  "limited_peer": {
+    "cpus": 0.25,
+    "memory_bytes": 268435456,
+    "convergence_seconds": 0.906
+  },
+  "resources_before_sustained": [
+    {
+      "BlockIO": "0B / 32.8kB",
+      "CPUPerc": "2.16%",
+      "Container": "7de64332b632c12305471fe4558ff316126b4f4616c66f92053a2afd7220655d",
+      "ID": "7de64332b632",
+      "MemPerc": "0.01%",
+      "MemUsage": "17.09MiB / 121.7GiB",
+      "Name": "gosync-faults-1325933-a-1",
+      "NetIO": "46.4kB / 4.24MB",
+      "PIDs": "12"
+    },
+    {
+      "BlockIO": "0B / 2.31MB",
+      "CPUPerc": "1.69%",
+      "Container": "4d44a316a6a3b17e6cf39d97a0982e3ea50d14fe0e646329d7fd30c788b57033",
+      "ID": "4d44a316a6a3",
+      "MemPerc": "11.60%",
+      "MemUsage": "118.8MiB / 1GiB",
+      "Name": "gosync-faults-1325933-b-1",
+      "NetIO": "10.1MB / 174kB",
+      "PIDs": "14"
+    },
+    {
+      "BlockIO": "0B / 31.8MB",
+      "CPUPerc": "1.84%",
+      "Container": "f16f62035e812ea106c1ee612f62daa7baf10776f02b26606976cb292a316361",
+      "ID": "f16f62035e81",
+      "MemPerc": "0.05%",
+      "MemUsage": "59.65MiB / 121.7GiB",
+      "Name": "gosync-faults-1325933-c-1",
+      "NetIO": "31.8MB / 318kB",
+      "PIDs": "12"
+    }
+  ],
+  "storage_before_sustained": {
+    "a": {
+      "state_bytes": 2282753484,
+      "backup_count": 0,
+      "backup_bytes": 0
+    },
+    "b": {
+      "state_bytes": 2282753060,
+      "backup_count": 1,
+      "backup_bytes": 25
+    },
+    "c": {
+      "state_bytes": 2282751845,
+      "backup_count": 1,
+      "backup_bytes": 25
+    }
+  },
+  "sustained": {
+    "cycles": 60,
+    "seconds": 13.453,
+    "median_convergence_seconds": 0.201,
+    "max_convergence_seconds": 0.302
+  },
+  "resources_after_sustained": [
+    {
+      "BlockIO": "0B / 4.69MB",
+      "CPUPerc": "2.04%",
+      "Container": "7de64332b632c12305471fe4558ff316126b4f4616c66f92053a2afd7220655d",
+      "ID": "7de64332b632",
+      "MemPerc": "0.03%",
+      "MemUsage": "40.84MiB / 121.7GiB",
+      "Name": "gosync-faults-1325933-a-1",
+      "NetIO": "2.05MB / 6.24MB",
+      "PIDs": "12"
+    },
+    {
+      "BlockIO": "0B / 6.9MB",
+      "CPUPerc": "1.93%",
+      "Container": "4d44a316a6a3b17e6cf39d97a0982e3ea50d14fe0e646329d7fd30c788b57033",
+      "ID": "4d44a316a6a3",
+      "MemPerc": "13.71%",
+      "MemUsage": "140.3MiB / 1GiB",
+      "Name": "gosync-faults-1325933-b-1",
+      "NetIO": "12.1MB / 2.16MB",
+      "PIDs": "14"
+    },
+    {
+      "BlockIO": "0B / 36.4MB",
+      "CPUPerc": "1.91%",
+      "Container": "f16f62035e812ea106c1ee612f62daa7baf10776f02b26606976cb292a316361",
+      "ID": "f16f62035e81",
+      "MemPerc": "0.07%",
+      "MemUsage": "81.19MiB / 121.7GiB",
+      "Name": "gosync-faults-1325933-c-1",
+      "NetIO": "33.8MB / 2.31MB",
+      "PIDs": "12"
+    }
+  ],
+  "storage_after_sustained": {
+    "a": {
+      "state_bytes": 2284391975,
+      "backup_count": 40,
+      "backup_bytes": 1638400
+    },
+    "b": {
+      "state_bytes": 2284325980,
+      "backup_count": 40,
+      "backup_bytes": 1572889
+    },
+    "c": {
+      "state_bytes": 2284324755,
+      "backup_count": 40,
+      "backup_bytes": 1572889
+    }
+  },
+  "prune": {
+    "a": {
+      "tombstones_compacted": 1,
+      "backups_removed": 40,
+      "partials_removed": 0
+    },
+    "b": {
+      "tombstones_compacted": 1,
+      "backups_removed": 40,
+      "partials_removed": 0
+    },
+    "c": {
+      "tombstones_compacted": 1,
+      "backups_removed": 40,
+      "partials_removed": 0
+    }
+  },
+  "storage_after_prune": {
+    "a": {
+      "state_bytes": 1063946,
+      "backup_count": 0,
+      "backup_bytes": 0
+    },
+    "b": {
+      "state_bytes": 1063629,
+      "backup_count": 0,
+      "backup_bytes": 0
+    },
+    "c": {
+      "state_bytes": 1063431,
+      "backup_count": 0,
+      "backup_bytes": 0
+    }
+  },
+  "passed": true
+}

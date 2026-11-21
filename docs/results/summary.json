@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-21",
+  "scope": "Docker runtime qualification on Linux arm64",
+  "grpc_version": "1.66.3",
+  "race_tests": "passed",
+  "go_vet": "passed",
+  "go_1_25_5_build": "passed",
+  "docker_checks": {
+    "files": 43,
+    "operations": 13,
+    "faults": 14,
+    "static_origins": 10,
+    "growing_origins": 10
+  },
+  "builds": [
+    "linux/amd64",
+    "linux/arm64",
+    "darwin/amd64",
+    "darwin/arm64",
+    "windows/amd64",
+    "windows/arm64"
+  ],
+  "production_docker_build": "passed",
+  "systemd_unit_validation": "passed",
+  "deferred": [
+    "physical LAN and Wi-Fi",
+    "native Windows and macOS runtime",
+    "power-loss durability",
+    "real disk-full and slow-device faults",
+    "multi-day soak"
+  ],
+  "logs": {
+    "files": "/tmp/gosync-regression-h2_hgfu3",
+    "operations": "/tmp/gosync-operations-dloyjwjf",
+    "mesh": "/tmp/gosync-mesh-zr79coy0",
+    "faults": "/tmp/gosync-faults-z6nn3tl4"
+  }
+}
