@@ -174,8 +174,14 @@ Remaining limitations:
   existing bytes can invalidate snapshots and postpone convergence until those
   bytes stabilize. Preallocated/out-of-order downloads have no "which ranges are
   complete" metadata; their zero-filled ranges are treated as ordinary bytes.
-- Interrupted deltas retry from the last committed replica; partially received
-  staging files are discarded. Persistent partial-transfer resume is future work.
+- Interrupted delta transfers retain private staging data and a journal under
+  `STATE/transfers`. After reconnect or restart, every retained block is rehashed
+  and compared with the source; corrupted or stale blocks are retransmitted.
+  A newer revision can reuse a valid earlier prefix. Only one transfer per path
+  writes staging at a time. Successful commits, deletions and invalid transfers
+  clean up staging. Transient interruptions retain at most one partial file per
+  path; pending data has no automatic age-based expiry yet. Legacy v2 full-file
+  fallback cannot resume at block granularity.
 - Cascading/swarm routing and bandwidth scheduling remain future work.
 - Manifests are currently a single RPC response (gRPC's default 4 MiB limit).
   Pagination is needed before very large directory trees.

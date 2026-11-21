@@ -120,18 +120,30 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	if err := validateEntry(entry); err != nil {
 		return err
 	}
+	unlock := e.lockTransfer(entry.FileName)
+	defer unlock()
+	if entry.IsDeleted || entry.IsDirectory {
+		e.discardResume(entry.FileName)
+	}
 	if entry.IsDeleted || entry.IsDirectory {
 		return e.apply(entry, expected, "")
 	}
-	temp, name, err := e.stage(entry.FileName)
+	temp, name, resumed, err := e.resumeStage(entry.FileName)
 	if err != nil {
 		return err
 	}
-	defer e.root.Remove(name)
-	defer temp.Close()
+	defer func() {
+		if keepPartial(result) {
+			_ = temp.Sync()
+		}
+		temp.Close()
+		if !keepPartial(result) {
+			e.discardResume(entry.FileName)
+		}
+	}()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	err = e.receiveDelta(ctx, client, entry, temp)
+	err = e.receiveDelta(ctx, client, entry, temp, resumed)
 	if status.Code(err) == codes.Unimplemented {
 		if err = temp.Truncate(0); err != nil {
 			return err

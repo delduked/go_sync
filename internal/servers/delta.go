@@ -115,7 +115,7 @@ func (s *Service) ReadDelta(stream pb.FileSyncService_ReadDeltaServer) error {
 // receiveDelta seeds a new staging file from local bytes, hashes those exact
 // bytes, and accepts only ordered aligned replacements from the sender. Neither
 // the basis nor a partially received delta is ever written into the live file.
-func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClient, entry *pb.FileEntry, temp *os.File) error {
+func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClient, entry *pb.FileEntry, temp *os.File, resumed bool) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stream, err := client.ReadDelta(ctx)
@@ -134,13 +134,21 @@ func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClie
 	}
 	// Opening a local basis may fail (missing file, permissions, type replacement).
 	// In that case send no hashes and request the entire bounded snapshot.
-	basis, openErr := e.root.Open(entry.FileName)
+	var basis *os.File
+	var openErr error
+	if resumed {
+		basis = temp
+	} else {
+		basis, openErr = e.root.Open(entry.FileName)
+	}
 	if openErr == nil {
-		defer basis.Close()
+		if !resumed {
+			defer basis.Close()
+		}
 		info, statErr := basis.Stat()
 		if statErr == nil && info.Mode().IsRegular() {
 			limit := min(entry.FileSize, info.Size())
-			cloned := cloneFile(temp, basis)
+			cloned := !resumed && cloneFile(temp, basis)
 			var cached [][sha256.Size]byte
 			if cloned {
 				e.metrics.ReflinkBytes.Add(info.Size())
@@ -169,7 +177,7 @@ func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClie
 						break
 					}
 					length = int64(n)
-					if !cloned {
+					if !cloned && !resumed {
 						written, err := temp.WriteAt(buf[:n], offset)
 						e.metrics.StageWrite.Add(int64(written))
 						if err != nil {
