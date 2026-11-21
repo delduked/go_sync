@@ -33,7 +33,7 @@ recorded in PERFORMANCE.md. Final Docker log: `/tmp/gosync-regression-_qv8chnb`.
 - [x] 2.1 Track causal histories and distinguish concurrent revisions.
 - [x] 2.2 Preserve conflicting contents visibly and deterministically.
 - [x] 2.3 Handle edit/delete, rename/edit, and same-path creation conflicts.
-- [ ] 2.4 Specify and test fresh, stale and replaced-state joining behavior.
+- [x] 2.4 Specify and test fresh, stale and replaced-state joining behavior.
 - [ ] 2.5 Retire backups and tombstones only under safe retention rules.
 
 Accept: partition, edit independently, reconnect, converge, recover all conflicting data.

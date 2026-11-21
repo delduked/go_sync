@@ -16,6 +16,7 @@ import (
 // Engine serializes metadata changes and filesystem commits, never network I/O.
 // Records, including tombstones, survive restarts; the clock never goes backwards.
 type Engine struct {
+	bootstrap  string
 	transferMu sync.Mutex
 	transfers  map[string]*pathLock
 	// Set before starting workers. Zero selects 64 KiB.

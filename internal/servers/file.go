@@ -29,13 +29,13 @@ func validName(name string) error {
 		return fmt.Errorf("invalid relative path %q", name)
 	}
 	for _, part := range strings.Split(name, "/") {
-		if strings.HasPrefix(part, stagePrefix) {
+		if privateName(part) {
 			return fmt.Errorf("reserved path %q", name)
 		}
 	}
 	return nil
 }
-func NewEngine(folder, state string) (*Engine, error) {
+func NewEngine(folder, state string, options ...Option) (*Engine, error) {
 	folder, err := filepath.Abs(folder)
 	if err != nil {
 		return nil, err
@@ -75,11 +75,21 @@ func NewEngine(folder, state string) (*Engine, error) {
 		return nil, err
 	}
 	e := &Engine{root: &safeRoot{root}, db: db, stateDir: state, files: make(map[string]*pb.FileEntry), cache: make(map[string]fingerprintCache)}
+	for _, option := range options {
+		if err = option(e); err != nil {
+			e.Close()
+			return nil, err
+		}
+	}
 	if err = e.load(); err != nil {
 		e.Close()
 		return nil, err
 	}
 	if e.id == "" {
+		if err = e.bootstrapExisting(); err != nil {
+			e.Close()
+			return nil, err
+		}
 		e.id = randomID()
 		err = db.Update(func(tx *badger.Txn) error { return tx.Set([]byte("node"), []byte(e.id)) })
 		if err != nil {
@@ -155,7 +165,7 @@ func (e *Engine) scanLocked() error {
 		if name == "." {
 			return nil
 		}
-		if strings.HasPrefix(d.Name(), stagePrefix) {
+		if privateName(d.Name()) {
 			if d.IsDir() {
 				return fs.SkipDir
 			}
@@ -221,6 +231,9 @@ func (e *Engine) Watch(ctx context.Context, interval time.Duration) {
 			watched[p] = true
 		}
 		filepath.WalkDir(e.root.Name(), func(p string, d fs.DirEntry, err error) error {
+			if err == nil && d.IsDir() && p != e.root.Name() && privateName(d.Name()) {
+				return fs.SkipDir
+			}
 			if err == nil && d.IsDir() && !watched[p] {
 				if watcher.Add(p) == nil {
 					watched[p] = true

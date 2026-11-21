@@ -38,6 +38,7 @@ func run() error {
 	var chunkKB int64
 	var debug bool
 	flag.StringVar(&cfg.SyncFolder, "sync-folder", "", "Folder to synchronize (required)")
+	flag.StringVar(&cfg.Bootstrap, "bootstrap", "", "For existing files without history: seed or join")
 	flag.StringVar(&cfg.StateDir, "state-dir", "./badgerdb-v2", "Persistent state outside the synchronized folder")
 	flag.Int64Var(&chunkKB, "chunk-size", 64, "Transfer chunk size in KiB (1–1024)")
 	flag.DurationVar(&cfg.SyncInterval, "sync-interval", time.Second, "Reconciliation and scan interval")
@@ -86,7 +87,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	engine, err := servers.NewEngine(folder, cfg.StateDir)
+	engine, err := servers.NewEngine(folder, cfg.StateDir, servers.WithBootstrap(cfg.Bootstrap))
 	if err != nil {
 		return err
 	}

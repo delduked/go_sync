@@ -3,6 +3,7 @@ package conf
 import "time"
 
 type Config struct {
+	Bootstrap              string
 	SyncFolder             string
 	StateDir               string
 	ChunkSize              int64

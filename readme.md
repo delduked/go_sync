@@ -31,7 +31,20 @@ its logs, fixtures, and JSON results. The test image and build cache remain reus
 ## Run
 
 Use a separate persistent state directory for every peer, outside its sync folder.
-The folder is created if missing. State contains the peer's identity, file
+The folder is created if missing. When a new state directory is paired with a
+nonempty folder, choose an explicit bootstrap policy:
+
+- `--bootstrap seed` publishes the existing contents as intentional local data.
+  Use it when establishing the first source.
+- `--bootstrap join` moves existing top-level entries into a protected local
+  `.gosync-local-prejoin-ID` archive before joining the shared history. This keeps
+  stale copies from silently resurrecting deletions after state loss. Stop other
+  writers during this per-entry archival step. Normal restarts retain the same
+  identity and do not repeat bootstrap.
+
+Private `.gosync-local-` archives are neither advertised nor remotely writable.
+They are retained for manual inspection/restoration and are never pruned as sync
+history. State contains the peer's identity, file
 revisions, deletion records, and retained overwritten file contents. Do not copy
 one peer's state directory to another running peer or delete it to reset a peer:
 doing so loses deletion history and can reintroduce old files.
