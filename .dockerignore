@@ -1,0 +1,6 @@
+.git
+.test-bin
+dist
+gosync
+badgerdb*
+sync_folder

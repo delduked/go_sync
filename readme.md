@@ -429,3 +429,33 @@ snapshot is over five seconds old. This is observed local health, not proof that
 an unreachable peer is current. Peer failures retry automatically. Check TLS
 paths/expiry, folder ID and reachability for persistent errors; inspect
 `.gosync-conflicts/*/details.json` to find the original path of a preserved edit.
+
+### Run in the background
+
+On Linux with a user systemd session:
+
+```sh
+make install install-service
+# Save the configuration at ~/.config/gosync/project.json first.
+systemctl --user daemon-reload
+systemctl --user enable --now gosync@project
+journalctl --user -u gosync@project -f
+systemctl --user restart gosync@project
+systemctl --user stop gosync@project
+```
+
+The unit restarts failures and sends SIGTERM for a graceful stop. It uses the
+user's permissions; enable user lingering separately if it must run after logout.
+No service is installed or enabled merely by building. `make install-tools`
+installs the protobuf generators. `make dist` builds amd64/arm64 binaries for
+Linux, macOS and Windows; native macOS launchd/Windows service installation is
+not supplied or runtime-validated.
+
+`docker build -t gosync:local .` builds the production image. The example
+`deploy/compose.yaml` mounts configuration/identity read-only and data/state
+separately. Set `GOSYNC_CONFIG`, `GOSYNC_IDENTITY`, `GOSYNC_FILES`, `GOSYNC_STATE`,
+and the matching UID/GID before starting it. Its host networking is intended for
+Linux mDNS; use explicit peers and published TCP ports where host networking or
+multicast is unavailable. The Docker regression suites use isolated networks,
+not host networking. Keep roots/state on persistent writable storage owned by
+the configured UID. Back up private state and trust material separately.

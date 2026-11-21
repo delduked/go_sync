@@ -85,7 +85,7 @@ Logs: `/tmp/gosync-mesh-x0ppj3o2`, `/tmp/gosync-regression-5hzdjx15`.
 - [x] 5.1 Trusted pairing/certificate provisioning workflow.
 - [x] 5.2 Persistent config and stable shared-folder identities.
 - [x] 5.3 Status, progress, conflicts and actionable failures.
-- [ ] 5.4 Background service packaging and lifecycle.
+- [x] 5.4 Background service packaging and lifecycle.
 - [ ] 5.5 Inspect, rescan, verify and restore commands.
 
 Accept: install, authorize, choose folders and determine sync health with documented commands.

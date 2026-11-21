@@ -23,15 +23,15 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          GOARCH=amd64 GOOS=windows go build -o go_sync_win.exe ./cmd/server/main.go
+          GOARCH=amd64 GOOS=windows go build -o go_sync_win.exe ./cmd/server
 
       - name: Build Linux binary
         run: |
-          GOARCH=amd64 GOOS=linux go build -o go_sync_linux ./cmd/server/main.go
+          GOARCH=amd64 GOOS=linux go build -o go_sync_linux ./cmd/server
 
       - name: Build Mac binary
         run: |
-          GOARCH=amd64 GOOS=darwin go build -o go_sync_mac ./cmd/server/main.go
+          GOARCH=amd64 GOOS=darwin go build -o go_sync_mac ./cmd/server
 
       - uses: benjlevesque/short-sha@v3.0
         id: short-sha
