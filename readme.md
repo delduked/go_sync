@@ -369,3 +369,21 @@ At low upload limits, the quantum shrinks to about two seconds of payload, with
 one chunk as the minimum. Small files are scheduled first within each directory
 depth, so a large transfer does not indefinitely hold a slot. Hashing and local
 I/O still cost time, and legacy full-file senders cannot yield this way.
+
+### Provision trusted peers
+
+```sh
+gosync trust init --out ./authority
+gosync trust issue --authority ./authority --name host-a --out ./host-a-identity
+gosync trust issue --authority ./authority --name host-b --out ./host-b-identity
+```
+
+Keep the authority directory private and offline when unused. Transfer each
+peer's identity directory through a trusted channel to that peer only; compare
+the CA fingerprint through a trusted channel when pairing. Each bundle contains
+its own private key, a certificate for mutual TLS, and the public CA certificate.
+It does not contain the CA signing key. Existing output directories are rejected.
+Certificates default to one year; `--days` changes their lifetime. To renew, issue
+a new bundle into a new directory and restart the peer using it. Certificate
+revocation lists are not implemented: remove trust in the old CA and re-provision
+remaining peers if a trusted key is compromised. Discovery alone grants no trust.

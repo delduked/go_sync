@@ -31,6 +31,9 @@ func main() {
 	}
 }
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "trust" {
+		return trustCommand(os.Args[2:])
+	}
 	if len(os.Args) > 1 && os.Args[1] == "prune" {
 		return pruneCommand(os.Args[2:])
 	}
