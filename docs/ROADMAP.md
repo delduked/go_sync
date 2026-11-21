@@ -45,17 +45,24 @@ retention/restart behavior have focused unit tests. Compact causal deletion
 floors remain indefinitely to prevent resurrection. Docker log:
 `/tmp/gosync-regression-ihwbzfoa`.
 
-## 3. Complete project-folder mirroring — in progress
+## 3. Complete project-folder mirroring — complete
 
 - [x] 3.1 Configurable exclusions.
 - [x] 3.2 Efficient moves/renames with content reuse.
 - [x] 3.3 Explicit permissions, timestamps, symlink and unsupported-file policies.
 - [x] 3.4 Editor/build and many-small-file workload tests.
-- [ ] 3.5 Portable path rules and platform-specific checks/documented limits.
+- [x] 3.5 Portable path rules and platform-specific checks/documented limits.
 
 Accept: representative TypeScript/Go trees behave predictably through edit/build cycles.
 
-## 4. Cascading distribution
+Evidence: full race suite and vet; 600-source-file editor/build workload;
+10,000-entry streaming manifest beyond the unary 4 MiB limit; unchanged moves
+and copies sent zero content bytes. All 43 Docker checks passed, including
+project save bursts, exclusions, timestamps and directory moves. Windows amd64,
+macOS arm64 and Go 1.25.5 builds passed; native non-Linux runtime tests are deferred.
+Docker log: `/tmp/gosync-regression-5xpj5jne`.
+
+## 4. Cascading distribution — in progress
 
 - [ ] 4.1 Ten-peer baseline harness and measurements.
 - [ ] 4.2 Separate revision announcements from chunk retrieval.

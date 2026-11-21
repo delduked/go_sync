@@ -29,6 +29,9 @@ func validName(name string) error {
 		return fmt.Errorf("invalid relative path %q", name)
 	}
 	for _, part := range strings.Split(name, "/") {
+		if err := portableComponent(part); err != nil {
+			return err
+		}
 		if privateName(part) {
 			return fmt.Errorf("reserved path %q", name)
 		}
@@ -162,6 +165,7 @@ func (e *Engine) scanLocked() error {
 		return err
 	}
 	seen := make(map[string]bool)
+	folded := make(map[string]string)
 	e.unsupported = make(map[string]string)
 	err := fs.WalkDir(e.root.FS(), ".", func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -176,6 +180,11 @@ func (e *Engine) scanLocked() error {
 			}
 			return nil
 		}
+		key := foldedPath(name)
+		if other, ok := folded[key]; ok && other != name {
+			return fmt.Errorf("case-fold collision: %s and %s", name, other)
+		}
+		folded[key] = name
 		seen[name] = true
 		if !d.IsDir() && !d.Type().IsRegular() {
 			e.unsupported[name] = "symlinks and special files stay local"

@@ -329,3 +329,14 @@ between updated peers. Older v2 peers use the unary fallback and remain subject
 to its 4 MiB message limit. Metadata still occupies memory proportional to the
 number of tracked paths and causal identities; streaming removes the per-message
 limit, not those total resource costs.
+
+Names must be UTF-8 in Unicode NFC form, use `/` on the wire, and fit 255 bytes
+per component. Windows device names, trailing dots/spaces, control characters
+and `< > : " \\ | ? *` are rejected. Unicode case-fold collisions are rejected,
+including untracked destination files; case-only renames should use an
+intermediate distinct name. An ambiguous local tree stops manifest publication
+with an error until renamed or excluded, rather than selecting one spelling.
+Linux is runtime-tested in Docker. Windows amd64 and macOS arm64 are build-checked;
+watcher behavior, filesystem timestamp/mode differences and service installation
+on those systems still require native validation. Windows does not provide POSIX
+executable-bit semantics. This is regular-file mirroring, not a filesystem image.

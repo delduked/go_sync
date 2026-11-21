@@ -142,6 +142,9 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	if err := e.checkLocalPath(entry.FileName); err != nil {
 		return err
 	}
+	if err := e.checkPortableTarget(entry.FileName); err != nil {
+		return err
+	}
 	unlock := e.lockTransfer(entry.FileName)
 	defer unlock()
 	if entry.IsDeleted || entry.IsDirectory {

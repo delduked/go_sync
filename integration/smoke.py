@@ -157,6 +157,33 @@ try:
     compose("start", "a", "b")
     check("offline copy cannot resurrect compacted deletion", lambda: all(not (p / "retention-demo").exists() for p in peers[:2]))
     compose("start", "c")
+    policy = b"node_modules/\ndist/\n*.tmp\n"
+    (peers[0] / ".gosyncignore").write_bytes(policy)
+    check("shared project exclusions", lambda: equals(".gosyncignore", policy))
+    for i in range(120):
+        target = peers[0] / f"project/package{i // 20}/module{i}.ts"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(f"export const value = {i};\n".encode())
+    (peers[0] / "node_modules").mkdir()
+    (peers[0] / "node_modules/local.js").write_bytes(b"local dependency")
+    (peers[0] / "dist").mkdir()
+    (peers[0] / "dist/bundle.js").write_bytes(b"generated locally")
+    check("many-file project propagates", lambda: all(equals(f"project/package{i // 20}/module{i}.ts", f"export const value = {i};\n".encode()) for i in range(120)))
+    check("dependency and build output stay local", lambda: all(not (p / "node_modules").exists() and not (p / "dist").exists() for p in peers[1:]))
+    for i in range(20):
+        target = peers[1] / f"project/package0/module{i}.ts"
+        temporary = target.with_suffix(".tmp")
+        temporary.write_bytes(f"// edited module {i}\n".encode())
+        temporary.replace(target)
+    check("project editor save burst", lambda: all(equals(f"project/package0/module{i}.ts", f"// edited module {i}\n".encode()) for i in range(20)))
+    stamp_ns = 1700000000123000000
+    os.utime(peers[2] / "project/package0/module0.ts", ns=(stamp_ns, stamp_ns))
+    check("regular file timestamp propagates", lambda: all((p / "project/package0/module0.ts").stat().st_mtime_ns == stamp_ns for p in peers))
+    (peers[2] / "project").rename(peers[2] / "moved-project")
+    check("project directory move converges", lambda: all(not (p / "project").exists() for p in peers) and all(equals(f"moved-project/package0/module{i}.ts", f"// edited module {i}\n".encode()) for i in range(20)))
+    for directory, filename in (("node_modules", "local.js"), ("dist", "bundle.js")):
+        (peers[0] / directory / filename).unlink()
+        (peers[0] / directory).rmdir()
     # Compare every path, byte hash and executable bit, not just selected files.
     def manifest(p):
         return {str(x.relative_to(p)): ("dir" if x.is_dir() else hashlib.sha256(x.read_bytes()).hexdigest(), 0 if x.is_dir() else x.stat().st_mode & 0o777) for x in p.rglob("*") if not x.name.startswith(".gosync-stage-")}
