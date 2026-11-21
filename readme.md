@@ -301,3 +301,10 @@ Adding a rule does not remove replicas already present. Removing a rule makes
 those local files eligible again; divergent edits can create conflicts. The
 policy and `.gosync-conflicts` cannot exclude themselves. Install the policy
 before starting peers if the excluded data must never be shared.
+
+Unchanged copies and renames reuse matching local content or retained versions.
+The receiver rehashes those bytes and verifies the full result; an unchanged move
+can require zero file-content payload. A move combined with an edit may require
+more data when no matching basis remains. Renames are represented as a deletion
+and creation, so a whole directory move is eventually consistent, not one atomic
+operation across machines.

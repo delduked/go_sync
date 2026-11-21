@@ -16,10 +16,11 @@ import (
 // Engine serializes metadata changes and filesystem commits, never network I/O.
 // Records, including tombstones, survive restarts; the clock never goes backwards.
 type Engine struct {
-	ignores    []ignoreRule
-	bootstrap  string
-	transferMu sync.Mutex
-	transfers  map[string]*pathLock
+	contentPaths map[string]map[string]bool
+	ignores      []ignoreRule
+	bootstrap    string
+	transferMu   sync.Mutex
+	transfers    map[string]*pathLock
 	// Set before starting workers. Zero selects 64 KiB.
 	BlockSize int
 	metrics   Metrics
@@ -81,6 +82,7 @@ func (e *Engine) load() error {
 				return fmt.Errorf("invalid stored path: %w", err)
 			}
 			e.files[f.FileName] = &f
+			e.indexContent(nil, &f)
 			if f.Revision > e.clock {
 				e.clock = f.Revision
 			}
@@ -157,6 +159,7 @@ func (e *Engine) save(f *pb.FileEntry) error {
 	}); err != nil {
 		return err
 	}
+	e.indexContent(e.files[f.FileName], f)
 	e.files[f.FileName] = copyEntry(f)
 	delete(e.graveyard, f.FileName)
 	e.clock = clock

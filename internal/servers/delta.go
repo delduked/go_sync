@@ -144,7 +144,7 @@ func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClie
 	if resumed {
 		basis = temp
 	} else {
-		basis, openErr = e.root.Open(entry.FileName)
+		basis, openErr = e.openBasis(entry)
 	}
 	if openErr == nil {
 		if !resumed {
