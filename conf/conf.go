@@ -7,6 +7,7 @@ type Config struct {
 	StateDir               string
 	ChunkSize              int64
 	SyncInterval           time.Duration
+	RepairInterval         time.Duration
 	Port                   string
 	Peers                  string
 	NoMDNS                 bool

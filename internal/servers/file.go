@@ -74,7 +74,7 @@ func NewEngine(folder, state string) (*Engine, error) {
 		root.Close()
 		return nil, err
 	}
-	e := &Engine{root: &safeRoot{root}, db: db, stateDir: state, files: make(map[string]*pb.FileEntry)}
+	e := &Engine{root: &safeRoot{root}, db: db, stateDir: state, files: make(map[string]*pb.FileEntry), cache: make(map[string]fingerprintCache)}
 	if err = e.load(); err != nil {
 		e.Close()
 		return nil, err
@@ -112,6 +112,11 @@ func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, erro
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("unsupported file type: %s", name)
 	}
+	if allowGrowth {
+		if cached, ok := e.cache[name]; ok && e.cacheFresh(cached, info) {
+			return copyEntry(cached.entry), nil
+		}
+	}
 	f, err := e.root.Open(name)
 	if err != nil {
 		return nil, err
@@ -121,9 +126,8 @@ func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, erro
 	if err != nil {
 		return nil, err
 	}
-	h := sha256.New()
-	// Capture a bounded prefix rather than chasing a growing EOF.
-	n, err := io.CopyN(h, f, before.Size())
+	// Capture a bounded prefix and its block index in a single read.
+	hash, blocks, n, err := e.hashFile(f, before.Size())
 	e.metrics.ScanRead.Add(n)
 	if err != nil {
 		return nil, err
@@ -136,7 +140,10 @@ func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, erro
 		return nil, fmt.Errorf("file changed during scan: %s", name)
 	}
 	r.FileSize = n
-	r.Hash = hex.EncodeToString(h.Sum(nil))
+	r.Hash = hash
+	if sameAttributes(before, after) {
+		e.cache[name] = fingerprintCache{info: after, entry: copyEntry(r), checked: time.Now(), blocks: blocks}
+	}
 	return r, nil
 }
 func (e *Engine) scanLocked() error {
@@ -172,6 +179,7 @@ func (e *Engine) scanLocked() error {
 	} // Never infer deletions from an incomplete scan.
 	for name, previous := range e.files {
 		if !seen[name] && !previous.IsDeleted {
+			delete(e.cache, name)
 			if err = e.local(&pb.FileEntry{FileName: name, IsDeleted: true, IsDirectory: previous.IsDirectory}); err != nil {
 				return err
 			}
@@ -239,9 +247,12 @@ func (e *Engine) Watch(ctx context.Context, interval time.Duration) {
 			return
 		case <-ticker.C:
 			refresh()
-		case _, ok := <-watcher.Events:
+		case event, ok := <-watcher.Events:
 			if !ok {
 				return
+			}
+			if relative, err := filepath.Rel(e.root.Name(), event.Name); err == nil {
+				e.Invalidate(filepath.ToSlash(relative))
 			}
 			if timerC == nil {
 				timer = time.NewTimer(100 * time.Millisecond)

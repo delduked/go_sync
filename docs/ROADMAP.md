@@ -11,7 +11,7 @@ Baseline: correctness repair `4984876` and incremental growing-file transfers
 ## 1. Efficient large-file downloads — in progress
 
 - [x] 1.1 Measure payload, logical file I/O, reuse, latency and failures for repeatable append/overwrite/truncate workloads.
-- [ ] 1.2 Cache validated file/block metadata; retain periodic full repair scans.
+- [x] 1.2 Cache validated file/block metadata; retain periodic full repair scans.
 - [ ] 1.3 Reduce staging I/O without exposing unverified content.
 - [ ] 1.4 Persist and validate partial transfers across interruptions and restarts.
 - [ ] 1.5 Cover preallocation/out-of-order writes and explicit completion semantics.

@@ -17,3 +17,10 @@ means they are not physical storage traffic. Latency varies with host load.
 The small network payload hides significant scanning, basis copying, verification
 and backup I/O. The next stories target repeated scans and destination copying
 while preserving the final integrity check and local-edit protection.
+
+## Metadata cache (Epic 1.2)
+
+The same workloads now read 12,585,984 / 14,680,064 / 8,388,608 bytes respectively.
+Payload and writes are unchanged. An unchanged scan performs zero content reads;
+periodic full verification, event invalidation and an uncached destination commit
+check are covered by regression tests. Timing samples were 18.43 / 24.75 / 19.36 ms.

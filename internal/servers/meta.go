@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"github.com/dgraph-io/badger/v3"
@@ -19,13 +20,15 @@ type Engine struct {
 	BlockSize int
 	metrics   Metrics
 
-	mu       sync.Mutex
-	root     *safeRoot
-	db       *badger.DB
-	stateDir string
-	id       string
-	clock    uint64
-	files    map[string]*pb.FileEntry
+	RepairInterval time.Duration
+	cache          map[string]fingerprintCache
+	mu             sync.Mutex
+	root           *safeRoot
+	db             *badger.DB
+	stateDir       string
+	id             string
+	clock          uint64
+	files          map[string]*pb.FileEntry
 }
 
 func randomID() string {

@@ -38,6 +38,7 @@ func run() error {
 	flag.StringVar(&cfg.StateDir, "state-dir", "./badgerdb-v2", "Persistent state outside the synchronized folder")
 	flag.Int64Var(&chunkKB, "chunk-size", 64, "Transfer chunk size in KiB (1–1024)")
 	flag.DurationVar(&cfg.SyncInterval, "sync-interval", time.Second, "Reconciliation and scan interval")
+	flag.DurationVar(&cfg.RepairInterval, "repair-interval", time.Minute, "Maximum time before a full content verification")
 	flag.StringVar(&cfg.Port, "port", "50051", "Listening port")
 	flag.StringVar(&cfg.Peers, "peers", "", "Optional comma-separated peer host:port addresses")
 	flag.BoolVar(&cfg.NoMDNS, "no-mdns", false, "Disable multicast discovery")
@@ -57,6 +58,9 @@ func run() error {
 		return fmt.Errorf("--chunk-size must be 1–1024 KiB")
 	}
 	cfg.ChunkSize = chunkKB * 1024
+	if cfg.RepairInterval <= 0 {
+		return fmt.Errorf("--repair-interval must be positive")
+	}
 	if cfg.SyncInterval <= 0 {
 		return fmt.Errorf("--sync-interval must be positive")
 	}
@@ -85,6 +89,7 @@ func run() error {
 	}
 	defer engine.Close()
 	engine.BlockSize = int(cfg.ChunkSize)
+	engine.RepairInterval = cfg.RepairInterval
 	listener, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {
 		return err

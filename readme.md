@@ -57,6 +57,7 @@ Other flags:
 
 | Flag | Default | Purpose |
 |---|---|---|
+| `--repair-interval` | `1m` | Maximum cache age before full content verification |
 | `--sync-interval` | `1s` | Periodic reconciliation and recursive scan interval |
 | `--chunk-size` | `64` | Delta block size requested by this peer, in KiB; 1–1024 |
 | `--debug` | false | Log discovery and retry failures |
@@ -96,7 +97,12 @@ openssl x509 -req -in peer-a.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 ## Transfer and recovery behavior
 
 Filesystem events prompt recursive scans; periodic scans catch missed events.
-A SHA-256 digest and file length detect content changes. Badger persists a logical
+A SHA-256 digest and file length detect content changes. Unchanged file digests
+and canonical 64 KiB block hashes are cached in memory after verifying file
+identity, size, permissions and modification time. Watch events invalidate the
+cache; `--repair-interval` forces periodic full verification even when an edit
+preserves its timestamp or an event is missed. Startup begins with an empty cache.
+Destination commits always rehash local contents and never trust this cache. Badger persists a logical
 revision and originating peer ID, independently of wall-clock time. Deletions
 are persistent tombstones, so a returning peer can learn that a file was removed.
 Renames currently synchronize as deletion of the old path plus creation of the
@@ -159,10 +165,10 @@ service internals were replaced as part of this lifecycle repair.
 
 Remaining limitations:
 
-- Delta sync reduces network payload, but whole-file rescans, staging copies, and
+- Delta sync reduces network payload, but verification of changed files, staging copies, and
   verification still perform substantial local disk I/O. RAM for a transfer's
-  basis hashes grows with its block count. No cached block index or reflink-based
-  staging is implemented yet.
+  basis hashes grows with its block count. The in-memory block index reduces repeated scans; reflink-based staging is
+  the next optimization.
 - Append-only writers can keep running during replication. Continuously rewriting
   existing bytes can invalidate snapshots and postpone convergence until those
   bytes stabilize. Preallocated/out-of-order downloads have no "which ranges are
