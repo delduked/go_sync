@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	FileSyncService_ListFiles_FullMethodName   = "/FileSyncService/ListFiles"
 	FileSyncService_ReadFile_FullMethodName    = "/FileSyncService/ReadFile"
+	FileSyncService_ReadDelta_FullMethodName   = "/FileSyncService/ReadDelta"
 	FileSyncService_HealthCheck_FullMethodName = "/FileSyncService/HealthCheck"
 )
 
@@ -32,6 +33,7 @@ const (
 type FileSyncServiceClient interface {
 	ListFiles(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*FileList, error)
 	ReadFile(ctx context.Context, in *FileEntry, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChunk], error)
+	ReadDelta(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DeltaRequest, FileChunk], error)
 	HealthCheck(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Ping, Pong], error)
 }
 
@@ -72,9 +74,22 @@ func (c *fileSyncServiceClient) ReadFile(ctx context.Context, in *FileEntry, opt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_ReadFileClient = grpc.ServerStreamingClient[FileChunk]
 
+func (c *fileSyncServiceClient) ReadDelta(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DeltaRequest, FileChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[1], FileSyncService_ReadDelta_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DeltaRequest, FileChunk]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_ReadDeltaClient = grpc.BidiStreamingClient[DeltaRequest, FileChunk]
+
 func (c *fileSyncServiceClient) HealthCheck(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Ping, Pong], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[1], FileSyncService_HealthCheck_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[2], FileSyncService_HealthCheck_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +108,7 @@ type FileSyncService_HealthCheckClient = grpc.BidiStreamingClient[Ping, Pong]
 type FileSyncServiceServer interface {
 	ListFiles(context.Context, *Empty) (*FileList, error)
 	ReadFile(*FileEntry, grpc.ServerStreamingServer[FileChunk]) error
+	ReadDelta(grpc.BidiStreamingServer[DeltaRequest, FileChunk]) error
 	HealthCheck(grpc.BidiStreamingServer[Ping, Pong]) error
 	mustEmbedUnimplementedFileSyncServiceServer()
 }
@@ -109,6 +125,9 @@ func (UnimplementedFileSyncServiceServer) ListFiles(context.Context, *Empty) (*F
 }
 func (UnimplementedFileSyncServiceServer) ReadFile(*FileEntry, grpc.ServerStreamingServer[FileChunk]) error {
 	return status.Errorf(codes.Unimplemented, "method ReadFile not implemented")
+}
+func (UnimplementedFileSyncServiceServer) ReadDelta(grpc.BidiStreamingServer[DeltaRequest, FileChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method ReadDelta not implemented")
 }
 func (UnimplementedFileSyncServiceServer) HealthCheck(grpc.BidiStreamingServer[Ping, Pong]) error {
 	return status.Errorf(codes.Unimplemented, "method HealthCheck not implemented")
@@ -163,6 +182,13 @@ func _FileSyncService_ReadFile_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FileSyncService_ReadFileServer = grpc.ServerStreamingServer[FileChunk]
 
+func _FileSyncService_ReadDelta_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(FileSyncServiceServer).ReadDelta(&grpc.GenericServerStream[DeltaRequest, FileChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_ReadDeltaServer = grpc.BidiStreamingServer[DeltaRequest, FileChunk]
+
 func _FileSyncService_HealthCheck_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(FileSyncServiceServer).HealthCheck(&grpc.GenericServerStream[Ping, Pong]{ServerStream: stream})
 }
@@ -187,6 +213,12 @@ var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "ReadFile",
 			Handler:       _FileSyncService_ReadFile_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "ReadDelta",
+			Handler:       _FileSyncService_ReadDelta_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 		{
 			StreamName:    "HealthCheck",

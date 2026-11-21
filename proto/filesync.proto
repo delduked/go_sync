@@ -5,6 +5,7 @@ option go_package = "github.com/TypeTerrors/go_sync/proto;filesync";
 service FileSyncService {
   rpc ListFiles(Empty) returns (FileList);
   rpc ReadFile(FileEntry) returns (stream FileChunk);
+  rpc ReadDelta(stream DeltaRequest) returns (stream FileChunk);
   rpc HealthCheck(stream Ping) returns (stream Pong);
 }
 message Empty {}
@@ -23,3 +24,12 @@ message FileEntry {
 }
 message FileList { repeated FileEntry files = 1; }
 message FileChunk { bytes chunk_data = 1; int64 offset = 2; }
+
+// The first request names a bounded file revision and block size. Subsequent
+// requests contain only batches of local basis hashes; CloseSend ends the list.
+message DeltaRequest {
+  FileEntry file = 1;
+  int64 block_size = 2;
+  repeated ChunkHash basis = 3;
+}
+message ChunkHash { int64 offset = 1; bytes hash = 2; }

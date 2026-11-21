@@ -96,7 +96,7 @@ func NewEngine(folder, state string) (*Engine, error) {
 
 // fingerprint rejects special files and symlinks. os.Root also confines access
 // when a path is swapped for an escaping symlink between validation and opening.
-func (e *Engine) fingerprint(name string) (*pb.FileEntry, error) {
+func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, error) {
 	if err := validName(name); err != nil {
 		return nil, err
 	}
@@ -122,7 +122,8 @@ func (e *Engine) fingerprint(name string) (*pb.FileEntry, error) {
 		return nil, err
 	}
 	h := sha256.New()
-	n, err := io.Copy(h, f)
+	// Capture a bounded prefix rather than chasing a growing EOF.
+	n, err := io.CopyN(h, f, before.Size())
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +131,7 @@ func (e *Engine) fingerprint(name string) (*pb.FileEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !os.SameFile(info, before) || !os.SameFile(before, after) || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) || n != after.Size() {
+	if !os.SameFile(info, before) || !os.SameFile(before, after) || ((before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime())) && !(allowGrowth && after.Size() > before.Size())) || n != before.Size() {
 		return nil, fmt.Errorf("file changed during scan: %s", name)
 	}
 	r.FileSize = n
@@ -156,7 +157,7 @@ func (e *Engine) scanLocked() error {
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		current, err := e.fingerprint(name)
+		current, err := e.fingerprint(name, true)
 		if err != nil {
 			return err
 		}
@@ -222,8 +223,8 @@ func (e *Engine) Watch(ctx context.Context, interval time.Duration) {
 	refresh()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	// A fixed window bounds delay even during a burst; continuous-write snapshot
-	// semantics remain distinct from the future download-streaming protocol.
+	// A fixed window bounds delay even during continuous writes. Scans capture
+	// bounded prefixes, allowing verified snapshots while appenders keep running.
 	var timer *time.Timer
 	var timerC <-chan time.Time
 	defer func() {
@@ -304,7 +305,9 @@ func (e *Engine) backup(name string) error {
 
 // Recheck only the target at commit time; full-tree repair scans run separately.
 func (e *Engine) refreshLocked(name string) error {
-	current, err := e.fingerprint(name)
+	// A receiving destination must stay stable through the final check. Unlike
+	// source scans, accepting a growing prefix here could hide a local append.
+	current, err := e.fingerprint(name, false)
 	previous := e.files[name]
 	if errors.Is(err, os.ErrNotExist) {
 		if previous != nil && !previous.IsDeleted {
@@ -335,8 +338,12 @@ func (e *Engine) apply(entry, expected *pb.FileEntry, staged string) error {
 	if !newer(entry, current) {
 		return nil
 	}
-	if err := e.backup(entry.FileName); err != nil {
-		return err
+	// A same-origin append retains every previous byte in the new file. Avoid
+	// archiving a complete growing file on every incremental snapshot.
+	if !preservesPrefix(current, entry, staged, e.root) {
+		if err := e.backup(entry.FileName); err != nil {
+			return err
+		}
 	}
 	if entry.IsDeleted {
 		err := e.root.Remove(entry.FileName)
@@ -376,4 +383,20 @@ func (e *Engine) stage(name string) (*os.File, string, error) {
 	temp := path.Join(parent, stagePrefix+randomID())
 	f, err := e.root.OpenFile(temp, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	return f, temp, err
+}
+
+func preservesPrefix(current, next *pb.FileEntry, staged string, root *safeRoot) bool {
+	if current == nil || current.IsDeleted || current.IsDirectory || next.IsDeleted || next.IsDirectory || staged == "" || current.Origin != next.Origin || current.Mode != next.Mode || next.FileSize < current.FileSize {
+		return false
+	}
+	file, err := root.Open(staged)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	h := sha256.New()
+	if _, err = io.CopyN(h, file, current.FileSize); err != nil {
+		return false
+	}
+	return hex.EncodeToString(h.Sum(nil)) == current.Hash
 }

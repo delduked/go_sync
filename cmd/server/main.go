@@ -84,6 +84,7 @@ func run() error {
 		return err
 	}
 	defer engine.Close()
+	engine.BlockSize = int(cfg.ChunkSize)
 	listener, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {
 		return err

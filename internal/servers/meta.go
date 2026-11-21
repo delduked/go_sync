@@ -15,6 +15,9 @@ import (
 // Engine serializes metadata changes and filesystem commits, never network I/O.
 // Records, including tombstones, survive restarts; the clock never goes backwards.
 type Engine struct {
+	// Set before starting workers. Zero selects 64 KiB.
+	BlockSize int
+
 	mu       sync.Mutex
 	root     *safeRoot
 	db       *badger.DB

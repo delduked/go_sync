@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 import time
 
 repo = Path(__file__).resolve().parents[1]
@@ -89,6 +90,42 @@ try:
     check("persistent tombstones prevent resurrection", lambda: all(not (p / "moved").exists() for p in peers))
     time.sleep(2)
     check("deletion stays deleted", lambda: all(not (p / "moved").exists() for p in peers))
+    # Keep writing faster than the old 500 ms debounce. Observe actual replicas
+    # while the writer is still active, not only after it closes the file.
+    finished = threading.Event()
+    writer_errors = []
+    def download():
+        try:
+            with (peers[0] / "download.bin").open("wb") as out:
+                for i in range(100):
+                    out.write(bytes([i]) * 16384)
+                    out.flush()
+                    time.sleep(.04)
+        except Exception as error:
+            writer_errors.append(str(error))
+        finally:
+            finished.set()
+    writer = threading.Thread(target=download)
+    writer.start()
+    try:
+        check("replicas receive bytes while download is still writing",
+              lambda: not finished.is_set() and all((p / "download.bin").stat().st_size > 0 for p in peers[1:]))
+        observed = [(p / "download.bin").stat().st_size for p in peers[1:]]
+        check("replicas keep growing before writer finishes",
+              lambda: not finished.is_set() and all((p / "download.bin").stat().st_size > n for p, n in zip(peers[1:], observed)))
+    finally:
+        writer.join()
+    if writer_errors:
+        raise AssertionError(writer_errors)
+    expected_download = b"".join(bytes([i]) * 16384 for i in range(100))
+    check("completed download has exact bytes on every peer", lambda: equals("download.bin", expected_download))
+    check("growth reuses existing bytes", lambda: any("Delta download.bin:" in line and "reused_bytes=0" not in line for line in compose("logs").splitlines()))
+    # Replace a block in a preallocated binary file without changing its length.
+    with (peers[1] / "download.bin").open("r+b") as out:
+        out.seek(70000)
+        out.write(b"PATCH")
+    expected_download = expected_download[:70000] + b"PATCH" + expected_download[70005:]
+    check("same-size binary patch propagates from B", lambda: equals("download.bin", expected_download))
     # Compare every path, byte hash and executable bit, not just selected files.
     def manifest(p):
         return {str(x.relative_to(p)): ("dir" if x.is_dir() else hashlib.sha256(x.read_bytes()).hexdigest(), 0 if x.is_dir() else x.stat().st_mode & 0o777) for x in p.rglob("*") if not x.name.startswith(".gosync-stage-")}

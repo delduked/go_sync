@@ -120,29 +120,28 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	defer temp.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	stream, err := client.ReadFile(ctx, entry)
+	err = e.receiveDelta(ctx, client, entry, temp)
+	if status.Code(err) == codes.Unimplemented {
+		if err = temp.Truncate(0); err != nil {
+			return err
+		}
+		if _, err = temp.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		err = receiveFull(ctx, client, entry, temp)
+	}
 	if err != nil {
 		return err
 	}
-	h := sha256.New()
-	var offset int64
-	for {
-		chunk, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		if chunk.Offset != offset || len(chunk.ChunkData) == 0 || int64(len(chunk.ChunkData)) > entry.FileSize-offset {
-			return fmt.Errorf("invalid chunk offset or length")
-		}
-		if _, err = io.MultiWriter(temp, h).Write(chunk.ChunkData); err != nil {
-			return err
-		}
-		offset += int64(len(chunk.ChunkData))
+	if _, err = temp.Seek(0, io.SeekStart); err != nil {
+		return err
 	}
-	if offset != entry.FileSize || hex.EncodeToString(h.Sum(nil)) != entry.Hash {
+	h := sha256.New()
+	n, err := io.Copy(h, temp)
+	if err != nil {
+		return err
+	}
+	if n != entry.FileSize || hex.EncodeToString(h.Sum(nil)) != entry.Hash {
 		return fmt.Errorf("incomplete or corrupt transfer for %s", entry.FileName)
 	}
 	if err = temp.Chmod(os.FileMode(entry.Mode)); err != nil {
@@ -155,4 +154,32 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 		return err
 	}
 	return e.apply(entry, expected, name)
+}
+
+func receiveFull(ctx context.Context, client pb.FileSyncServiceClient, entry *pb.FileEntry, temp *os.File) error {
+	stream, err := client.ReadFile(ctx, entry)
+	if err != nil {
+		return err
+	}
+	var offset int64
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if chunk.Offset != offset || len(chunk.ChunkData) == 0 || int64(len(chunk.ChunkData)) > entry.FileSize-offset {
+			return fmt.Errorf("invalid chunk offset or length")
+		}
+		if _, err = temp.Write(chunk.ChunkData); err != nil {
+			return err
+		}
+		offset += int64(len(chunk.ChunkData))
+	}
+	if offset != entry.FileSize {
+		return fmt.Errorf("incomplete full transfer")
+	}
+	return nil
 }
