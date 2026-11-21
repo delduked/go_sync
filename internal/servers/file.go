@@ -89,6 +89,10 @@ func NewEngine(folder, state string, options ...Option) (*Engine, error) {
 		e.Close()
 		return nil, err
 	}
+	if err = e.loadFolderID(); err != nil {
+		e.Close()
+		return nil, err
+	}
 	if e.id == "" {
 		if err = e.bootstrapExisting(); err != nil {
 			e.Close()

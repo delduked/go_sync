@@ -387,3 +387,31 @@ Certificates default to one year; `--days` changes their lifetime. To renew, iss
 a new bundle into a new directory and restart the peer using it. Certificate
 revocation lists are not implemented: remove trust in the old CA and re-provision
 remaining peers if a trusted key is compromised. Discovery alone grants no trust.
+
+### Save a configuration
+
+```sh
+gosync init --config ./host-a.json --sync-folder /data/project \
+  --state-dir /data/gosync-project-state --identity ./host-a-identity
+# Use the printed folder ID on every other peer:
+gosync init --config ./host-b.json --sync-folder /other/project \
+  --state-dir /other/gosync-project-state --identity ./host-b-identity \
+  --folder-id THE_SAME_FOLDER_ID
+gosync --config ./host-a.json --bootstrap seed
+gosync --config ./host-b.json
+```
+
+For a new peer whose root already contains files, deliberately select `seed` or
+`join` as described above. Leave that one-time bootstrap choice out of persistent
+configuration so lost state requires a new decision. Subsequent starts need only
+`gosync --config FILE`. Config keys are long flag names without `--`; durations
+are strings such as `"500ms"`, booleans/numbers are JSON values, and explicit flags
+override the file. Unknown keys fail. Relative filesystem paths resolve relative
+to the configuration file. Generated files and identity directories are private.
+
+The folder ID is persisted with node history and cannot be changed in place.
+mDNS filters by folder ID, and every RPC checks it, including explicit peer
+connections. It is a namespace, not a secret or a substitute for mutual TLS:
+all certificates signed by the configured CA are trusted. Old unnamed folders
+remain compatible with the empty namespace; name them explicitly to isolate them.
+Run one configured service per shared folder, using a distinct port/state directory.

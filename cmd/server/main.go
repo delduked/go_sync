@@ -31,6 +31,9 @@ func main() {
 	}
 }
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		return initCommand(os.Args[2:])
+	}
 	if len(os.Args) > 1 && os.Args[1] == "trust" {
 		return trustCommand(os.Args[2:])
 	}
@@ -40,28 +43,40 @@ func run() error {
 	if len(os.Args) > 1 && (os.Args[1] == "complete" || os.Args[1] == "verify-complete") {
 		return completionCommand(os.Args[1], os.Args[2:])
 	}
+	flags := flag.NewFlagSet("gosync", flag.ContinueOnError)
+	var configPath string
+	flags.StringVar(&configPath, "config", "", "JSON configuration file; explicit flags override it")
 	var cfg conf.Config
 	var chunkKB int64
 	var debug bool
-	flag.IntVar(&cfg.Transfers, "transfers", 2, "Maximum concurrent transfers per direction (1–64)")
-	flag.Int64Var(&cfg.UploadLimit, "upload-limit", 0, "Aggregate outgoing file bytes/second (0 unlimited)")
-	flag.Int64Var(&cfg.TransferQuantum, "transfer-quantum", 8<<20, "Payload bytes before yielding a delta transfer (0 unlimited)")
-	flag.IntVar(&cfg.Fanout, "fanout", 2, "Preferred relay-tree fanout (0 for full mesh, 1–32)")
-	flag.StringVar(&cfg.SyncFolder, "sync-folder", "", "Folder to synchronize (required)")
-	flag.StringVar(&cfg.Bootstrap, "bootstrap", "", "For existing files without history: seed or join")
-	flag.StringVar(&cfg.StateDir, "state-dir", "./badgerdb-v2", "Persistent state outside the synchronized folder")
-	flag.Int64Var(&chunkKB, "chunk-size", 64, "Transfer chunk size in KiB (1–1024)")
-	flag.DurationVar(&cfg.SyncInterval, "sync-interval", time.Second, "Reconciliation and scan interval")
-	flag.DurationVar(&cfg.RepairInterval, "repair-interval", time.Minute, "Maximum time before a full content verification")
-	flag.StringVar(&cfg.Port, "port", "50051", "Listening port")
-	flag.StringVar(&cfg.Peers, "peers", "", "Optional comma-separated peer host:port addresses")
-	flag.BoolVar(&cfg.NoMDNS, "no-mdns", false, "Disable multicast discovery")
-	flag.BoolVar(&cfg.Insecure, "insecure", false, "Explicitly allow unauthenticated plaintext (isolated tests only)")
-	flag.StringVar(&cfg.TLSCert, "tls-cert", "", "PEM certificate for this peer")
-	flag.StringVar(&cfg.TLSKey, "tls-key", "", "PEM private key for this peer")
-	flag.StringVar(&cfg.TLSCA, "tls-ca", "", "PEM CA trusted for peer certificates")
-	flag.BoolVar(&debug, "debug", false, "Enable debug logs")
-	flag.Parse()
+	flags.IntVar(&cfg.Transfers, "transfers", 2, "Maximum concurrent transfers per direction (1–64)")
+	flags.Int64Var(&cfg.UploadLimit, "upload-limit", 0, "Aggregate outgoing file bytes/second (0 unlimited)")
+	flags.Int64Var(&cfg.TransferQuantum, "transfer-quantum", 8<<20, "Payload bytes before yielding a delta transfer (0 unlimited)")
+	flags.IntVar(&cfg.Fanout, "fanout", 2, "Preferred relay-tree fanout (0 for full mesh, 1–32)")
+	flags.StringVar(&cfg.FolderID, "folder-id", "", "Shared folder identity (same on every authorized peer)")
+	flags.StringVar(&cfg.SyncFolder, "sync-folder", "", "Folder to synchronize (required)")
+	flags.StringVar(&cfg.Bootstrap, "bootstrap", "", "For existing files without history: seed or join")
+	flags.StringVar(&cfg.StateDir, "state-dir", "./badgerdb-v2", "Persistent state outside the synchronized folder")
+	flags.Int64Var(&chunkKB, "chunk-size", 64, "Transfer chunk size in KiB (1–1024)")
+	flags.DurationVar(&cfg.SyncInterval, "sync-interval", time.Second, "Reconciliation and scan interval")
+	flags.DurationVar(&cfg.RepairInterval, "repair-interval", time.Minute, "Maximum time before a full content verification")
+	flags.StringVar(&cfg.Port, "port", "50051", "Listening port")
+	flags.StringVar(&cfg.Peers, "peers", "", "Optional comma-separated peer host:port addresses")
+	flags.BoolVar(&cfg.NoMDNS, "no-mdns", false, "Disable multicast discovery")
+	flags.BoolVar(&cfg.Insecure, "insecure", false, "Explicitly allow unauthenticated plaintext (isolated tests only)")
+	flags.StringVar(&cfg.TLSCert, "tls-cert", "", "PEM certificate for this peer")
+	flags.StringVar(&cfg.TLSKey, "tls-key", "", "PEM private key for this peer")
+	flags.StringVar(&cfg.TLSCA, "tls-ca", "", "PEM CA trusted for peer certificates")
+	flags.BoolVar(&debug, "debug", false, "Enable debug logs")
+	if err := parseConfigFlags(flags, os.Args[1:]); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("unexpected positional arguments")
+	}
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
@@ -100,7 +115,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	engine, err := servers.NewEngine(folder, cfg.StateDir, servers.WithBootstrap(cfg.Bootstrap), servers.WithTransferLimits(cfg.Transfers, cfg.UploadLimit, cfg.TransferQuantum))
+	engine, err := servers.NewEngine(folder, cfg.StateDir, servers.WithFolderID(cfg.FolderID), servers.WithBootstrap(cfg.Bootstrap), servers.WithTransferLimits(cfg.Transfers, cfg.UploadLimit, cfg.TransferQuantum))
 	if err != nil {
 		return err
 	}
@@ -111,7 +126,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	grpcServer := grpc.NewServer(grpc.Creds(serverCreds), grpc.WaitForHandlers(true))
+	grpcServer := grpc.NewServer(append([]grpc.ServerOption{grpc.Creds(serverCreds), grpc.WaitForHandlers(true)}, servers.FolderServerOptions(engine.FolderID())...)...)
 	pb.RegisterFileSyncServiceServer(grpcServer, &servers.Service{Engine: engine, ChunkSize: int(cfg.ChunkSize)})
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

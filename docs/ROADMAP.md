@@ -83,7 +83,7 @@ Logs: `/tmp/gosync-mesh-x0ppj3o2`, `/tmp/gosync-regression-5hzdjx15`.
 ## 5. Easy setup and operation — in progress
 
 - [x] 5.1 Trusted pairing/certificate provisioning workflow.
-- [ ] 5.2 Persistent config and stable shared-folder identities.
+- [x] 5.2 Persistent config and stable shared-folder identities.
 - [ ] 5.3 Status, progress, conflicts and actionable failures.
 - [ ] 5.4 Background service packaging and lifecycle.
 - [ ] 5.5 Inspect, rescan, verify and restore commands.

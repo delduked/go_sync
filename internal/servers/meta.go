@@ -16,6 +16,7 @@ import (
 // Engine serializes metadata changes and filesystem commits, never network I/O.
 // Records, including tombstones, survive restarts; the clock never goes backwards.
 type Engine struct {
+	folderID     string
 	limits       *transferLimits
 	session      string
 	generation   uint64

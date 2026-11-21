@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/charmbracelet/log"
@@ -17,7 +18,7 @@ const serviceType = "_gosync-v2._tcp"
 // same machine are supported, and the advertised port is always respected.
 func Discover(ctx context.Context, wg *sync.WaitGroup, id string, port int, connections *Connections) (func(), error) {
 	instance := "gosync-" + id
-	server, err := zeroconf.Register(instance, serviceType, "local.", port, []string{"protocol=2"}, nil)
+	server, err := zeroconf.Register(instance, serviceType, "local.", port, []string{"protocol=2", "folder=" + connections.engine.FolderID()}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -46,12 +47,16 @@ func Discover(ctx context.Context, wg *sync.WaitGroup, id string, port int, conn
 					continue
 				}
 				compatible := false
+				folder := ""
 				for _, txt := range entry.Text {
+					if strings.HasPrefix(txt, "folder=") {
+						folder = strings.TrimPrefix(txt, "folder=")
+					}
 					if txt == "protocol=2" {
 						compatible = true
 					}
 				}
-				if !compatible {
+				if !compatible || folder != connections.engine.FolderID() {
 					continue
 				}
 				for _, ip := range entry.AddrIPv4 {

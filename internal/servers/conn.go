@@ -151,6 +151,7 @@ func (c *Connections) AddPeer(addr string) {
 				return
 			case <-timer.C:
 				callCtx, done := context.WithTimeout(ctx, 10*time.Minute)
+				callCtx = folderContext(callCtx, c.engine.FolderID())
 				announcement, err := client.Announce(callCtx, &pb.Empty{})
 				localGeneration := c.engine.Generation()
 				if err == nil {

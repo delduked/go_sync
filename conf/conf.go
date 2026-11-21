@@ -3,6 +3,7 @@ package conf
 import "time"
 
 type Config struct {
+	FolderID               string
 	Transfers              int
 	UploadLimit            int64
 	TransferQuantum        int64
