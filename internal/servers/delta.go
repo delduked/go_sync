@@ -140,30 +140,58 @@ func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClie
 		info, statErr := basis.Stat()
 		if statErr == nil && info.Mode().IsRegular() {
 			limit := min(entry.FileSize, info.Size())
+			cloned := cloneFile(temp, basis)
+			var cached [][sha256.Size]byte
+			if cloned {
+				e.metrics.ReflinkBytes.Add(info.Size())
+				after, statErr := basis.Stat()
+				if size == defaultBlockSize && statErr == nil && sameAttributes(info, after) {
+					cached = e.cachedBlocks(entry.FileName, info)
+				}
+			}
 			buf := make([]byte, size)
 			batch := make([]*pb.ChunkHash, 0, hashBatchSize)
 			for offset := int64(0); offset < limit; {
-				n, readErr := io.ReadFull(basis, buf[:min(int64(size), limit-offset)])
-				e.metrics.BasisRead.Add(int64(n))
-				if n > 0 {
-					written, err := temp.WriteAt(buf[:n], offset)
-					e.metrics.StageWrite.Add(int64(written))
-					if err != nil {
-						return err
+				length := min(int64(size), limit-offset)
+				var hash [sha256.Size]byte
+				index := int(offset / int64(size))
+				canCache := cloned && index < len(cached) && (length == int64(size) || limit == info.Size())
+				if canCache {
+					hash = cached[index]
+				} else {
+					reader := basis
+					if cloned {
+						reader = temp
 					}
-					hash := sha256.Sum256(buf[:n])
-					batch = append(batch, &pb.ChunkHash{Offset: offset, Hash: hash[:]})
-					offset += int64(n)
+					n, readErr := reader.ReadAt(buf[:length], offset)
+					e.metrics.BasisRead.Add(int64(n))
+					if n == 0 {
+						break
+					}
+					length = int64(n)
+					if !cloned {
+						written, err := temp.WriteAt(buf[:n], offset)
+						e.metrics.StageWrite.Add(int64(written))
+						if err != nil {
+							return err
+						}
+					}
+					hash = sha256.Sum256(buf[:n])
+					if readErr != nil && readErr != io.EOF {
+						return readErr
+					}
 				}
+				batch = append(batch, &pb.ChunkHash{Offset: offset, Hash: hash[:]})
+				offset += length
 				if len(batch) == hashBatchSize {
 					if err = stream.Send(&pb.DeltaRequest{Basis: batch}); err != nil {
 						return deltaSendError(stream, err)
 					}
 					batch = nil
 				}
-				if readErr != nil {
+				if length < int64(size) {
 					break
-				} // A raced/truncated basis is repaired by the delta or rejected at commit.
+				}
 			}
 			if len(batch) > 0 {
 				if err = stream.Send(&pb.DeltaRequest{Basis: batch}); err != nil {

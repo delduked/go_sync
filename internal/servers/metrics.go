@@ -11,6 +11,7 @@ import (
 // They exclude database, metadata and protocol framing/TLS overhead. Counters
 // include failed attempts and reset when the process restarts.
 type Metrics struct {
+	ReflinkBytes    atomic.Int64
 	ScanRead        atomic.Int64
 	SourceRead      atomic.Int64
 	BasisRead       atomic.Int64
@@ -27,6 +28,7 @@ type Metrics struct {
 	TransferNanos   atomic.Int64
 }
 type MetricsSnapshot struct {
+	ReflinkBytes    int64 `json:"reflink_bytes"`
 	ScanRead        int64 `json:"scan_read_bytes"`
 	SourceRead      int64 `json:"source_read_bytes"`
 	BasisRead       int64 `json:"basis_read_bytes"`
@@ -45,7 +47,7 @@ type MetricsSnapshot struct {
 
 func (e *Engine) Metrics() MetricsSnapshot {
 	m := &e.metrics
-	return MetricsSnapshot{m.ScanRead.Load(), m.SourceRead.Load(), m.BasisRead.Load(), m.StageWrite.Load(), m.VerifyRead.Load(), m.BackupRead.Load(), m.BackupWrite.Load(), m.PrefixRead.Load(), m.PayloadSent.Load(), m.PayloadReceived.Load(), m.Reused.Load(), m.Transfers.Load(), m.Failures.Load(), m.TransferNanos.Load()}
+	return MetricsSnapshot{m.ReflinkBytes.Load(), m.ScanRead.Load(), m.SourceRead.Load(), m.BasisRead.Load(), m.StageWrite.Load(), m.VerifyRead.Load(), m.BackupRead.Load(), m.BackupWrite.Load(), m.PrefixRead.Load(), m.PayloadSent.Load(), m.PayloadReceived.Load(), m.Reused.Load(), m.Transfers.Load(), m.Failures.Load(), m.TransferNanos.Load()}
 }
 func (s MetricsSnapshot) ReadBytes() int64 {
 	return s.ScanRead + s.SourceRead + s.BasisRead + s.VerifyRead + s.BackupRead + s.PrefixRead

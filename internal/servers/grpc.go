@@ -148,12 +148,23 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 		return err
 	}
 	h := sha256.New()
-	n, err := io.Copy(h, temp)
+	prefix := sha256.New()
+	var n int64
+	if expected != nil && !expected.IsDeleted && !expected.IsDirectory {
+		count, copyErr := io.CopyN(io.MultiWriter(h, prefix), temp, min(expected.FileSize, entry.FileSize))
+		n += count
+		if copyErr != nil {
+			return copyErr
+		}
+	}
+	count, err := io.Copy(h, temp)
+	n += count
 	e.metrics.VerifyRead.Add(n)
 	if err != nil {
 		return err
 	}
 	if n != entry.FileSize || hex.EncodeToString(h.Sum(nil)) != entry.Hash {
+		e.Invalidate(entry.FileName)
 		return fmt.Errorf("incomplete or corrupt transfer for %s", entry.FileName)
 	}
 	if err = temp.Chmod(os.FileMode(entry.Mode)); err != nil {
@@ -165,7 +176,7 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	if err = temp.Close(); err != nil {
 		return err
 	}
-	return e.apply(entry, expected, name)
+	return e.apply(entry, expected, name, hex.EncodeToString(prefix.Sum(nil)))
 }
 
 func (e *Engine) receiveFull(ctx context.Context, client pb.FileSyncServiceClient, entry *pb.FileEntry, temp *os.File) error {

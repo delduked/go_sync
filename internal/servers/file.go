@@ -338,7 +338,7 @@ func (e *Engine) refreshLocked(name string) error {
 	return nil
 }
 
-func (e *Engine) apply(entry, expected *pb.FileEntry, staged string) error {
+func (e *Engine) apply(entry, expected *pb.FileEntry, staged string, verifiedPrefix ...string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	// Detect local edits made while the download was in flight.
@@ -354,7 +354,7 @@ func (e *Engine) apply(entry, expected *pb.FileEntry, staged string) error {
 	}
 	// A same-origin append retains every previous byte in the new file. Avoid
 	// archiving a complete growing file on every incremental snapshot.
-	if !e.preservesPrefix(current, entry, staged) {
+	if !e.preservesPrefix(current, entry, staged, verifiedPrefix...) {
 		if err := e.backup(entry.FileName); err != nil {
 			return err
 		}
@@ -399,9 +399,12 @@ func (e *Engine) stage(name string) (*os.File, string, error) {
 	return f, temp, err
 }
 
-func (e *Engine) preservesPrefix(current, next *pb.FileEntry, staged string) bool {
+func (e *Engine) preservesPrefix(current, next *pb.FileEntry, staged string, verifiedPrefix ...string) bool {
 	if current == nil || current.IsDeleted || current.IsDirectory || next.IsDeleted || next.IsDirectory || staged == "" || current.Origin != next.Origin || current.Mode != next.Mode || next.FileSize < current.FileSize {
 		return false
+	}
+	if len(verifiedPrefix) > 0 {
+		return verifiedPrefix[0] == current.Hash
 	}
 	file, err := e.root.Open(staged)
 	if err != nil {

@@ -167,8 +167,9 @@ Remaining limitations:
 
 - Delta sync reduces network payload, but verification of changed files, staging copies, and
   verification still perform substantial local disk I/O. RAM for a transfer's
-  basis hashes grows with its block count. The in-memory block index reduces repeated scans; reflink-based staging is
-  the next optimization.
+  basis hashes grows with its block count. The in-memory block index reduces repeated scans. Linux attempts copy-on-write
+  staging on reflink-capable filesystems, otherwise it copies the basis normally.
+  Prefix preservation is checked during final verification without another pass.
 - Append-only writers can keep running during replication. Continuously rewriting
   existing bytes can invalidate snapshots and postpone convergence until those
   bytes stabilize. Preallocated/out-of-order downloads have no "which ranges are

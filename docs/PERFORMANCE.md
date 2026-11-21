@@ -24,3 +24,12 @@ The same workloads now read 12,585,984 / 14,680,064 / 8,388,608 bytes respective
 Payload and writes are unchanged. An unchanged scan performs zero content reads;
 periodic full verification, event invalidation and an uncached destination commit
 check are covered by regression tests. Timing samples were 18.43 / 24.75 / 19.36 ms.
+
+## Staging/verification (Epic 1.3)
+
+Append/overwrite/truncate now read 10,488,832 / 12,582,912 / 8,388,608 bytes.
+Prefix preservation shares the verification pass. Writes are unchanged on this
+ext filesystem, which does not support reflinks. Linux reflink support is attempted
+and falls back automatically; successful clones are separately counted in
+`reflink_bytes`. The clone-isolation test is skipped when the filesystem rejects
+the ioctl, and no copy-on-write performance claim is made for this machine.

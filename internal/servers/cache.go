@@ -55,3 +55,13 @@ func (e *Engine) hashFile(file *os.File, size int64) (string, [][sha256.Size]byt
 	}
 	return hex.EncodeToString(h.Sum(nil)), blocks, total, nil
 }
+
+func (e *Engine) cachedBlocks(name string, info os.FileInfo) [][sha256.Size]byte {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	c, ok := e.cache[name]
+	if !ok || !e.cacheFresh(c, info) {
+		return nil
+	}
+	return append([][sha256.Size]byte(nil), c.blocks...)
+}
