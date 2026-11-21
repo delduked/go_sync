@@ -1,0 +1,129 @@
+{
+  "transport": "mutual TLS",
+  "discovery": "mDNS",
+  "port": 54171,
+  "checks": [
+    {
+      "test": "native services start",
+      "passed": true,
+      "seconds": 1.237
+    },
+    {
+      "test": "authenticated connections use the physical LAN addresses",
+      "passed": true,
+      "seconds": 0.052
+    },
+    {
+      "test": "text edit from spark",
+      "passed": true,
+      "seconds": 0.363
+    },
+    {
+      "test": "text edit from plex",
+      "passed": true,
+      "seconds": 0.295
+    },
+    {
+      "test": "large binary matches on every host",
+      "passed": true,
+      "seconds": 4.17
+    },
+    {
+      "test": "same-size binary edit from second host",
+      "passed": true,
+      "seconds": 1.021
+    },
+    {
+      "test": "replicas progress while spark is still writing",
+      "passed": true,
+      "seconds": 0.313
+    },
+    {
+      "test": "completed growing binary from spark matches",
+      "passed": true,
+      "seconds": 0.469
+    },
+    {
+      "test": "completion marker from spark verifies",
+      "passed": true,
+      "seconds": 0.441
+    },
+    {
+      "test": "replicas progress while plex is still writing",
+      "passed": true,
+      "seconds": 0.272
+    },
+    {
+      "test": "completed growing binary from plex matches",
+      "passed": true,
+      "seconds": 0.874
+    },
+    {
+      "test": "completion marker from plex verifies",
+      "passed": true,
+      "seconds": 0.626
+    },
+    {
+      "test": "project tree replicates",
+      "passed": true,
+      "seconds": 0.353
+    },
+    {
+      "test": "directory rename removes old paths",
+      "passed": true,
+      "seconds": 0.562
+    },
+    {
+      "test": "offline deletion base",
+      "passed": true,
+      "seconds": 0.373
+    },
+    {
+      "test": "restart catches edits and persistent deletion",
+      "passed": true,
+      "seconds": 1.165
+    },
+    {
+      "test": "shared base before partition",
+      "passed": true,
+      "seconds": 0.374
+    },
+    {
+      "test": "concurrent offline edits are preserved everywhere",
+      "passed": true,
+      "seconds": 1.442
+    },
+    {
+      "test": "conflict resolution propagates",
+      "passed": true,
+      "seconds": 0.326
+    },
+    {
+      "test": "complete test-directory hashes and modes match",
+      "passed": true,
+      "seconds": 0.351
+    }
+  ],
+  "peers": [
+    {
+      "name": "spark",
+      "system": "Linux",
+      "machine": "aarch64"
+    },
+    {
+      "name": "plex",
+      "system": "Linux",
+      "machine": "x86_64"
+    }
+  ],
+  "large_transfer": {
+    "bytes": 67108864,
+    "seconds_including_validation": 4.244,
+    "origin_payload_sent": 67108864
+  },
+  "passed": true,
+  "cleanup_errors": [],
+  "date": "2026-11-21",
+  "source_commit": "2089693",
+  "network": "direct wired LAN on two distinct Linux hosts; addresses and paths omitted"
+}

@@ -1,0 +1,4 @@
+[
+  {"name": "spark", "address": "192.0.2.10"},
+  {"name": "plex", "address": "192.0.2.20", "ssh": "user@192.0.2.20"}
+]

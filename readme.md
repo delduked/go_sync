@@ -5,7 +5,8 @@ find one another with mDNS or explicitly configured addresses, and exchange
 files over gRPC. It supports verified incremental growing-file transfers,
 bidirectional edits and conflict preservation, project exclusions, resumable
 recovery, and cascading distribution. Ten-peer operation and fault recovery are
-validated in Docker; physical-LAN and native non-Linux runtime tests are deferred.
+validated in Docker. A native Spark/Plex two-host wired-LAN run also passes;
+native macOS/Windows and a three-host physical LAN remain unvalidated.
 
 ## Build and test
 
@@ -502,3 +503,6 @@ are confined to disposable container namespaces. An extended GitHub Actions
 workflow is available through manual `workflow_dispatch`; it uploads reports
 and logs, not generated test private keys. See `docs/PERFORMANCE.md` for measured
 costs, tuning decisions and the explicit validation limits.
+
+For the native two/three-host runner and the completed Spark/Plex validation,
+see [LAN testing](docs/LAN_TESTING.md).

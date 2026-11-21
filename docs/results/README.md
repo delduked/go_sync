@@ -22,3 +22,6 @@ sent/received counters can differ.
 Run `make qualification` to reproduce the suites. Full temporary logs are printed
 by each harness. Generated test private keys are intentionally not archived here
 or uploaded by the extended CI workflow. See ../PERFORMANCE.md for scope and limits.
+
+The later `native-lan-two-peer.json` records the real Spark/Plex LAN run; it is
+separate from the original Docker qualification and omits private host addresses.

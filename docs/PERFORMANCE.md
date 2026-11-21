@@ -108,7 +108,7 @@ announcements remain a full mesh, block caches scale with tracked file sizes,
 and compact deletion histories remain indefinitely. No unbounded-peer-count or
 constant-memory claim is made.
 
-Not covered: physical LAN/Wi-Fi throughput, native Windows/macOS filesystem and
+Not covered by the Docker qualification: physical LAN/Wi-Fi throughput, native Windows/macOS filesystem and
 watcher behavior, true disk-full/slow-device faults, power-loss durability, or a
 multi-day soak. The storage fault test covers write permissions; the abrupt-crash
 test covers process death with the kernel/filesystem still running. Successful
@@ -130,3 +130,8 @@ and 72 MiB total payload per workload. Every growing origin reached all nine
 replicas before its writer finished. Preferred-relay failure recovered in 3.612 s.
 No Internal transport errors appeared. Final reports are retained in `results/`,
 including the complete network/resource suite and a machine-readable summary.
+
+A subsequent native Spark/Plex two-host wired-LAN run passed all 20 checks.
+Its 64 MiB transfer sent 64 MiB of application payload and converged in 4.244 s
+including validation. See [LAN testing](LAN_TESTING.md) for the distinct native
+result; three-host LAN, Wi-Fi and native macOS/Windows remain unvalidated.

@@ -23,7 +23,7 @@
   "production_docker_build": "passed",
   "systemd_unit_validation": "passed",
   "deferred": [
-    "physical LAN and Wi-Fi",
+    "three-host physical LAN and Wi-Fi",
     "native Windows and macOS runtime",
     "power-loss durability",
     "real disk-full and slow-device faults",
@@ -34,5 +34,17 @@
     "operations": "/tmp/gosync-operations-dloyjwjf",
     "mesh": "/tmp/gosync-mesh-zr79coy0",
     "faults": "/tmp/gosync-faults-z6nn3tl4"
+  },
+  "follow_up_native_lan": {
+    "report": "native-lan-two-peer.json",
+    "checks": 20,
+    "peers": 2,
+    "platforms": [
+      "linux/arm64",
+      "linux/amd64"
+    ],
+    "discovery": "mDNS",
+    "transport": "mutual TLS",
+    "passed": true
   }
 }

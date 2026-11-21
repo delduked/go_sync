@@ -2,8 +2,8 @@
 
 Work is performed sequentially, with tests and reviewable local commits.
 An epic is merged locally after its acceptance checks pass. Nothing is pushed
-without a request. The user selected Docker-only validation; physical LAN testing
-is explicitly deferred and is not a completion requirement for this run.
+without a request. The original six-epic run used Docker-only validation at the
+user’s request. A later native-LAN follow-up is recorded below.
 
 Baseline: correctness repair `4984876` and incremental growing-file transfers
 `f1f5fc9` are on local main. The latter passed race tests, vet and 27 Docker checks.
@@ -118,3 +118,12 @@ Durable machine-readable evidence is in `docs/results/`; measured costs and
 validation limits are in `docs/PERFORMANCE.md`. All six planned epics are complete
 for the agreed Docker-only scope. Physical-LAN/native-platform/long-soak work is
 explicitly deferred rather than represented as tested.
+
+
+## Follow-up: native LAN validation
+
+After the six-epic Docker scope was completed, the user authorized a native
+Spark/Plex test. All 20 checks passed on 2026-11-21 across Linux ARM64 and x86-64,
+using mDNS and mutual TLS over the physical LAN. See `docs/LAN_TESTING.md` and
+`docs/results/native-lan-two-peer.json`. The Mac can be added as a third peer;
+that native three-host/macOS validation is still pending access and availability.
