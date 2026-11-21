@@ -21,6 +21,7 @@ message FileEntry {
   string origin = 6;
   uint32 mode = 7;
   bool is_directory = 8;
+  map<string, uint64> version = 9;
 }
 message FileList { repeated FileEntry files = 1; }
 message FileChunk { bytes chunk_data = 1; int64 offset = 2; }

@@ -99,9 +99,11 @@ func (e *Engine) save(f *pb.FileEntry) error {
 	return nil
 }
 func (e *Engine) local(f *pb.FileEntry) error {
+	f.Version = vector(e.files[f.FileName])
 	e.clock++
 	f.Revision = e.clock
 	f.Origin = e.id
+	f.Version[e.id] = f.Revision
 	return e.save(f)
 }
 func (e *Engine) Close() error { e.root.Close(); return e.db.Close() }

@@ -51,6 +51,14 @@ func validateEntry(f *pb.FileEntry) error {
 	if _, err := hex.DecodeString(f.Origin); err != nil {
 		return err
 	}
+	for id, n := range f.Version {
+		if len(id) != 32 || n == 0 || n >= 1<<63 {
+			return fmt.Errorf("invalid version vector")
+		}
+		if _, err := hex.DecodeString(id); err != nil {
+			return fmt.Errorf("invalid version identity")
+		}
+	}
 	if !f.IsDeleted && !f.IsDirectory {
 		b, err := hex.DecodeString(f.Hash)
 		if err != nil || len(b) != 32 || f.Hash != strings.ToLower(f.Hash) {
