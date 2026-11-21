@@ -16,16 +16,19 @@ import (
 // Engine serializes metadata changes and filesystem commits, never network I/O.
 // Records, including tombstones, survive restarts; the clock never goes backwards.
 type Engine struct {
-	folderID     string
-	limits       *transferLimits
-	session      string
-	generation   uint64
-	unsupported  map[string]string
-	contentPaths map[string]map[string]bool
-	ignores      []ignoreRule
-	bootstrap    string
-	transferMu   sync.Mutex
-	transfers    map[string]*pathLock
+	progress      progressTracker
+	lastScan      time.Time
+	lastScanError string
+	folderID      string
+	limits        *transferLimits
+	session       string
+	generation    uint64
+	unsupported   map[string]string
+	contentPaths  map[string]map[string]bool
+	ignores       []ignoreRule
+	bootstrap     string
+	transferMu    sync.Mutex
+	transfers     map[string]*pathLock
 	// Set before starting workers. Zero selects 64 KiB.
 	BlockSize int
 	metrics   Metrics

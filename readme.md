@@ -415,3 +415,17 @@ connections. It is a namespace, not a secret or a substitute for mutual TLS:
 all certificates signed by the configured CA are trusted. Old unnamed folders
 remain compatible with the empty namespace; name them explicitly to isolate them.
 Run one configured service per shared folder, using a distinct port/state directory.
+
+### Check service health
+
+`gosync status --state-dir /path/to/state` reads the service's private, atomic
+`status.json` without locking its database. It reports node/folder identity,
+scan errors, unsupported paths, conflict and partial-transfer counts, active
+transfers, payload counters, and each peer's last attempt/success/error. Active
+transfer progress distinguishes received payload from total target size; reused
+bytes and preallocated staging lengths are not presented as verified progress.
+Snapshots update once per second and on shutdown; `stale: true` means a running
+snapshot is over five seconds old. This is observed local health, not proof that
+an unreachable peer is current. Peer failures retry automatically. Check TLS
+paths/expiry, folder ID and reachability for persistent errors; inspect
+`.gosync-conflicts/*/details.json` to find the original path of a preserved edit.

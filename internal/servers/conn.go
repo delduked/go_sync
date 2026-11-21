@@ -105,6 +105,7 @@ func (e *Engine) reconcile(ctx context.Context, client pb.FileSyncServiceClient,
 }
 
 type Connections struct {
+	status            map[string]PeerStatus
 	fanout            int
 	nodes             map[string]string
 	pending           map[string]time.Time
@@ -122,7 +123,7 @@ type Connections struct {
 
 func NewConnections(ctx context.Context, e *Engine, interval time.Duration, options ...grpc.DialOption) *Connections {
 	ctx, cancel := context.WithCancel(ctx)
-	return &Connections{fanout: 2, nodes: make(map[string]string), pending: make(map[string]time.Time), ctx: ctx, cancel: cancel, peers: make(map[string]context.CancelFunc), engine: e, interval: interval, options: options}
+	return &Connections{status: make(map[string]PeerStatus), fanout: 2, nodes: make(map[string]string), pending: make(map[string]time.Time), ctx: ctx, cancel: cancel, peers: make(map[string]context.CancelFunc), engine: e, interval: interval, options: options}
 }
 func (c *Connections) AddPeer(addr string) {
 	c.mu.Lock()
@@ -132,6 +133,7 @@ func (c *Connections) AddPeer(addr string) {
 	}
 	ctx, cancel := context.WithCancel(c.ctx)
 	c.peers[addr] = cancel
+	c.status[addr] = PeerStatus{Address: addr, Pending: true}
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
@@ -174,6 +176,7 @@ func (c *Connections) AddPeer(addr string) {
 					}
 				}
 				done()
+				c.recordResult(addr, err)
 				if err != nil && err != errDeferred && ctx.Err() == nil {
 					log.Debugf("peer %s: %v", addr, err)
 				}

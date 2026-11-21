@@ -243,6 +243,7 @@ func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClie
 			return err
 		}
 		e.metrics.PayloadReceived.Add(int64(len(chunk.ChunkData)))
+		e.addProgress(entry.FileName, int64(len(chunk.ChunkData)))
 		if chunk.Offset < 0 || chunk.Offset >= entry.FileSize || chunk.Offset%int64(size) != 0 || chunk.Offset <= last || int64(len(chunk.ChunkData)) != min(int64(size), entry.FileSize-chunk.Offset) {
 			return fmt.Errorf("invalid delta chunk offset or length")
 		}

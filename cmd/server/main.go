@@ -31,6 +31,9 @@ func main() {
 	}
 }
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "status" {
+		return statusCommand(os.Args[2:])
+	}
 	if len(os.Args) > 1 && os.Args[1] == "init" {
 		return initCommand(os.Args[2:])
 	}
@@ -172,6 +175,9 @@ func run() error {
 				if err := engine.WriteMetrics(); err != nil {
 					log.Warnf("metrics: %v", err)
 				}
+				if err := engine.WriteStatus(connections.Status(), true); err != nil {
+					log.Warnf("status: %v", err)
+				}
 			}
 		}
 	}()
@@ -186,7 +192,7 @@ func run() error {
 	if err := engine.WriteMetrics(); err != nil {
 		return err
 	}
-	return nil
+	return engine.WriteStatus(connections.Status(), false)
 }
 func transport(cfg conf.Config) (credentials.TransportCredentials, credentials.TransportCredentials, error) {
 	if cfg.Insecure {

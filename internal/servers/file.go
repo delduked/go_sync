@@ -165,7 +165,14 @@ func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, erro
 	}
 	return r, nil
 }
-func (e *Engine) scanLocked() error {
+func (e *Engine) scanLocked() (result error) {
+	defer func() {
+		e.lastScan = time.Now()
+		e.lastScanError = ""
+		if result != nil {
+			e.lastScanError = result.Error()
+		}
+	}()
 	if err := e.loadIgnoreLocked(); err != nil {
 		return err
 	}

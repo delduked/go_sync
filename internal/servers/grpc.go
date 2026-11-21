@@ -172,6 +172,8 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 		return err
 	}
 	defer release()
+	e.startProgress(entry.FileName, entry.FileSize)
+	defer e.endProgress(entry.FileName)
 	temp, name, resumed, err := e.resumeStage(entry.FileName)
 	if err != nil {
 		return err
@@ -250,6 +252,7 @@ func (e *Engine) receiveFull(ctx context.Context, client pb.FileSyncServiceClien
 			return err
 		}
 		e.metrics.PayloadReceived.Add(int64(len(chunk.ChunkData)))
+		e.addProgress(entry.FileName, int64(len(chunk.ChunkData)))
 		if chunk.Offset != offset || len(chunk.ChunkData) == 0 || int64(len(chunk.ChunkData)) > entry.FileSize-offset {
 			return fmt.Errorf("invalid chunk offset or length")
 		}
