@@ -153,10 +153,17 @@ partial final block retransmits that block; inserting bytes can shift many later
 blocks and require substantial retransmission. This is fixed-block delta sync,
 not a rolling-window/rsync matching algorithm.
 
-Concurrent same-path edits converge using the deterministic `(revision, origin)`
-ordering; this is **not** a semantic merge or a wall-clock last-writer rule. Before
-an incoming revision overwrites or deletes a regular local file, its old contents
-are retained under `STATE/versions/SHA256(relative-path)-SHA256(contents)`.
+Per-file version vectors distinguish causal successors from independent edits.
+Concurrent same-path edits choose a deterministic `(revision, origin)` winner;
+this is not a semantic merge or a wall-clock last-writer rule. Differing losing
+contents are preserved in `.gosync-conflicts/ID/data`, with the original path and
+revision in `details.json`. These conflict artifacts synchronize to every peer.
+Merged histories ensure that a later edit made after seeing both versions is a
+normal successor. Identical concurrent contents merge histories without creating
+extra copies. Older v2 records without vectors are treated conservatively.
+
+Ordinary overwritten/deleted file contents are also retained locally under
+`STATE/versions/SHA256(relative-path)-SHA256(contents)`.
 A same-origin update that preserves the old file as an exact prefix (and keeps
 its permissions) does not create a full backup: all previous bytes still exist
 in the new version. This prevents a growing download from accumulating a full

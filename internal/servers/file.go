@@ -349,8 +349,22 @@ func (e *Engine) apply(entry, expected *pb.FileEntry, staged string, verifiedPre
 	if !sameVersion(current, expected) {
 		return fmt.Errorf("destination changed during transfer")
 	}
-	if !newer(entry, current) {
+	if !shouldReceive(entry, current) {
 		return nil
+	}
+	if current != nil && compare(entry, current) == concurrent {
+		if !sameContent(entry, current) {
+			if err := e.preserveConflictLocked(current); err != nil {
+				return err
+			}
+		}
+		history := mergedVersion(entry, current)
+		if sameContent(entry, current) && newer(current, entry) {
+			entry = copyEntry(current)
+		} else {
+			entry = copyEntry(entry)
+		}
+		entry.Version = history
 	}
 	// A same-origin append retains every previous byte in the new file. Avoid
 	// archiving a complete growing file on every incremental snapshot.

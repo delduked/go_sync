@@ -70,7 +70,9 @@ func shouldReceive(incoming, current *pb.FileEntry) bool {
 	case after:
 		return true
 	case concurrent:
-		return newer(incoming, current)
+		return newer(incoming, current) || sameContent(incoming, current)
+	case equal:
+		return sameContent(incoming, current) && newer(incoming, current)
 	}
 	return false
 }

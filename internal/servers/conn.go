@@ -47,7 +47,7 @@ func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient)
 		e.mu.Lock()
 		local := copyEntry(e.files[f.FileName])
 		e.mu.Unlock()
-		if newer(f, local) {
+		if shouldReceive(f, local) {
 			if err = e.pull(ctx, client, f, local); err != nil && firstErr == nil {
 				firstErr = fmt.Errorf("%s: %w", f.FileName, err)
 			}

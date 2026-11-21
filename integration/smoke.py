@@ -128,6 +128,24 @@ try:
     check("same-size binary patch propagates from B", lambda: equals("download.bin", expected_download))
     subprocess.run([str(repo / ".test-bin/gosync"), "complete", "--file", str(peers[1] / "download.bin")], check=True, capture_output=True)
     check("explicit completion marker validates on all peers", lambda: all(subprocess.run([str(repo / ".test-bin/gosync"), "verify-complete", "--file", str(p / "download.bin")], capture_output=True).returncode == 0 for p in peers))
+    (peers[0] / "conflict-demo.txt").write_bytes(b"common base")
+    check("common base before offline conflict", lambda: equals("conflict-demo.txt", b"common base"))
+    compose("stop")
+    conflicting = [b"offline edit A", b"offline edit B", b"offline edit C"]
+    for peer, data in zip(peers, conflicting):
+        (peer / "conflict-demo.txt").write_bytes(data)
+    compose("start")
+    check("offline concurrent edits converge at main path", lambda: len({(p / "conflict-demo.txt").read_bytes() for p in peers}) == 1)
+    def preserved_everywhere():
+        for p in peers:
+            contents = {(p / "conflict-demo.txt").read_bytes()}
+            contents.update(f.read_bytes() for f in (p / ".gosync-conflicts").glob("*/data"))
+            if not set(conflicting).issubset(contents):
+                return False
+        return True
+    check("every concurrent version preserved on all peers", preserved_everywhere)
+    (peers[1] / "conflict-demo.txt").write_bytes(b"resolved after seeing conflicts")
+    check("subsequent resolution propagates", lambda: equals("conflict-demo.txt", b"resolved after seeing conflicts"))
     # Compare every path, byte hash and executable bit, not just selected files.
     def manifest(p):
         return {str(x.relative_to(p)): ("dir" if x.is_dir() else hashlib.sha256(x.read_bytes()).hexdigest(), 0 if x.is_dir() else x.stat().st_mode & 0o777) for x in p.rglob("*") if not x.name.startswith(".gosync-stage-")}

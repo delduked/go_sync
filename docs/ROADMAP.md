@@ -31,7 +31,7 @@ recorded in PERFORMANCE.md. Final Docker log: `/tmp/gosync-regression-_qv8chnb`.
 ## 2. Concurrent edits and offline recovery — in progress
 
 - [x] 2.1 Track causal histories and distinguish concurrent revisions.
-- [ ] 2.2 Preserve conflicting contents visibly and deterministically.
+- [x] 2.2 Preserve conflicting contents visibly and deterministically.
 - [ ] 2.3 Handle edit/delete, rename/edit, and same-path creation conflicts.
 - [ ] 2.4 Specify and test fresh, stale and replaced-state joining behavior.
 - [ ] 2.5 Retire backups and tombstones only under safe retention rules.
