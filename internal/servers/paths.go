@@ -19,8 +19,10 @@ func portableComponent(part string) error {
 			return fmt.Errorf("control character in path")
 		}
 	}
-	base := strings.ToUpper(strings.SplitN(part, ".", 2)[0])
-	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9' {
+	base := strings.TrimRight(strings.ToUpper(strings.SplitN(part, ".", 2)[0]), " ")
+	deviceRunes := []rune(base)
+	superscriptDevice := len(deviceRunes) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && strings.ContainsRune("¹²³", deviceRunes[3])
+	if superscriptDevice || base == "CONIN$" || base == "CONOUT$" || base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9' {
 		return fmt.Errorf("reserved device name %q", part)
 	}
 	return nil

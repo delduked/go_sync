@@ -54,3 +54,32 @@ speedup. Logs: `/tmp/gosync-mesh-5hl3fg4y`.
 Stopping a preferred relay in a ten-peer fanout-two tree left the other nine
 peers able to converge in 3.604 s via fallback holders. The stopped peer caught
 up after restart. Logs: `/tmp/gosync-mesh-fnzrmauz`.
+
+## Docker fault qualification (Epic 6)
+
+`python3 integration/faults.py` runs three isolated peers. Network impairment is
+applied inside a test container's network namespace, never to the host/LAN.
+The test helper needs Docker `NET_ADMIN` and kernel netem support. One initial run
+on Linux arm64 (20 logical CPUs) produced:
+
+| Scenario | Result |
+|---|---|
+| Unimpaired 16 MiB transfer, including resumable quantum yields | 0.838 s |
+| 4 MiB with 40 ± 10 ms delay, 0.5% loss, 20 Mbit/s egress cap | 3.940 s; qdisc recorded dropped packets |
+| Network disconnect, offline edit/delete, reconnect | Converged |
+| SIGKILL receiver during 8 MiB transfer | Reused 512 KiB; received 7.5 MiB after restart |
+| Receiver limited to 0.25 CPU and 256 MiB | 2 MiB converged in 0.906 s |
+| Unwritable destination then restored permissions | Error visible; automatic retry succeeded |
+| 60 rotating-origin overwrites | Median 0.201 s; max 0.302 s |
+| Explicit history pruning | Removed 40 backups per peer; compact deletion context retained |
+
+Initial report: `/tmp/gosync-faults-hs1kfs8w`. The sustained segment lasted about
+13.5 seconds; it is a repeated-workload regression, not a days-long soak or proof
+of a memory plateau. Container memory increased by about 21–24 MiB over that
+segment. State files showed about 2.28 GB of apparent size while running because
+Badger preallocates/memory-maps large files; this is not a measurement of physical
+disk use. The harness now records allocated and apparent bytes separately.
+
+The final small-operation sample retained the same logical I/O/payload costs as
+Epic 1.3; append/overwrite/truncate latencies were 22.65/31.95/26.09 ms. Timing
+samples vary and are not regression thresholds.

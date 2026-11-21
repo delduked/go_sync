@@ -98,10 +98,10 @@ service installation outside Linux remains documented as unvalidated.
 
 ## 6. Docker validation and tuning (physical LAN deferred by user) — in progress
 
-- [ ] 6.1 Reproducible throughput/convergence baseline.
-- [ ] 6.2 Latency/loss/disconnect/bandwidth fault scenarios.
-- [ ] 6.3 Uneven peer/storage/CPU scenarios within available facilities.
-- [ ] 6.4 Sustained workloads and resource/history growth checks.
+- [x] 6.1 Reproducible throughput/convergence baseline.
+- [x] 6.2 Latency/loss/disconnect/bandwidth fault scenarios.
+- [x] 6.3 Uneven peer/storage/CPU scenarios within available facilities.
+- [x] 6.4 Sustained workloads and resource/history growth checks.
 - [ ] 6.5 Tune defaults from results; document physical-LAN and OS validation gaps.
 
 Accept: repeatable reports distinguish tested results from simulations and untested platforms.

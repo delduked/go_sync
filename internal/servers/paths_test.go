@@ -9,7 +9,7 @@ import (
 )
 
 func TestPortableNames(t *testing.T) {
-	for _, name := range []string{"CON", "aux.txt", "nested/COM1.exe", "NUL", "name.", "name ", "a?b", "a*b", "a<b", "a|b", "a\tb", "e\u0301.txt", strings.Repeat("x", 256)} {
+	for _, name := range []string{"CON", "CONIN$", "CONOUT$.txt", "COM¹.log", "LPT²", "CON .txt", "aux.txt", "nested/COM1.exe", "NUL", "name.", "name ", "a?b", "a*b", "a<b", "a|b", "a\tb", "e\u0301.txt", strings.Repeat("x", 256)} {
 		if validName(name) == nil {
 			t.Errorf("accepted %q", name)
 		}
