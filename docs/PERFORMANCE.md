@@ -44,3 +44,9 @@ shows opportunistic reuse of relays, but source choice has no fanout limit.
 These are application payload counters on one machine, not LAN throughput.
 Logs: `/tmp/gosync-mesh-1ynzvf7o`. The harness records per-peer bytes and cleans
 up containers/networks while retaining its report and logs.
+
+With `--fanout 2`, the same ten-peer/8 MiB workload converged in 1.023 s. The
+origin sent 16 MiB (two copies), a 66.7% reduction from the observed 48 MiB
+baseline; aggregate payload stayed at 72 MiB. Each relay sent at most two copies.
+This single-host run demonstrates the upload/latency tradeoff, not a universal
+speedup. Logs: `/tmp/gosync-mesh-5hl3fg4y`.

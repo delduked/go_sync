@@ -147,6 +147,12 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	}
 	unlock := e.lockTransfer(entry.FileName)
 	defer unlock()
+	e.mu.Lock()
+	current := copyEntry(e.files[entry.FileName])
+	e.mu.Unlock()
+	if !shouldReceive(entry, current) {
+		return nil
+	}
 	if entry.IsDeleted || entry.IsDirectory {
 		e.discardResume(entry.FileName)
 	}

@@ -18,6 +18,9 @@ import (
 // Reconcile fetches durable state instead of enqueuing lossy filesystem events.
 // A failed transfer stays pending in the manifest and is retried next pass.
 func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient) error {
+	return e.reconcile(ctx, client, nil)
+}
+func (e *Engine) reconcile(ctx context.Context, client pb.FileSyncServiceClient, route *routePolicy) error {
 	e.mu.Lock()
 	if err := e.loadIgnoreLocked(); err != nil {
 		e.mu.Unlock()
@@ -75,7 +78,17 @@ func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient)
 		local := copyEntry(e.files[f.FileName])
 		e.mu.Unlock()
 		if shouldReceive(f, local) {
-			if err = e.pull(ctx, client, f, local); err != nil && firstErr == nil {
+			if route != nil && !route.allow(f) {
+				if firstErr == nil {
+					firstErr = errDeferred
+				}
+				continue
+			}
+			err = e.pull(ctx, client, f, local)
+			if route != nil {
+				route.done(f, err)
+			}
+			if err != nil && (firstErr == nil || firstErr == errDeferred) {
 				firstErr = fmt.Errorf("%s: %w", f.FileName, err)
 			}
 		}
@@ -84,20 +97,24 @@ func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient)
 }
 
 type Connections struct {
-	mu       sync.Mutex
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	peers    map[string]context.CancelFunc
-	engine   *Engine
-	options  []grpc.DialOption
-	interval time.Duration
-	closed   bool
+	fanout            int
+	nodes             map[string]string
+	pending           map[string]time.Time
+	membershipChanged time.Time
+	mu                sync.Mutex
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
+	peers             map[string]context.CancelFunc
+	engine            *Engine
+	options           []grpc.DialOption
+	interval          time.Duration
+	closed            bool
 }
 
 func NewConnections(ctx context.Context, e *Engine, interval time.Duration, options ...grpc.DialOption) *Connections {
 	ctx, cancel := context.WithCancel(ctx)
-	return &Connections{ctx: ctx, cancel: cancel, peers: make(map[string]context.CancelFunc), engine: e, interval: interval, options: options}
+	return &Connections{fanout: 2, nodes: make(map[string]string), pending: make(map[string]time.Time), ctx: ctx, cancel: cancel, peers: make(map[string]context.CancelFunc), engine: e, interval: interval, options: options}
 }
 func (c *Connections) AddPeer(addr string) {
 	c.mu.Lock()
@@ -128,17 +145,27 @@ func (c *Connections) AddPeer(addr string) {
 				callCtx, done := context.WithTimeout(ctx, 10*time.Minute)
 				announcement, err := client.Announce(callCtx, &pb.Empty{})
 				localGeneration := c.engine.Generation()
+				if err == nil {
+					if !validID(announcement.NodeId) {
+						err = fmt.Errorf("invalid peer identity")
+					} else if announcement.NodeId == c.engine.ID() {
+						done()
+						return
+					} else {
+						c.noteNode(addr, announcement.NodeId)
+					}
+				}
 				if status.Code(err) == codes.Unimplemented {
 					err = c.engine.Reconcile(callCtx, client)
 				} else if err == nil && (announcement.Generation != lastRemote || localGeneration != lastLocal) {
-					err = c.engine.Reconcile(callCtx, client)
+					err = c.engine.reconcile(callCtx, client, c.route(addr))
 					if err == nil {
 						lastRemote = announcement.Generation
 						lastLocal = c.engine.Generation()
 					}
 				}
 				done()
-				if err != nil && ctx.Err() == nil {
+				if err != nil && err != errDeferred && ctx.Err() == nil {
 					log.Debugf("peer %s: %v", addr, err)
 				}
 				timer.Reset(c.interval)

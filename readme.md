@@ -345,3 +345,17 @@ Peers exchange a small node/generation announcement each interval and fetch
 manifests when either side changes. Chunk retrieval remains a separate verified
 RPC. Generations include a process-session token, so a restart forces fresh
 reconciliation. Older v2 peers fall back to periodic full manifests.
+
+### Cascading transfers
+
+`--fanout 2` (default) selects a deterministic tree rooted at each revision's
+origin. All peers exchange small announcements; a receiver normally fetches file
+content from its parent in that tree. `--fanout 0` selects the full-mesh baseline.
+The data is independently hashed and verified at each relay. Per-path transfer
+serialization suppresses duplicate downloads after another source succeeds.
+
+After at least three seconds without its preferred relay's revision, a receiver
+can use any authenticated holder. This supports departed origins, partitions and
+unequal discovery views. The configured fanout is a preferred topology, not a
+hard upload cap during recovery or membership changes. Metadata discovery still
+uses a full mesh; large populations require additional control-plane scaling.

@@ -3,6 +3,7 @@ package conf
 import "time"
 
 type Config struct {
+	Fanout                 int
 	Bootstrap              string
 	SyncFolder             string
 	StateDir               string

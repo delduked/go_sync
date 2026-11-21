@@ -40,6 +40,7 @@ func run() error {
 	var cfg conf.Config
 	var chunkKB int64
 	var debug bool
+	flag.IntVar(&cfg.Fanout, "fanout", 2, "Preferred relay-tree fanout (0 for full mesh, 1–32)")
 	flag.StringVar(&cfg.SyncFolder, "sync-folder", "", "Folder to synchronize (required)")
 	flag.StringVar(&cfg.Bootstrap, "bootstrap", "", "For existing files without history: seed or join")
 	flag.StringVar(&cfg.StateDir, "state-dir", "./badgerdb-v2", "Persistent state outside the synchronized folder")
@@ -57,6 +58,9 @@ func run() error {
 	flag.Parse()
 	if debug {
 		log.SetLevel(log.DebugLevel)
+	}
+	if cfg.Fanout < 0 || cfg.Fanout > 32 {
+		return fmt.Errorf("--fanout must be 0–32")
 	}
 	if cfg.SyncFolder == "" {
 		return fmt.Errorf("--sync-folder is required")
@@ -115,6 +119,7 @@ func run() error {
 		}
 	}()
 	connections := servers.NewConnections(ctx, engine, cfg.SyncInterval, grpc.WithTransportCredentials(clientCreds))
+	connections.SetFanout(cfg.Fanout)
 	var stopDiscovery func()
 	if !cfg.NoMDNS {
 		stopDiscovery, err = servers.Discover(ctx, &wg, engine.ID(), port, connections)
