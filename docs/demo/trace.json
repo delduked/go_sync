@@ -1,0 +1,2467 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-11-21T23:41:20.561473+00:00",
+  "peers": [
+    "atlas",
+    "orbit",
+    "vault"
+  ],
+  "transport": "mutual TLS 1.3",
+  "discovery": "mDNS",
+  "environment": "three containers on an isolated Docker bridge",
+  "source_commit": "1c7fbc57caaea6f218d3cdd9b304d559a62a9772",
+  "operations": [
+    {
+      "action": "create",
+      "origin": 0,
+      "before": [
+        {},
+        {},
+        {}
+      ],
+      "samples": [
+        {
+          "seconds": 0.0001,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.0403,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.0805,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.1208,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.1611,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.2016,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.2422,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.2825,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.3227,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.3629,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.4031,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.4434,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.4837,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {},
+            {}
+          ]
+        },
+        {
+          "seconds": 0.524,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {}
+          ]
+        },
+        {
+          "seconds": 0.5643,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {}
+          ]
+        },
+        {
+          "seconds": 0.6046,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {}
+          ]
+        },
+        {
+          "seconds": 0.6449,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {}
+          ]
+        },
+        {
+          "seconds": 0.6852,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {}
+          ]
+        },
+        {
+          "seconds": 0.7254,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {}
+          ]
+        },
+        {
+          "seconds": 0.7657,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "edit",
+      "origin": 1,
+      "before": [
+        {
+          "ideas.md": {
+            "text": "# Ship it\n",
+            "bytes": 10,
+            "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+          }
+        },
+        {
+          "ideas.md": {
+            "text": "# Ship it\n",
+            "bytes": 10,
+            "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+          }
+        },
+        {
+          "ideas.md": {
+            "text": "# Ship it\n",
+            "bytes": 10,
+            "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+          }
+        }
+      ],
+      "samples": [
+        {
+          "seconds": 0.0001,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.0404,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.0807,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.1209,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.1617,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.202,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it\n",
+                "bytes": 10,
+                "sha256": "e91c5dce47ee5ddd217d7175a23d9ac611010b8d1a872a9822207c383cd0aa3e"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.2423,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "rename",
+      "origin": 2,
+      "before": [
+        {
+          "ideas.md": {
+            "text": "# Ship it together\n",
+            "bytes": 19,
+            "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+          }
+        },
+        {
+          "ideas.md": {
+            "text": "# Ship it together\n",
+            "bytes": 19,
+            "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+          }
+        },
+        {
+          "ideas.md": {
+            "text": "# Ship it together\n",
+            "bytes": 19,
+            "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+          }
+        }
+      ],
+      "samples": [
+        {
+          "seconds": 0.0001,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.0404,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.0807,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.1211,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.1615,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.2019,
+          "peers": [
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "ideas.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.2422,
+          "peers": [
+            {},
+            {},
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.2825,
+          "peers": [
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "delete",
+      "origin": 0,
+      "before": [
+        {
+          "launch.md": {
+            "text": "# Ship it together\n",
+            "bytes": 19,
+            "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+          }
+        },
+        {
+          "launch.md": {
+            "text": "# Ship it together\n",
+            "bytes": 19,
+            "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+          }
+        },
+        {
+          "launch.md": {
+            "text": "# Ship it together\n",
+            "bytes": 19,
+            "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+          }
+        }
+      ],
+      "samples": [
+        {
+          "seconds": 0.0001,
+          "peers": [
+            {},
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.0405,
+          "peers": [
+            {},
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.0808,
+          "peers": [
+            {},
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.1212,
+          "peers": [
+            {},
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.1615,
+          "peers": [
+            {},
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.2019,
+          "peers": [
+            {},
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            },
+            {
+              "launch.md": {
+                "text": "# Ship it together\n",
+                "bytes": 19,
+                "sha256": "a4ff42ccc9a572c1d8b65db3f53b45c30f3df348bac41bad9ba9507d909cf81b"
+              }
+            }
+          ]
+        },
+        {
+          "seconds": 0.2421,
+          "peers": [
+            {},
+            {},
+            {}
+          ]
+        }
+      ]
+    }
+  ],
+  "growth": {
+    "origin": 0,
+    "filename": "download.bin",
+    "target_bytes": 16777216,
+    "samples": [
+      {
+        "seconds": 0.0002,
+        "peers": {
+          "bytes": [
+            0,
+            0,
+            0
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.0406,
+        "peers": {
+          "bytes": [
+            262144,
+            0,
+            0
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.0812,
+        "peers": {
+          "bytes": [
+            524288,
+            0,
+            0
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.1216,
+        "peers": {
+          "bytes": [
+            524288,
+            0,
+            0
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.1617,
+        "peers": {
+          "bytes": [
+            786432,
+            0,
+            0
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.2019,
+        "peers": {
+          "bytes": [
+            786432,
+            0,
+            0
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.242,
+        "peers": {
+          "bytes": [
+            1048576,
+            786432,
+            786432
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.2825,
+        "peers": {
+          "bytes": [
+            1048576,
+            786432,
+            786432
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.323,
+        "peers": {
+          "bytes": [
+            1310720,
+            786432,
+            786432
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.3632,
+        "peers": {
+          "bytes": [
+            1310720,
+            786432,
+            786432
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.4034,
+        "peers": {
+          "bytes": [
+            1572864,
+            786432,
+            786432
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.444,
+        "peers": {
+          "bytes": [
+            1572864,
+            786432,
+            786432
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.4842,
+        "peers": {
+          "bytes": [
+            1835008,
+            786432,
+            786432
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.5249,
+        "peers": {
+          "bytes": [
+            1835008,
+            1572864,
+            1572864
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.565,
+        "peers": {
+          "bytes": [
+            2097152,
+            1572864,
+            1572864
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.6052,
+        "peers": {
+          "bytes": [
+            2097152,
+            1572864,
+            1572864
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.6454,
+        "peers": {
+          "bytes": [
+            2359296,
+            1572864,
+            1572864
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.6855,
+        "peers": {
+          "bytes": [
+            2359296,
+            1572864,
+            1572864
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.7258,
+        "peers": {
+          "bytes": [
+            2621440,
+            1572864,
+            1572864
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.766,
+        "peers": {
+          "bytes": [
+            2621440,
+            1572864,
+            1572864
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.8069,
+        "peers": {
+          "bytes": [
+            2883584,
+            2621440,
+            2621440
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.8472,
+        "peers": {
+          "bytes": [
+            2883584,
+            2621440,
+            2621440
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.8874,
+        "peers": {
+          "bytes": [
+            3145728,
+            2621440,
+            2621440
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.9276,
+        "peers": {
+          "bytes": [
+            3145728,
+            2621440,
+            2621440
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 0.9677,
+        "peers": {
+          "bytes": [
+            3407872,
+            2621440,
+            2621440
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.0079,
+        "peers": {
+          "bytes": [
+            3407872,
+            2621440,
+            2621440
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.0481,
+        "peers": {
+          "bytes": [
+            3670016,
+            2621440,
+            2621440
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.0883,
+        "peers": {
+          "bytes": [
+            3670016,
+            3407872,
+            3407872
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.1285,
+        "peers": {
+          "bytes": [
+            3932160,
+            3407872,
+            3407872
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.1688,
+        "peers": {
+          "bytes": [
+            3932160,
+            3407872,
+            3407872
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.209,
+        "peers": {
+          "bytes": [
+            4194304,
+            3407872,
+            3407872
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.2492,
+        "peers": {
+          "bytes": [
+            4194304,
+            3407872,
+            3407872
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.2894,
+        "peers": {
+          "bytes": [
+            4456448,
+            3407872,
+            3407872
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.3295,
+        "peers": {
+          "bytes": [
+            4456448,
+            3407872,
+            3407872
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.3702,
+        "peers": {
+          "bytes": [
+            4718592,
+            4456448,
+            4456448
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.4105,
+        "peers": {
+          "bytes": [
+            4718592,
+            4456448,
+            4456448
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.451,
+        "peers": {
+          "bytes": [
+            4980736,
+            4456448,
+            4456448
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.4912,
+        "peers": {
+          "bytes": [
+            4980736,
+            4456448,
+            4456448
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.5317,
+        "peers": {
+          "bytes": [
+            5242880,
+            4456448,
+            4456448
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.572,
+        "peers": {
+          "bytes": [
+            5242880,
+            4456448,
+            4456448
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.6122,
+        "peers": {
+          "bytes": [
+            5505024,
+            4456448,
+            4456448
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.6523,
+        "peers": {
+          "bytes": [
+            5505024,
+            5242880,
+            5242880
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.6926,
+        "peers": {
+          "bytes": [
+            5767168,
+            5242880,
+            5242880
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.7328,
+        "peers": {
+          "bytes": [
+            5767168,
+            5242880,
+            5242880
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.7734,
+        "peers": {
+          "bytes": [
+            6029312,
+            5242880,
+            5242880
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.8135,
+        "peers": {
+          "bytes": [
+            6029312,
+            5242880,
+            5242880
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.8537,
+        "peers": {
+          "bytes": [
+            6291456,
+            5242880,
+            5242880
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.8939,
+        "peers": {
+          "bytes": [
+            6291456,
+            5242880,
+            5242880
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.934,
+        "peers": {
+          "bytes": [
+            6553600,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 1.9743,
+        "peers": {
+          "bytes": [
+            6553600,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.0145,
+        "peers": {
+          "bytes": [
+            6815744,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.0548,
+        "peers": {
+          "bytes": [
+            6815744,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.0951,
+        "peers": {
+          "bytes": [
+            7077888,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.1358,
+        "peers": {
+          "bytes": [
+            7077888,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.1761,
+        "peers": {
+          "bytes": [
+            7340032,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.2163,
+        "peers": {
+          "bytes": [
+            7340032,
+            6291456,
+            6291456
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.2567,
+        "peers": {
+          "bytes": [
+            7602176,
+            7340032,
+            7340032
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.297,
+        "peers": {
+          "bytes": [
+            7602176,
+            7340032,
+            7340032
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.3375,
+        "peers": {
+          "bytes": [
+            7864320,
+            7340032,
+            7340032
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.3777,
+        "peers": {
+          "bytes": [
+            7864320,
+            7340032,
+            7340032
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.418,
+        "peers": {
+          "bytes": [
+            8126464,
+            7340032,
+            7340032
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.4584,
+        "peers": {
+          "bytes": [
+            8126464,
+            7340032,
+            7340032
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.4986,
+        "peers": {
+          "bytes": [
+            8388608,
+            7340032,
+            7340032
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.5387,
+        "peers": {
+          "bytes": [
+            8388608,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.5789,
+        "peers": {
+          "bytes": [
+            8650752,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.6195,
+        "peers": {
+          "bytes": [
+            8650752,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.6597,
+        "peers": {
+          "bytes": [
+            8912896,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.7002,
+        "peers": {
+          "bytes": [
+            8912896,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.7404,
+        "peers": {
+          "bytes": [
+            9175040,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.7806,
+        "peers": {
+          "bytes": [
+            9175040,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.8208,
+        "peers": {
+          "bytes": [
+            9437184,
+            8126464,
+            8126464
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.861,
+        "peers": {
+          "bytes": [
+            9437184,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.9013,
+        "peers": {
+          "bytes": [
+            9699328,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.9415,
+        "peers": {
+          "bytes": [
+            9699328,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 2.9821,
+        "peers": {
+          "bytes": [
+            9961472,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.0222,
+        "peers": {
+          "bytes": [
+            9961472,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.0625,
+        "peers": {
+          "bytes": [
+            10223616,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.1028,
+        "peers": {
+          "bytes": [
+            10223616,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.1429,
+        "peers": {
+          "bytes": [
+            10485760,
+            9175040,
+            9175040
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.1831,
+        "peers": {
+          "bytes": [
+            10485760,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.2233,
+        "peers": {
+          "bytes": [
+            10747904,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.2636,
+        "peers": {
+          "bytes": [
+            10747904,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.3038,
+        "peers": {
+          "bytes": [
+            11010048,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.3441,
+        "peers": {
+          "bytes": [
+            11010048,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.3847,
+        "peers": {
+          "bytes": [
+            11272192,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.4253,
+        "peers": {
+          "bytes": [
+            11272192,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.4657,
+        "peers": {
+          "bytes": [
+            11534336,
+            10223616,
+            10223616
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.5059,
+        "peers": {
+          "bytes": [
+            11534336,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.5462,
+        "peers": {
+          "bytes": [
+            11796480,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.5864,
+        "peers": {
+          "bytes": [
+            11796480,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.6266,
+        "peers": {
+          "bytes": [
+            12058624,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.6669,
+        "peers": {
+          "bytes": [
+            12058624,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.7075,
+        "peers": {
+          "bytes": [
+            12320768,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.7477,
+        "peers": {
+          "bytes": [
+            12320768,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.7878,
+        "peers": {
+          "bytes": [
+            12582912,
+            11272192,
+            11272192
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.828,
+        "peers": {
+          "bytes": [
+            12582912,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.8682,
+        "peers": {
+          "bytes": [
+            12845056,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.9088,
+        "peers": {
+          "bytes": [
+            12845056,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.9493,
+        "peers": {
+          "bytes": [
+            13107200,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 3.9895,
+        "peers": {
+          "bytes": [
+            13107200,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.0296,
+        "peers": {
+          "bytes": [
+            13369344,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.0698,
+        "peers": {
+          "bytes": [
+            13369344,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.11,
+        "peers": {
+          "bytes": [
+            13631488,
+            12320768,
+            12320768
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.1505,
+        "peers": {
+          "bytes": [
+            13631488,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.1912,
+        "peers": {
+          "bytes": [
+            13893632,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.2313,
+        "peers": {
+          "bytes": [
+            13893632,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.2716,
+        "peers": {
+          "bytes": [
+            14155776,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.3117,
+        "peers": {
+          "bytes": [
+            14155776,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.3519,
+        "peers": {
+          "bytes": [
+            14417920,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.3921,
+        "peers": {
+          "bytes": [
+            14417920,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.4324,
+        "peers": {
+          "bytes": [
+            14680064,
+            13369344,
+            13369344
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.4726,
+        "peers": {
+          "bytes": [
+            14680064,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.5128,
+        "peers": {
+          "bytes": [
+            14942208,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.5531,
+        "peers": {
+          "bytes": [
+            14942208,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.5936,
+        "peers": {
+          "bytes": [
+            15204352,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.6341,
+        "peers": {
+          "bytes": [
+            15204352,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.6742,
+        "peers": {
+          "bytes": [
+            15466496,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.7144,
+        "peers": {
+          "bytes": [
+            15466496,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.7546,
+        "peers": {
+          "bytes": [
+            15728640,
+            14417920,
+            14417920
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.7949,
+        "peers": {
+          "bytes": [
+            15728640,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.8351,
+        "peers": {
+          "bytes": [
+            15990784,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.8755,
+        "peers": {
+          "bytes": [
+            15990784,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.9157,
+        "peers": {
+          "bytes": [
+            16252928,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.9564,
+        "peers": {
+          "bytes": [
+            16252928,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 4.9967,
+        "peers": {
+          "bytes": [
+            16515072,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 5.037,
+        "peers": {
+          "bytes": [
+            16515072,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 5.0773,
+        "peers": {
+          "bytes": [
+            16777216,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 5.1179,
+        "peers": {
+          "bytes": [
+            16777216,
+            15466496,
+            15466496
+          ],
+          "writer_open": true
+        }
+      },
+      {
+        "seconds": 5.1581,
+        "peers": {
+          "bytes": [
+            16777216,
+            15466496,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.1984,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.2386,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.2788,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.319,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.3592,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.3993,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.4395,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16515072
+          ],
+          "writer_open": false
+        }
+      },
+      {
+        "seconds": 5.4796,
+        "peers": {
+          "bytes": [
+            16777216,
+            16777216,
+            16777216
+          ],
+          "writer_open": false
+        }
+      }
+    ],
+    "final_sha256": [
+      "9eca24fcd2d7a760f9e763187e7f74b8dce5ef6ffe621cd173167fa002312043",
+      "9eca24fcd2d7a760f9e763187e7f74b8dce5ef6ffe621cd173167fa002312043",
+      "9eca24fcd2d7a760f9e763187e7f74b8dce5ef6ffe621cd173167fa002312043"
+    ],
+    "replicas_grew_before_writer_closed": true
+  }
+}
