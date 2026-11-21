@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FileSyncService_ListFiles_FullMethodName   = "/FileSyncService/ListFiles"
-	FileSyncService_ReadFile_FullMethodName    = "/FileSyncService/ReadFile"
-	FileSyncService_ReadDelta_FullMethodName   = "/FileSyncService/ReadDelta"
-	FileSyncService_HealthCheck_FullMethodName = "/FileSyncService/HealthCheck"
+	FileSyncService_ListFiles_FullMethodName        = "/FileSyncService/ListFiles"
+	FileSyncService_ExchangeManifest_FullMethodName = "/FileSyncService/ExchangeManifest"
+	FileSyncService_ReadFile_FullMethodName         = "/FileSyncService/ReadFile"
+	FileSyncService_ReadDelta_FullMethodName        = "/FileSyncService/ReadDelta"
+	FileSyncService_HealthCheck_FullMethodName      = "/FileSyncService/HealthCheck"
 )
 
 // FileSyncServiceClient is the client API for FileSyncService service.
@@ -32,6 +33,7 @@ const (
 // Protocol v2 deliberately does not accept the unsafe v1 push RPCs.
 type FileSyncServiceClient interface {
 	ListFiles(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*FileList, error)
+	ExchangeManifest(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ManifestBatch, ManifestBatch], error)
 	ReadFile(ctx context.Context, in *FileEntry, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChunk], error)
 	ReadDelta(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DeltaRequest, FileChunk], error)
 	HealthCheck(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Ping, Pong], error)
@@ -55,9 +57,22 @@ func (c *fileSyncServiceClient) ListFiles(ctx context.Context, in *Empty, opts .
 	return out, nil
 }
 
+func (c *fileSyncServiceClient) ExchangeManifest(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ManifestBatch, ManifestBatch], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[0], FileSyncService_ExchangeManifest_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ManifestBatch, ManifestBatch]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_ExchangeManifestClient = grpc.BidiStreamingClient[ManifestBatch, ManifestBatch]
+
 func (c *fileSyncServiceClient) ReadFile(ctx context.Context, in *FileEntry, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[0], FileSyncService_ReadFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[1], FileSyncService_ReadFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +91,7 @@ type FileSyncService_ReadFileClient = grpc.ServerStreamingClient[FileChunk]
 
 func (c *fileSyncServiceClient) ReadDelta(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DeltaRequest, FileChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[1], FileSyncService_ReadDelta_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[2], FileSyncService_ReadDelta_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +104,7 @@ type FileSyncService_ReadDeltaClient = grpc.BidiStreamingClient[DeltaRequest, Fi
 
 func (c *fileSyncServiceClient) HealthCheck(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Ping, Pong], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[2], FileSyncService_HealthCheck_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &FileSyncService_ServiceDesc.Streams[3], FileSyncService_HealthCheck_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +122,7 @@ type FileSyncService_HealthCheckClient = grpc.BidiStreamingClient[Ping, Pong]
 // Protocol v2 deliberately does not accept the unsafe v1 push RPCs.
 type FileSyncServiceServer interface {
 	ListFiles(context.Context, *Empty) (*FileList, error)
+	ExchangeManifest(grpc.BidiStreamingServer[ManifestBatch, ManifestBatch]) error
 	ReadFile(*FileEntry, grpc.ServerStreamingServer[FileChunk]) error
 	ReadDelta(grpc.BidiStreamingServer[DeltaRequest, FileChunk]) error
 	HealthCheck(grpc.BidiStreamingServer[Ping, Pong]) error
@@ -122,6 +138,9 @@ type UnimplementedFileSyncServiceServer struct{}
 
 func (UnimplementedFileSyncServiceServer) ListFiles(context.Context, *Empty) (*FileList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFiles not implemented")
+}
+func (UnimplementedFileSyncServiceServer) ExchangeManifest(grpc.BidiStreamingServer[ManifestBatch, ManifestBatch]) error {
+	return status.Errorf(codes.Unimplemented, "method ExchangeManifest not implemented")
 }
 func (UnimplementedFileSyncServiceServer) ReadFile(*FileEntry, grpc.ServerStreamingServer[FileChunk]) error {
 	return status.Errorf(codes.Unimplemented, "method ReadFile not implemented")
@@ -171,6 +190,13 @@ func _FileSyncService_ListFiles_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileSyncService_ExchangeManifest_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(FileSyncServiceServer).ExchangeManifest(&grpc.GenericServerStream[ManifestBatch, ManifestBatch]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FileSyncService_ExchangeManifestServer = grpc.BidiStreamingServer[ManifestBatch, ManifestBatch]
+
 func _FileSyncService_ReadFile_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(FileEntry)
 	if err := stream.RecvMsg(m); err != nil {
@@ -209,6 +235,12 @@ var FileSyncService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ExchangeManifest",
+			Handler:       _FileSyncService_ExchangeManifest_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
 		{
 			StreamName:    "ReadFile",
 			Handler:       _FileSyncService_ReadFile_Handler,

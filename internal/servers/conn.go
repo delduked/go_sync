@@ -28,7 +28,7 @@ func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient)
 		}
 	}
 	e.mu.Unlock()
-	remote, err := client.ListFiles(ctx, &pb.Empty{KnownPaths: known})
+	remote, err := fetchManifest(ctx, client, known)
 	if err != nil {
 		return err
 	}

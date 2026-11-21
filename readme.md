@@ -323,3 +323,9 @@ manifest. They do not block unrelated files. Remote changes cannot overwrite
 these objects or traverse a symlink parent, even when it points inside the root.
 Replace or exclude an unsupported object explicitly to resolve a blocked path.
 File publication is atomic; whole-tree operations are eventually consistent.
+
+Large project manifests and known-path requests use bounded streaming batches
+between updated peers. Older v2 peers use the unary fallback and remain subject
+to its 4 MiB message limit. Metadata still occupies memory proportional to the
+number of tracked paths and causal identities; streaming removes the per-message
+limit, not those total resource costs.

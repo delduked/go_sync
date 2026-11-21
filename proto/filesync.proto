@@ -4,10 +4,12 @@ option go_package = "github.com/TypeTerrors/go_sync/proto;filesync";
 // Protocol v2 deliberately does not accept the unsafe v1 push RPCs.
 service FileSyncService {
   rpc ListFiles(Empty) returns (FileList);
+  rpc ExchangeManifest(stream ManifestBatch) returns (stream ManifestBatch);
   rpc ReadFile(FileEntry) returns (stream FileChunk);
   rpc ReadDelta(stream DeltaRequest) returns (stream FileChunk);
   rpc HealthCheck(stream Ping) returns (stream Pong);
 }
+message ManifestBatch { repeated string known_paths = 1; repeated FileEntry files = 2; }
 message Empty { repeated string known_paths = 1; }
 message Ping { string message = 1; }
 message Pong { string message = 1; }
