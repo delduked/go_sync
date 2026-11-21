@@ -32,6 +32,8 @@ type Engine struct {
 	id             string
 	clock          uint64
 	files          map[string]*pb.FileEntry
+	graveyard      map[string]*pb.FileEntry
+	deletedAt      map[string]time.Time
 }
 
 func randomID() string {
@@ -82,6 +84,43 @@ func (e *Engine) load() error {
 				e.clock = f.Revision
 			}
 		}
+		if item, err := tx.Get([]byte("clock")); err == nil {
+			var clock uint64
+			if err = item.Value(func(b []byte) error { return json.Unmarshal(b, &clock) }); err != nil {
+				return err
+			}
+			if clock > e.clock {
+				e.clock = clock
+			}
+		} else if err != badger.ErrKeyNotFound {
+			return err
+		}
+		for it.Seek([]byte("graveyard/")); it.ValidForPrefix([]byte("graveyard/")); it.Next() {
+			var f pb.FileEntry
+			if err := it.Item().Value(func(b []byte) error { return json.Unmarshal(b, &f) }); err != nil {
+				return err
+			}
+			if err := validateEntry(&f); err != nil {
+				return err
+			}
+			e.graveyard[f.FileName] = &f
+			if f.Revision > e.clock {
+				e.clock = f.Revision
+			}
+		}
+		for name, f := range e.files {
+			if f.IsDeleted {
+				when := time.Now()
+				if item, err := tx.Get([]byte("deleted-at/" + name)); err == nil {
+					if err = item.Value(func(b []byte) error { return json.Unmarshal(b, &when) }); err != nil {
+						return err
+					}
+				} else if err != badger.ErrKeyNotFound {
+					return err
+				}
+				e.deletedAt[name] = when
+			}
+		}
 		return nil
 	})
 }
@@ -90,17 +129,49 @@ func (e *Engine) save(f *pb.FileEntry) error {
 	if err != nil {
 		return err
 	}
-	if err = e.db.Update(func(tx *badger.Txn) error { return tx.Set([]byte("file/"+f.FileName), data) }); err != nil {
+	clock := e.clock
+	if f.Revision > clock {
+		clock = f.Revision
+	}
+	clockData, _ := json.Marshal(clock)
+	when := e.deletedAt[f.FileName]
+	if f.IsDeleted && (when.IsZero() || !sameVersion(f, e.files[f.FileName])) {
+		when = time.Now()
+	}
+	whenData, _ := json.Marshal(when)
+	if err = e.db.Update(func(tx *badger.Txn) error {
+		if err := tx.Set([]byte("file/"+f.FileName), data); err != nil {
+			return err
+		}
+		if err := tx.Set([]byte("clock"), clockData); err != nil {
+			return err
+		}
+		if err := tx.Delete([]byte("graveyard/" + f.FileName)); err != nil {
+			return err
+		}
+		if f.IsDeleted {
+			return tx.Set([]byte("deleted-at/"+f.FileName), whenData)
+		}
+		return tx.Delete([]byte("deleted-at/" + f.FileName))
+	}); err != nil {
 		return err
 	}
 	e.files[f.FileName] = copyEntry(f)
-	if f.Revision > e.clock {
-		e.clock = f.Revision
+	delete(e.graveyard, f.FileName)
+	e.clock = clock
+	if f.IsDeleted {
+		e.deletedAt[f.FileName] = when
+	} else {
+		delete(e.deletedAt, f.FileName)
 	}
 	return nil
 }
 func (e *Engine) local(f *pb.FileEntry) error {
-	f.Version = mergedVersion(f, e.files[f.FileName])
+	previous := e.files[f.FileName]
+	if previous == nil {
+		previous = e.graveyard[f.FileName]
+	}
+	f.Version = mergedVersion(f, previous)
 	e.clock++
 	f.Revision = e.clock
 	f.Origin = e.id

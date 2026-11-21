@@ -229,8 +229,11 @@ Remaining limitations:
   replicated. Atomic replace has been exercised on Linux; other OSes need testing.
 - File commits are atomic, but a multi-file project update or rename is not a
   transaction. Network partitions allow temporary divergence.
-- Tombstones and backup history have no garbage collection yet. A peer with lost
-  state cannot distinguish an old orphaned copy from a newly created file.
+- History pruning is explicit, using the command below. Compact deletion floors
+  retain per-path causal information indefinitely; forgetting all deletion history
+  cannot be made safe for arbitrary offline peers. Fresh-state joins require an
+  explicit bootstrap policy. Compacted-floor recovery requires updated peers or
+  bidirectional reconciliation with older v2 peers.
 - Docker tests establish behavior on one host, not LAN throughput or scalability.
 
 Implementation entry points are `cmd/server/main.go`, `internal/servers/file.go`
@@ -254,3 +257,22 @@ not measure physical device traffic. Live counters are sampled independently.
 and truncation (to 1 MiB). Setup is excluded. The `converge-ms/op` field covers
 edit detection through destination commit. See `docs/PERFORMANCE.md` for baseline
 measurements and subsequent comparisons.
+
+## Retiring old history
+
+Stop the service before using its state directory from another process:
+
+```sh
+./gosync prune --sync-folder ./files-a --state-dir ./state-a --older-than 720h
+```
+
+This removes aged local backups and abandoned partial transfers and compacts
+aged tombstones out of ordinary manifests. It never prunes synchronized conflict
+artifacts or private bootstrap archives. Active transfers are skipped. JSON output
+reports counts of each operation. Backups without an expired age are retained.
+
+Compact deletion floors remain in Badger and preserve the logical clock and
+causal context. When a returning peer mentions an old path, the deletion becomes
+active again and is sent to that peer. Thus an offline copy cannot silently
+resurrect just because retention ran. Deliberately recreating a file inherits its
+retained history and is treated as a new edit. Retention is not automatic by default.

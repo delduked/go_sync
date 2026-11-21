@@ -16,7 +16,15 @@ import (
 // Reconcile fetches durable state instead of enqueuing lossy filesystem events.
 // A failed transfer stays pending in the manifest and is retried next pass.
 func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient) error {
-	remote, err := client.ListFiles(ctx, &pb.Empty{})
+	e.mu.Lock()
+	var known []string
+	for name, f := range e.files {
+		if !f.IsDeleted {
+			known = append(known, name)
+		}
+	}
+	e.mu.Unlock()
+	remote, err := client.ListFiles(ctx, &pb.Empty{KnownPaths: known})
 	if err != nil {
 		return err
 	}
@@ -42,6 +50,9 @@ func (e *Engine) Reconcile(ctx context.Context, client pb.FileSyncServiceClient)
 	var firstErr error
 	for _, f := range remote.Files {
 		if err = ctx.Err(); err != nil {
+			return err
+		}
+		if err = e.RestoreDeletionFloors([]string{f.FileName}); err != nil {
 			return err
 		}
 		e.mu.Lock()

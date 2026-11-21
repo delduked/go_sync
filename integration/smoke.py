@@ -146,13 +146,25 @@ try:
     check("every concurrent version preserved on all peers", preserved_everywhere)
     (peers[1] / "conflict-demo.txt").write_bytes(b"resolved after seeing conflicts")
     check("subsequent resolution propagates", lambda: equals("conflict-demo.txt", b"resolved after seeing conflicts"))
+    (peers[0] / "retention-demo").write_bytes(b"stale offline copy")
+    check("retention test base replicated", lambda: equals("retention-demo", b"stale offline copy"))
+    compose("stop", "b")
+    (peers[0] / "retention-demo").unlink()
+    check("retention deletion reaches online peer", lambda: not (peers[2] / "retention-demo").exists())
+    compose("stop", "a", "c")
+    pruned = subprocess.run([str(repo / ".test-bin/gosync"), "prune", "--sync-folder", str(peers[0]), "--state-dir", str(root / "a/state"), "--older-than", "1ns"], check=True, capture_output=True, text=True)
+    check("deletion history compacted through CLI", lambda: json.loads(pruned.stdout)["tombstones_compacted"] > 0)
+    compose("start", "a", "b")
+    check("offline copy cannot resurrect compacted deletion", lambda: all(not (p / "retention-demo").exists() for p in peers[:2]))
+    compose("start", "c")
     # Compare every path, byte hash and executable bit, not just selected files.
     def manifest(p):
         return {str(x.relative_to(p)): ("dir" if x.is_dir() else hashlib.sha256(x.read_bytes()).hexdigest(), 0 if x.is_dir() else x.stat().st_mode & 0o777) for x in p.rglob("*") if not x.name.startswith(".gosync-stage-")}
     check("complete final directory equality", lambda: manifest(peers[0]) == manifest(peers[1]) == manifest(peers[2]))
+    shutdown_started = time.time()
     compose("stop")
     status = [json.loads(line) for line in compose("ps", "-a", "--format", "json").splitlines() if line]
-    check("metrics exported on shutdown", lambda: all(json.loads((root / n / "state/metrics.json").read_text())["payload_received_bytes"] > 0 for n in "abc"))
+    check("metrics exported on shutdown", lambda: all((root / n / "state/metrics.json").stat().st_mtime >= shutdown_started and json.loads((root / n / "state/metrics.json").read_text())["scan_read_bytes"] > 0 for n in "abc"))
     check("all peers shut down cleanly", lambda: len(status) == 3 and all(p["ExitCode"] == 0 for p in status))
 finally:
     try:

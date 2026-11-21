@@ -21,7 +21,10 @@ type Service struct {
 	ChunkSize int
 }
 
-func (s *Service) ListFiles(ctx context.Context, _ *pb.Empty) (*pb.FileList, error) {
+func (s *Service) ListFiles(ctx context.Context, req *pb.Empty) (*pb.FileList, error) {
+	if err := s.Engine.RestoreDeletionFloors(req.KnownPaths); err != nil {
+		return nil, err
+	}
 	return s.Engine.Manifest()
 }
 func (s *Service) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {

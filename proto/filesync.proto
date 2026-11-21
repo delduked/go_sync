@@ -8,7 +8,7 @@ service FileSyncService {
   rpc ReadDelta(stream DeltaRequest) returns (stream FileChunk);
   rpc HealthCheck(stream Ping) returns (stream Pong);
 }
-message Empty {}
+message Empty { repeated string known_paths = 1; }
 message Ping { string message = 1; }
 message Pong { string message = 1; }
 // (revision, origin) is a deterministic total order, independent of wall clocks.

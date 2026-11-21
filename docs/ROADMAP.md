@@ -28,17 +28,24 @@ unsupported on this workspace filesystem; fallback is tested and that limit is
 recorded in PERFORMANCE.md. Final Docker log: `/tmp/gosync-regression-_qv8chnb`.
 
 
-## 2. Concurrent edits and offline recovery — in progress
+## 2. Concurrent edits and offline recovery — complete
 
 - [x] 2.1 Track causal histories and distinguish concurrent revisions.
 - [x] 2.2 Preserve conflicting contents visibly and deterministically.
 - [x] 2.3 Handle edit/delete, rename/edit, and same-path creation conflicts.
 - [x] 2.4 Specify and test fresh, stale and replaced-state joining behavior.
-- [ ] 2.5 Retire backups and tombstones only under safe retention rules.
+- [x] 2.5 Retire backups and tombstones only under safe retention rules.
 
 Accept: partition, edit independently, reconnect, converge, recover all conflicting data.
 
-## 3. Complete project-folder mirroring
+Evidence: race suite and vet passed; Docker suite passed 37 checks, including
+three offline edits, preservation of every conflicting version, resolution and
+a stale peer rejoining after deletion-history compaction. Safe seed/join and
+retention/restart behavior have focused unit tests. Compact causal deletion
+floors remain indefinitely to prevent resurrection. Docker log:
+`/tmp/gosync-regression-ihwbzfoa`.
+
+## 3. Complete project-folder mirroring — in progress
 
 - [ ] 3.1 Configurable exclusions.
 - [ ] 3.2 Efficient moves/renames with content reuse.
