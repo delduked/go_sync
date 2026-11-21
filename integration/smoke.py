@@ -126,6 +126,8 @@ try:
         out.write(b"PATCH")
     expected_download = expected_download[:70000] + b"PATCH" + expected_download[70005:]
     check("same-size binary patch propagates from B", lambda: equals("download.bin", expected_download))
+    subprocess.run([str(repo / ".test-bin/gosync"), "complete", "--file", str(peers[1] / "download.bin")], check=True, capture_output=True)
+    check("explicit completion marker validates on all peers", lambda: all(subprocess.run([str(repo / ".test-bin/gosync"), "verify-complete", "--file", str(p / "download.bin")], capture_output=True).returncode == 0 for p in peers))
     # Compare every path, byte hash and executable bit, not just selected files.
     def manifest(p):
         return {str(x.relative_to(p)): ("dir" if x.is_dir() else hashlib.sha256(x.read_bytes()).hexdigest(), 0 if x.is_dir() else x.stat().st_mode & 0o777) for x in p.rglob("*") if not x.name.startswith(".gosync-stage-")}

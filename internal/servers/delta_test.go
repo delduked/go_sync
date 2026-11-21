@@ -311,3 +311,38 @@ func TestReceiverChoosesBlockSize(t *testing.T) {
 		})
 	}
 }
+
+func TestPreallocatedOutOfOrderWrites(t *testing.T) {
+	a, b := newFixture(t), newFixture(t)
+	client := &measuredClient{FileSyncServiceClient: serve(t, a)}
+	a.client = client
+	size := 16 * defaultBlockSize
+	file, err := os.Create(filepath.Join(a.dir, "download"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err = file.Truncate(int64(size)); err != nil {
+		t.Fatal(err)
+	}
+	a.e.Scan()
+	pull(t, b, a)
+	expected := make([]byte, size)
+	for _, index := range []int{15, 0, 7, 2, 12, 1, 8, 4, 14, 3, 10, 6, 11, 5, 13, 9} {
+		block := bytes.Repeat([]byte{byte(index + 1)}, defaultBlockSize)
+		offset := index * defaultBlockSize
+		if _, err = file.WriteAt(block, int64(offset)); err != nil {
+			t.Fatal(err)
+		}
+		copy(expected[offset:], block)
+		client.bytes.Store(0)
+		if err = a.e.Scan(); err != nil {
+			t.Fatal(err)
+		}
+		pull(t, b, a)
+		equalFile(t, b, "download", expected)
+		if client.bytes.Load() != defaultBlockSize {
+			t.Fatalf("out-of-order block sent %d bytes", client.bytes.Load())
+		}
+	}
+}

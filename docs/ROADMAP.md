@@ -8,18 +8,27 @@ is explicitly deferred and is not a completion requirement for this run.
 Baseline: correctness repair `4984876` and incremental growing-file transfers
 `f1f5fc9` are on local main. The latter passed race tests, vet and 27 Docker checks.
 
-## 1. Efficient large-file downloads — in progress
+## 1. Efficient large-file downloads — complete
 
 - [x] 1.1 Measure payload, logical file I/O, reuse, latency and failures for repeatable append/overwrite/truncate workloads.
 - [x] 1.2 Cache validated file/block metadata; retain periodic full repair scans.
 - [x] 1.3 Reduce staging I/O without exposing unverified content.
 - [x] 1.4 Persist and validate partial transfers across interruptions and restarts.
-- [ ] 1.5 Cover preallocation/out-of-order writes and explicit completion semantics.
+- [x] 1.5 Cover preallocation/out-of-order writes and explicit completion semantics.
 
 Accept: replicas progress before an append-only writer finishes, recover from
 interruptions, and converge byte-for-byte with measured costs.
 
-## 2. Concurrent edits and offline recovery
+Evidence: race suite and vet passed; Docker suite passed 29 checks, including
+live growth and explicit completion verification. Restart/resume tests retained
+half a transfer and sent only the missing half; corrupting one retained block
+caused exactly that additional block to be retransmitted. Out-of-order writes
+into a preallocated file transferred one changed block per update. Reflinks are
+unsupported on this workspace filesystem; fallback is tested and that limit is
+recorded in PERFORMANCE.md. Final Docker log: `/tmp/gosync-regression-_qv8chnb`.
+
+
+## 2. Concurrent edits and offline recovery — in progress
 
 - [ ] 2.1 Track causal histories and distinguish concurrent revisions.
 - [ ] 2.2 Preserve conflicting contents visibly and deterministically.

@@ -31,6 +31,9 @@ func main() {
 	}
 }
 func run() error {
+	if len(os.Args) > 1 && (os.Args[1] == "complete" || os.Args[1] == "verify-complete") {
+		return completionCommand(os.Args[1], os.Args[2:])
+	}
 	var cfg conf.Config
 	var chunkKB int64
 	var debug bool

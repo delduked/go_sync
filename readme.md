@@ -126,8 +126,22 @@ and allows the file to grow beyond it. The sender serves that prefix even if a
 newer append revision has already been observed. Changes within the requested
 prefix cause a hash failure and retry rather than publishing inconsistent bytes.
 Receivers therefore see successive verified prefixes while an append-only
-writer continues. There is no application-level "download complete" signal:
-a visible replica may still be shorter than the source. Existing file handles on
+writer continues. File size and zero-filled preallocated ranges do not imply completion; a visible
+replica may still be shorter than the source. A producer can explicitly mark a
+finished file, and receivers can verify that exact version:
+
+```sh
+# Run after the producer closes its writer:
+./gosync complete --file ./files-a/download.bin
+# On any receiver; exits nonzero until both the marker and matching bytes arrive:
+./gosync verify-complete --file ./files-b/download.bin
+```
+
+The `.gosync-complete.json` sidecar contains the filename, size and SHA-256 and is
+synchronized like an ordinary file. Its presence alone is not proof of completion:
+verification hashes the local file. A later edit invalidates the old marker.
+Preallocated downloads can fill blocks in any order; unfilled zeros remain
+ordinary bytes until changed. A producer must decide when its work is finished. Existing file handles on
 the receiving machine keep their old inode after atomic replacement; reopen the
 path to see the latest snapshot.
 
