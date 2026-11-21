@@ -459,3 +459,33 @@ Linux mDNS; use explicit peers and published TCP ports where host networking or
 multicast is unavailable. The Docker regression suites use isolated networks,
 not host networking. Keep roots/state on persistent writable storage owned by
 the configured UID. Back up private state and trust material separately.
+
+### Inspect, verify and recover
+
+```sh
+# Online: request and wait for a full rehash (bypasses the scan cache).
+gosync rescan --state-dir /data/gosync-project-state
+# Stop the service for commands that open its database:
+gosync inspect --sync-folder /data/project --state-dir /data/gosync-project-state
+gosync verify --sync-folder /data/project --state-dir /data/gosync-project-state
+gosync history --sync-folder /data/project --state-dir /data/gosync-project-state --path src/main.go
+gosync restore --sync-folder /data/project --state-dir /data/gosync-project-state \
+  --path src/main.go --version VERSION_ID_FROM_HISTORY
+gosync restore --sync-folder /data/project --state-dir /data/gosync-project-state \
+  --conflict CONFLICT_DIRECTORY_ID
+```
+
+`verify` reports differences from saved revisions and exits nonzero when it finds
+any; it does not adopt disk changes. Those differences may be intentional edits,
+so inspect them before restarting synchronization. `restore` checks the retained
+content hash, preserves the replaced file in history, and records the restored
+bytes as a new local edit that propagates on restart. Historical backups retain
+bytes, not all original metadata; they restore with mode `0644`. Visible data
+conflicts retain the original mode. Conflicts describing deletion or directory
+operations require inspecting their details and explicitly applying the desired
+local operation. Keep external writers stopped during offline recovery. Backups
+are recovery aids, not a substitute for independent backups.
+
+`make integration` runs the file/mDNS suite; `python3 integration/operations.py`
+exercises real provisioned mutual TLS, configuration, namespace isolation,
+status, rescan, verification, history, restoration and clean lifecycle in Docker.

@@ -105,9 +105,11 @@ func NewEngine(folder, state string, options ...Option) (*Engine, error) {
 			return nil, err
 		}
 	}
-	if err = e.Scan(); err != nil {
-		e.Close()
-		return nil, err
+	if !e.skipInitialScan {
+		if err = e.Scan(); err != nil {
+			e.Close()
+			return nil, err
+		}
 	}
 	return e, nil
 }
@@ -258,7 +260,7 @@ func (e *Engine) Watch(ctx context.Context, interval time.Duration) {
 	defer watcher.Close()
 
 	refresh := func() {
-		if err := e.Scan(); err != nil {
+		if err := e.scanRequests(); err != nil {
 			log.Warnf("scan: %v", err)
 		}
 		watched := map[string]bool{}

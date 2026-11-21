@@ -31,6 +31,12 @@ func main() {
 	}
 }
 func run() error {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "inspect", "verify", "history", "restore", "rescan":
+			return maintenanceCommand(os.Args[1], os.Args[2:])
+		}
+	}
 	if len(os.Args) > 1 && os.Args[1] == "status" {
 		return statusCommand(os.Args[2:])
 	}

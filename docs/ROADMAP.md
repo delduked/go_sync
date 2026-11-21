@@ -80,17 +80,23 @@ relay outage recovered in 3.684 s, then the restarted relay caught up. Race suit
 rate/quantum/deduplication tests, vet and all 43 Docker regression checks passed.
 Logs: `/tmp/gosync-mesh-x0ppj3o2`, `/tmp/gosync-regression-5hzdjx15`.
 
-## 5. Easy setup and operation — in progress
+## 5. Easy setup and operation — complete
 
 - [x] 5.1 Trusted pairing/certificate provisioning workflow.
 - [x] 5.2 Persistent config and stable shared-folder identities.
 - [x] 5.3 Status, progress, conflicts and actionable failures.
 - [x] 5.4 Background service packaging and lifecycle.
-- [ ] 5.5 Inspect, rescan, verify and restore commands.
+- [x] 5.5 Inspect, rescan, verify and restore commands.
 
 Accept: install, authorize, choose folders and determine sync health with documented commands.
 
-## 6. Docker validation and tuning (physical LAN deferred by user)
+Evidence: race suite and vet; provisioned TLS/configuration/namespace/maintenance
+Docker suite passed 13 checks (`/tmp/gosync-operations-j66lhxot`). Production
+Docker image built; six OS/architecture binaries compiled; systemd user unit
+passed `systemd-analyze verify` and deployment Compose parsed. Native background
+service installation outside Linux remains documented as unvalidated.
+
+## 6. Docker validation and tuning (physical LAN deferred by user) — in progress
 
 - [ ] 6.1 Reproducible throughput/convergence baseline.
 - [ ] 6.2 Latency/loss/disconnect/bandwidth fault scenarios.
