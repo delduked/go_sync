@@ -124,6 +124,7 @@ func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, erro
 	h := sha256.New()
 	// Capture a bounded prefix rather than chasing a growing EOF.
 	n, err := io.CopyN(h, f, before.Size())
+	e.metrics.ScanRead.Add(n)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +289,9 @@ func (e *Engine) backup(name string) error {
 	temp := out.Name()
 	defer os.Remove(temp)
 	h := sha256.New()
-	_, err = io.Copy(io.MultiWriter(out, h), f)
+	n, err := io.Copy(io.MultiWriter(out, h), f)
+	e.metrics.BackupRead.Add(n)
+	e.metrics.BackupWrite.Add(n)
 	if err == nil {
 		err = out.Sync()
 	}
@@ -340,7 +343,7 @@ func (e *Engine) apply(entry, expected *pb.FileEntry, staged string) error {
 	}
 	// A same-origin append retains every previous byte in the new file. Avoid
 	// archiving a complete growing file on every incremental snapshot.
-	if !preservesPrefix(current, entry, staged, e.root) {
+	if !e.preservesPrefix(current, entry, staged) {
 		if err := e.backup(entry.FileName); err != nil {
 			return err
 		}
@@ -385,17 +388,19 @@ func (e *Engine) stage(name string) (*os.File, string, error) {
 	return f, temp, err
 }
 
-func preservesPrefix(current, next *pb.FileEntry, staged string, root *safeRoot) bool {
+func (e *Engine) preservesPrefix(current, next *pb.FileEntry, staged string) bool {
 	if current == nil || current.IsDeleted || current.IsDirectory || next.IsDeleted || next.IsDirectory || staged == "" || current.Origin != next.Origin || current.Mode != next.Mode || next.FileSize < current.FileSize {
 		return false
 	}
-	file, err := root.Open(staged)
+	file, err := e.root.Open(staged)
 	if err != nil {
 		return false
 	}
 	defer file.Close()
 	h := sha256.New()
-	if _, err = io.CopyN(h, file, current.FileSize); err != nil {
+	n, err := io.CopyN(h, file, current.FileSize)
+	e.metrics.PrefixRead.Add(n)
+	if err != nil {
 		return false
 	}
 	return hex.EncodeToString(h.Sum(nil)) == current.Hash

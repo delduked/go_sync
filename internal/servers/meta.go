@@ -17,6 +17,7 @@ import (
 type Engine struct {
 	// Set before starting workers. Zero selects 64 KiB.
 	BlockSize int
+	metrics   Metrics
 
 	mu       sync.Mutex
 	root     *safeRoot

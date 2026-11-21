@@ -24,7 +24,7 @@ type fixture struct {
 	client     pb.FileSyncServiceClient
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t testing.TB) *fixture {
 	t.Helper()
 	base := t.TempDir()
 	dir, state := filepath.Join(base, "files"), filepath.Join(base, "state")
@@ -36,7 +36,7 @@ func newFixture(t *testing.T) *fixture {
 	t.Cleanup(func() { f.e.Close() })
 	return f
 }
-func serve(t *testing.T, f *fixture) pb.FileSyncServiceClient {
+func serve(t testing.TB, f *fixture) pb.FileSyncServiceClient {
 	t.Helper()
 	listener := bufconn.Listen(1024 * 1024)
 	s := grpc.NewServer()
@@ -51,7 +51,7 @@ func serve(t *testing.T, f *fixture) pb.FileSyncServiceClient {
 	f.client = pb.NewFileSyncServiceClient(conn)
 	return f.client
 }
-func write(t *testing.T, f *fixture, name string, data []byte) {
+func write(t testing.TB, f *fixture, name string, data []byte) {
 	t.Helper()
 	p := filepath.Join(f.dir, name)
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
@@ -64,7 +64,7 @@ func write(t *testing.T, f *fixture, name string, data []byte) {
 		t.Fatal(err)
 	}
 }
-func pull(t *testing.T, to, from *fixture) {
+func pull(t testing.TB, to, from *fixture) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -72,14 +72,14 @@ func pull(t *testing.T, to, from *fixture) {
 		t.Fatal(err)
 	}
 }
-func equalFile(t *testing.T, f *fixture, name string, want []byte) {
+func equalFile(t testing.TB, f *fixture, name string, want []byte) {
 	t.Helper()
 	got, err := os.ReadFile(filepath.Join(f.dir, name))
 	if err != nil || !bytes.Equal(got, want) {
 		t.Fatalf("%s: got %d bytes, want %d, err=%v", name, len(got), len(want), err)
 	}
 }
-func absent(t *testing.T, f *fixture, name string) {
+func absent(t testing.TB, f *fixture, name string) {
 	t.Helper()
 	_, err := os.Lstat(filepath.Join(f.dir, name))
 	if !os.IsNotExist(err) {

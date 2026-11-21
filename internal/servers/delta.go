@@ -88,18 +88,22 @@ func (s *Service) ReadDelta(stream pb.FileSyncService_ReadDeltaServer) error {
 		}
 		n := min(blockSize, entry.FileSize-offset)
 		chunk := buffer[:n]
-		if _, err = io.ReadFull(file, chunk); err != nil {
+		read, readErr := io.ReadFull(file, chunk)
+		s.Engine.metrics.SourceRead.Add(int64(read))
+		if readErr != nil {
 			return status.Error(codes.Aborted, "source changed during transfer")
 		}
 		whole.Write(chunk)
 		sum := sha256.Sum256(chunk)
 		if bytes.Equal(basis[offset], sum[:]) {
+			s.Engine.metrics.Reused.Add(n)
 			continue
 		}
 		if err = stream.Send(&pb.FileChunk{Offset: offset, ChunkData: chunk}); err != nil {
 			return err
 		}
 		sent += n
+		s.Engine.metrics.PayloadSent.Add(n)
 	}
 	if hex.EncodeToString(whole.Sum(nil)) != entry.Hash {
 		return status.Error(codes.Aborted, "source prefix changed; retry a newer revision")
@@ -140,8 +144,11 @@ func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClie
 			batch := make([]*pb.ChunkHash, 0, hashBatchSize)
 			for offset := int64(0); offset < limit; {
 				n, readErr := io.ReadFull(basis, buf[:min(int64(size), limit-offset)])
+				e.metrics.BasisRead.Add(int64(n))
 				if n > 0 {
-					if _, err = temp.WriteAt(buf[:n], offset); err != nil {
+					written, err := temp.WriteAt(buf[:n], offset)
+					e.metrics.StageWrite.Add(int64(written))
+					if err != nil {
 						return err
 					}
 					hash := sha256.Sum256(buf[:n])
@@ -180,11 +187,14 @@ func (e *Engine) receiveDelta(ctx context.Context, client pb.FileSyncServiceClie
 		if err != nil {
 			return err
 		}
+		e.metrics.PayloadReceived.Add(int64(len(chunk.ChunkData)))
 		if chunk.Offset < 0 || chunk.Offset >= entry.FileSize || chunk.Offset%int64(size) != 0 || chunk.Offset <= last || int64(len(chunk.ChunkData)) != min(int64(size), entry.FileSize-chunk.Offset) {
 			return fmt.Errorf("invalid delta chunk offset or length")
 		}
-		if _, err = temp.WriteAt(chunk.ChunkData, chunk.Offset); err != nil {
-			return err
+		written, writeErr := temp.WriteAt(chunk.ChunkData, chunk.Offset)
+		e.metrics.StageWrite.Add(int64(written))
+		if writeErr != nil {
+			return writeErr
 		}
 		last = chunk.Offset
 	}

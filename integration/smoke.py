@@ -132,6 +132,7 @@ try:
     check("complete final directory equality", lambda: manifest(peers[0]) == manifest(peers[1]) == manifest(peers[2]))
     compose("stop")
     status = [json.loads(line) for line in compose("ps", "-a", "--format", "json").splitlines() if line]
+    check("metrics exported on shutdown", lambda: all(json.loads((root / n / "state/metrics.json").read_text())["payload_received_bytes"] > 0 for n in "abc"))
     check("all peers shut down cleanly", lambda: len(status) == 3 and all(p["ExitCode"] == 0 for p in status))
 finally:
     try:

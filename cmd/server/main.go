@@ -121,6 +121,22 @@ func run() error {
 	}
 	wg.Add(1)
 	go func() { defer wg.Done(); engine.Watch(ctx, cfg.SyncInterval) }()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := engine.WriteMetrics(); err != nil {
+					log.Warnf("metrics: %v", err)
+				}
+			}
+		}
+	}()
 	log.Infof("Syncing %s on port %s", folder, cfg.Port)
 	<-ctx.Done()
 	if stopDiscovery != nil {
@@ -129,6 +145,9 @@ func run() error {
 	connections.Close()
 	grpcServer.Stop()
 	wg.Wait()
+	if err := engine.WriteMetrics(); err != nil {
+		return err
+	}
 	return nil
 }
 func transport(cfg conf.Config) (credentials.TransportCredentials, credentials.TransportCredentials, error) {

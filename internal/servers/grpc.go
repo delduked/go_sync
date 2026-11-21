@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	pb "github.com/TypeTerrors/go_sync/proto"
 	"google.golang.org/grpc/codes"
@@ -92,11 +93,13 @@ func (s *Service) ReadFile(req *pb.FileEntry, stream pb.FileSyncService_ReadFile
 	var offset int64
 	for offset < req.FileSize {
 		n, err := file.Read(buf[:min(int64(len(buf)), req.FileSize-offset)])
+		s.Engine.metrics.SourceRead.Add(int64(n))
 		if n > 0 {
 			if sendErr := stream.Send(&pb.FileChunk{ChunkData: buf[:n], Offset: offset}); sendErr != nil {
 				return sendErr
 			}
 			offset += int64(n)
+			s.Engine.metrics.PayloadSent.Add(int64(n))
 		}
 		if err != nil {
 			return status.Errorf(codes.Aborted, "file changed during read: %v", err)
@@ -105,7 +108,15 @@ func (s *Service) ReadFile(req *pb.FileEntry, stream pb.FileSyncService_ReadFile
 	return nil
 }
 
-func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entry, expected *pb.FileEntry) error {
+func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entry, expected *pb.FileEntry) (result error) {
+	start := time.Now()
+	e.metrics.Transfers.Add(1)
+	defer func() {
+		e.metrics.TransferNanos.Add(time.Since(start).Nanoseconds())
+		if result != nil {
+			e.metrics.Failures.Add(1)
+		}
+	}()
 	if err := validateEntry(entry); err != nil {
 		return err
 	}
@@ -128,7 +139,7 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 		if _, err = temp.Seek(0, io.SeekStart); err != nil {
 			return err
 		}
-		err = receiveFull(ctx, client, entry, temp)
+		err = e.receiveFull(ctx, client, entry, temp)
 	}
 	if err != nil {
 		return err
@@ -138,6 +149,7 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	}
 	h := sha256.New()
 	n, err := io.Copy(h, temp)
+	e.metrics.VerifyRead.Add(n)
 	if err != nil {
 		return err
 	}
@@ -156,7 +168,7 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 	return e.apply(entry, expected, name)
 }
 
-func receiveFull(ctx context.Context, client pb.FileSyncServiceClient, entry *pb.FileEntry, temp *os.File) error {
+func (e *Engine) receiveFull(ctx context.Context, client pb.FileSyncServiceClient, entry *pb.FileEntry, temp *os.File) error {
 	stream, err := client.ReadFile(ctx, entry)
 	if err != nil {
 		return err
@@ -170,11 +182,14 @@ func receiveFull(ctx context.Context, client pb.FileSyncServiceClient, entry *pb
 		if err != nil {
 			return err
 		}
+		e.metrics.PayloadReceived.Add(int64(len(chunk.ChunkData)))
 		if chunk.Offset != offset || len(chunk.ChunkData) == 0 || int64(len(chunk.ChunkData)) > entry.FileSize-offset {
 			return fmt.Errorf("invalid chunk offset or length")
 		}
-		if _, err = temp.Write(chunk.ChunkData); err != nil {
-			return err
+		written, writeErr := temp.Write(chunk.ChunkData)
+		e.metrics.StageWrite.Add(int64(written))
+		if writeErr != nil {
+			return writeErr
 		}
 		offset += int64(len(chunk.ChunkData))
 	}

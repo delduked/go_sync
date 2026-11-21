@@ -14,6 +14,7 @@ only needed when changing the protocol.
 ```sh
 make build
 make test         # unit/RPC tests with the race detector; requires a C compiler
+make benchmark    # repeatable append/overwrite/truncate payload and logical-I/O costs
 make integration  # isolated three-container regression suite; requires Docker Compose and Python 3
 ```
 
@@ -187,3 +188,17 @@ Implementation entry points are `cmd/server/main.go`, `internal/servers/file.go`
 
 To regenerate protobufs, install `protoc`, run `make install` for the pinned Go
 plugins, put `$(go env GOPATH)/bin` on PATH, and run `make generate_proto`.
+
+## Transfer measurements
+
+Each running service atomically exports `STATE/metrics.json` every second and
+once after shutdown. Counters include attempts/failures, aggregate transfer time,
+file payload sent/received, reused bytes, and logical regular-file reads/writes
+for scanning, transfer, staging, verification and backups. They reset at restart.
+They exclude protocol framing, TLS, database I/O and filesystem metadata, and do
+not measure physical device traffic. Live counters are sampled independently.
+
+`make benchmark` measures a 2 MiB file using append (1 KiB), overwrite (one byte),
+and truncation (to 1 MiB). Setup is excluded. The `converge-ms/op` field covers
+edit detection through destination commit. See `docs/PERFORMANCE.md` for baseline
+measurements and subsequent comparisons.
