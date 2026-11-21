@@ -94,6 +94,10 @@ func (e *Engine) preserveConflictFromLocked(loser *pb.FileEntry, source string) 
 				e.root.Remove(staged)
 				return copyErr
 			}
+			if err = e.setModified(staged, loser); err != nil {
+				e.root.Remove(staged)
+				return err
+			}
 			if err = e.root.Rename(staged, name); err != nil {
 				e.root.Remove(staged)
 				return err

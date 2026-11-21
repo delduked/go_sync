@@ -49,7 +49,7 @@ floors remain indefinitely to prevent resurrection. Docker log:
 
 - [x] 3.1 Configurable exclusions.
 - [x] 3.2 Efficient moves/renames with content reuse.
-- [ ] 3.3 Explicit permissions, timestamps, symlink and unsupported-file policies.
+- [x] 3.3 Explicit permissions, timestamps, symlink and unsupported-file policies.
 - [ ] 3.4 Editor/build and many-small-file workload tests.
 - [ ] 3.5 Portable path rules and platform-specific checks/documented limits.
 

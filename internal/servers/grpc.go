@@ -82,6 +82,9 @@ func (s *Service) ReadFile(req *pb.FileEntry, stream pb.FileSyncService_ReadFile
 	if req.IsDeleted || req.IsDirectory {
 		return status.Error(codes.InvalidArgument, "not a regular file")
 	}
+	if err := s.Engine.checkLocalPath(req.FileName); err != nil {
+		return status.Error(codes.FailedPrecondition, err.Error())
+	}
 	s.Engine.mu.Lock()
 	current := s.Engine.files[req.FileName]
 	if !sameVersion(req, current) {
@@ -134,6 +137,9 @@ func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entr
 		}
 	}()
 	if err := validateEntry(entry); err != nil {
+		return err
+	}
+	if err := e.checkLocalPath(entry.FileName); err != nil {
 		return err
 	}
 	unlock := e.lockTransfer(entry.FileName)

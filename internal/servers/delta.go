@@ -72,6 +72,9 @@ func (s *Service) ReadDelta(stream pb.FileSyncService_ReadDeltaServer) error {
 			return err
 		}
 	}
+	if err := s.Engine.checkLocalPath(entry.FileName); err != nil {
+		return status.Error(codes.FailedPrecondition, err.Error())
+	}
 	file, err := s.Engine.root.Open(entry.FileName)
 	if err != nil {
 		return err

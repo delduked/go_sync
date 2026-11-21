@@ -16,6 +16,7 @@ import (
 // Engine serializes metadata changes and filesystem commits, never network I/O.
 // Records, including tombstones, survive restarts; the clock never goes backwards.
 type Engine struct {
+	unsupported  map[string]string
 	contentPaths map[string]map[string]bool
 	ignores      []ignoreRule
 	bootstrap    string

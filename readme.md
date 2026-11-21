@@ -308,3 +308,18 @@ can require zero file-content payload. A move combined with an edit may require
 more data when no matching basis remains. Renames are represented as a deletion
 and creation, so a whole directory move is eventually consistent, not one atomic
 operation across machines.
+
+### Filesystem semantics
+
+Regular files, empty files, directories and binary bytes are supported. Regular
+file permission bits and modification times (millisecond precision) propagate;
+a timestamp-only change reuses existing content. Directory modes and timestamps
+are local, with new directories created as `0755`. Ownership, ACLs, extended
+attributes, creation/access times, hard-link relationships and sparse allocation
+are not mirrored. Hard links are treated as independent regular files.
+
+Symlinks, sockets, devices and named pipes stay local and are omitted from the
+manifest. They do not block unrelated files. Remote changes cannot overwrite
+these objects or traverse a symlink parent, even when it points inside the root.
+Replace or exclude an unsupported object explicitly to resolve a blocked path.
+File publication is atomic; whole-tree operations are eventually consistent.

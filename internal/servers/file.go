@@ -149,6 +149,7 @@ func (e *Engine) fingerprint(name string, allowGrowth bool) (*pb.FileEntry, erro
 	if !os.SameFile(info, before) || !os.SameFile(before, after) || ((before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime())) && !(allowGrowth && after.Size() > before.Size())) || n != before.Size() {
 		return nil, fmt.Errorf("file changed during scan: %s", name)
 	}
+	r.ModifiedMillis = before.ModTime().UnixMilli()
 	r.FileSize = n
 	r.Hash = hash
 	if sameAttributes(before, after) {
@@ -161,6 +162,7 @@ func (e *Engine) scanLocked() error {
 		return err
 	}
 	seen := make(map[string]bool)
+	e.unsupported = make(map[string]string)
 	err := fs.WalkDir(e.root.FS(), ".", func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -175,14 +177,15 @@ func (e *Engine) scanLocked() error {
 			return nil
 		}
 		seen[name] = true
-		if d.Type()&os.ModeSymlink != 0 {
+		if !d.IsDir() && !d.Type().IsRegular() {
+			e.unsupported[name] = "symlinks and special files stay local"
 			return nil
 		}
 		current, err := e.fingerprint(name, true)
 		if err != nil {
 			return err
 		}
-		if !sameContent(current, e.files[name]) {
+		if !sameSnapshot(current, e.files[name]) {
 			return e.local(current)
 		}
 		return nil
@@ -191,7 +194,7 @@ func (e *Engine) scanLocked() error {
 		return err
 	} // Never infer deletions from an incomplete scan.
 	for name, previous := range e.files {
-		if !seen[name] && !previous.IsDeleted && !e.ignoredLocked(name, previous.IsDirectory) {
+		if !seen[name] && !previous.IsDeleted && !e.ignoredLocked(name, previous.IsDirectory) && !e.unsupportedLocked(name) {
 			delete(e.cache, name)
 			if err = e.local(&pb.FileEntry{FileName: name, IsDeleted: true, IsDirectory: previous.IsDirectory}); err != nil {
 				return err
@@ -209,7 +212,7 @@ func (e *Engine) Manifest() (*pb.FileList, error) {
 	}
 	list := &pb.FileList{}
 	for _, f := range e.files {
-		if !e.ignoredLocked(f.FileName, f.IsDirectory) {
+		if !e.ignoredLocked(f.FileName, f.IsDirectory) && !e.unsupportedLocked(f.FileName) {
 			list.Files = append(list.Files, copyEntry(f))
 		}
 	}
@@ -356,7 +359,7 @@ func (e *Engine) refreshLocked(name string) error {
 	if err != nil {
 		return err
 	}
-	if !sameContent(current, previous) {
+	if !sameSnapshot(current, previous) {
 		return e.local(current)
 	}
 	return nil
@@ -370,6 +373,9 @@ func (e *Engine) apply(entry, expected *pb.FileEntry, staged string, verifiedPre
 	}
 	if e.ignoredLocked(entry.FileName, entry.IsDirectory) {
 		return fmt.Errorf("path is excluded by %s", ignoreFile)
+	}
+	if err := e.checkLocalPath(entry.FileName); err != nil {
+		return err
 	}
 	// Detect local edits made while the download was in flight.
 	if err := e.refreshLocked(entry.FileName); err != nil {
@@ -425,6 +431,9 @@ func (e *Engine) apply(entry, expected *pb.FileEntry, staged string, verifiedPre
 			if err = e.root.Remove(entry.FileName); err != nil {
 				return err
 			}
+		}
+		if err := e.setModified(staged, entry); err != nil {
+			return err
 		}
 		if err := e.root.Rename(staged, entry.FileName); err != nil {
 			return err
