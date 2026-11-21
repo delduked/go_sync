@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,6 +17,7 @@ def main():
     parser.add_argument("--size-mib", type=int, default=8)
     parser.add_argument("--fanout", type=int, default=None)
     parser.add_argument("--all-origins", action="store_true")
+    parser.add_argument("--relay-failure", action="store_true")
     args = parser.parse_args()
     if not 2 <= args.peers <= 50 or not 1 <= args.size_mib <= 512:
         parser.error("use 2–50 peers and 1–512 MiB")
@@ -76,6 +78,21 @@ def main():
                       "origin_payload_sent": sent[origin], "total_payload_sent": sum(sent), "total_payload_received": sum(received), "per_peer_sent": sent}
             report["workloads"].append(result)
             print(json.dumps(result), flush=True)
+        if args.relay_failure:
+            identities = {name: re.search(r"node=([a-f0-9]{32})", compose("logs", name)).group(1) for name in names}
+            relay = sorted(names[1:], key=lambda n: identities[n])[0]
+            compose("stop", relay)
+            data = hashlib.sha256(b"relay failure").digest() * (args.size_mib * 1024 * 1024 // 32)
+            digest = hashlib.sha256(data).digest()
+            started = time.monotonic()
+            (folders[0] / "relay-failure.bin").write_bytes(data)
+            online = [p for n, p in zip(names, folders) if n != relay]
+            wait(lambda: all(hashlib.sha256((p / "relay-failure.bin").read_bytes()).digest() == digest for p in online))
+            elapsed = time.monotonic() - started
+            compose("start", relay)
+            wait(lambda: all(hashlib.sha256((p / "relay-failure.bin").read_bytes()).digest() == digest for p in folders))
+            report["relay_failure"] = {"stopped_relay": relay, "online_convergence_seconds": round(elapsed, 3), "rejoined": True}
+            print(json.dumps(report["relay_failure"]), flush=True)
         compose("stop")
         states = [json.loads(line) for line in compose("ps", "-a", "--format", "json").splitlines() if line]
         if len(states) != args.peers or any(s["ExitCode"] != 0 for s in states):

@@ -50,3 +50,7 @@ origin sent 16 MiB (two copies), a 66.7% reduction from the observed 48 MiB
 baseline; aggregate payload stayed at 72 MiB. Each relay sent at most two copies.
 This single-host run demonstrates the upload/latency tradeoff, not a universal
 speedup. Logs: `/tmp/gosync-mesh-5hl3fg4y`.
+
+Stopping a preferred relay in a ten-peer fanout-two tree left the other nine
+peers able to converge in 3.604 s via fallback holders. The stopped peer caught
+up after restart. Logs: `/tmp/gosync-mesh-fnzrmauz`.

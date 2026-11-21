@@ -154,7 +154,7 @@ func run() error {
 			}
 		}
 	}()
-	log.Infof("Syncing %s on port %s", folder, cfg.Port)
+	log.Infof("Syncing %s on port %s node=%s", folder, cfg.Port, engine.ID())
 	<-ctx.Done()
 	if stopDiscovery != nil {
 		stopDiscovery()
