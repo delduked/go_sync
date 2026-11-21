@@ -4,3 +4,6 @@ main
 sync_folder
 /badgerdb
 
+/badgerdb-v2/
+/.test-bin/
+/gosync

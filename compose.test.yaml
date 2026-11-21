@@ -1,0 +1,24 @@
+x-peer: &peer
+  image: gosync-regression:local
+  build:
+    context: .
+    dockerfile: integration/Dockerfile
+  user: "${TEST_UID:-1000}:${TEST_GID:-1000}"
+  networks: [sync-test]
+  stop_grace_period: 5s
+services:
+  a:
+    <<: *peer
+    command: ["--sync-folder=/first", "--state-dir=/state", "--sync-interval=250ms", "--port=50051", "--insecure", "--debug"]
+    volumes: ["${TEST_ROOT}/a/files:/first", "${TEST_ROOT}/a/state:/state"]
+  b:
+    <<: *peer
+    command: ["--sync-folder=/second", "--state-dir=/state", "--sync-interval=250ms", "--port=50052", "--insecure", "--debug"]
+    volumes: ["${TEST_ROOT}/b/files:/second", "${TEST_ROOT}/b/state:/state"]
+  c:
+    <<: *peer
+    command: ["--sync-folder=/third", "--state-dir=/state", "--sync-interval=250ms", "--port=50053", "--insecure", "--debug"]
+    volumes: ["${TEST_ROOT}/c/files:/third", "${TEST_ROOT}/c/state:/state"]
+networks:
+  sync-test:
+    internal: true

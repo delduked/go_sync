@@ -1,29 +1,15 @@
-# Define the proto files
-PROTO_FILES = ./proto/filesync.proto
-
-
-# Define the Go plugin paths
-PROTOC_GEN_GO=$(shell go env GOPATH)/bin/protoc-gen-go
-PROTOC_GEN_GO_GRPC=$(shell go env GOPATH)/bin/protoc-gen-go-grpc
-
-# Ensure the Go plugins are installed
+.PHONY: all build test integration generate_proto install run
+all: build
+build:
+	go build -o gosync ./cmd/server
+test:
+	CGO_ENABLED=1 go test -race ./...
+integration:
+	python3 integration/smoke.py
 install:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-# Define the generate_proto target
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
 generate_proto:
-	@echo "Generating proto files..."
-	protoc --proto_path=. --go_out=. --go-grpc_out=. $(PROTO_FILES)
-
-# Define a clean target to remove generated files
-clean:
-	@echo "Cleaning generated files..."
-	rm -rf ./proto/*.pb.go
-
-# Run the Go application
-run: generate_proto
-	go run ./cmd/server/main.go -sync-folder ./sync_folder -port 50051
-
-# Default target
-all: generate_proto
+	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/filesync.proto
+run: build
+	./gosync --sync-folder ./sync_folder --insecure

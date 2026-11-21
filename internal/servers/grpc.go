@@ -1,527 +1,158 @@
 package servers
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"os"
-	"path/filepath"
-	"sync"
-	"time"
+	"strings"
 
-	"github.com/TypeTerrors/go_sync/conf"
-	"github.com/TypeTerrors/go_sync/pkg"
 	pb "github.com/TypeTerrors/go_sync/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/peer"
-
-	"github.com/charmbracelet/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// GrpcInterface defines methods that other services need from Grpc
-type GrpcInterface interface {
-	Start()
-	Stop()
-	HandleFileChunk(chunk *pb.FileChunk) error
-}
-
-type Grpc struct {
+type Service struct {
 	pb.UnimplementedFileSyncServiceServer
-	grpcServer *grpc.Server
-	mdns       MdnsInterface
-	meta       MetaInterface
-	file       FileDataInterface
-	listener   net.Listener
-	syncDir    string
-	port       string
-	wg         *sync.WaitGroup
+	Engine    *Engine
+	ChunkSize int
 }
 
-func NewGrpc(syncDir string, mdns *Mdns, meta MetaInterface, file FileDataInterface, port string) *Grpc {
-
-	// Create TCP listener
-	listener, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		panic(fmt.Sprintf("failed to listen on port %s: %v", port, err))
-	}
-
-	return &Grpc{
-		grpcServer: grpc.NewServer(),
-		syncDir:    syncDir,
-		mdns:       mdns,
-		meta:       meta,
-		file:       file,
-		listener:   listener,
-		port:       port,
-		wg:         &sync.WaitGroup{},
-	}
+func (s *Service) ListFiles(ctx context.Context, _ *pb.Empty) (*pb.FileList, error) {
+	return s.Engine.Manifest()
 }
-
-func (g *Grpc) Start() {
-	g.wg.Add(1)
-	go func() {
-		defer g.wg.Done()
-		log.Infof("Starting gRPC server on port %s...", g.port)
-		pb.RegisterFileSyncServiceServer(g.grpcServer, g) // Registering on s.grpcServer
-		if err := g.grpcServer.Serve(g.listener); err != nil {
-			panic(fmt.Sprintf("failed to serve gRPC server: %v", err))
-		}
-	}()
-}
-
-// Stop gracefully stops the gRPC server
-func (g *Grpc) Stop() {
-	g.grpcServer.GracefulStop()
-	log.Info("gRPC server stopped gracefully.")
-}
-
-// Implement the SyncFile method as per the generated interface
-func (g *Grpc) SyncFile(stream pb.FileSyncService_SyncFileServer) error {
+func (s *Service) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
 	for {
-		req, err := stream.Recv()
+		ping, err := stream.Recv()
 		if err == io.EOF {
 			return nil
 		}
 		if err != nil {
-			log.Errorf("Error receiving from stream: %v", err)
 			return err
 		}
-
-		switch req := req.GetRequest().(type) {
-		case *pb.FileSyncRequest_FileChunk:
-			g.file.markFileAsInProgress(req.FileChunk.FileName)
-			err := g.handleFileChunk(req.FileChunk)
-			if err != nil {
-				log.Errorf("Error handling file chunk: %v", err)
-				return err
-			}
-		case *pb.FileSyncRequest_FileDelete:
-			g.file.markFileAsInProgress(req.FileDelete.FileName)
-			err := g.handleFileDelete(req.FileDelete)
-			if err != nil {
-				log.Errorf("Error handling file delete: %v", err)
-				return err
-			}
-			if req.FileDelete.Offset != 0 {
-				stream.Send(&pb.FileSyncResponse{
-					Message: fmt.Sprintf("Chunk %s deleted in file %v on peer %v", req.FileDelete.FileName, req.FileDelete.Offset, g.mdns.LocalIp()),
-				})
-			} else {
-				stream.Send(&pb.FileSyncResponse{
-					Message: fmt.Sprintf("File %s deleted on peer %v", req.FileDelete.FileName, g.mdns.LocalIp()),
-				})
-			}
-		case *pb.FileSyncRequest_FileTruncate:
-			err := g.handleFileTruncate(req.FileTruncate)
-			if err != nil {
-				log.Errorf("Error handling file truncate: %v", err)
-				return err
-			}
-		default:
-			log.Warnf("Received unknown request type")
+		if err = stream.Send(&pb.Pong{Message: ping.Message}); err != nil {
+			return err
 		}
 	}
 }
-
-func (g *Grpc) ExchangeMetadata(stream pb.FileSyncService_ExchangeMetadataServer) error {
-	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			log.Errorf("Error receiving metadata request: %v", err)
-			return err
-		}
-
-		fileName := req.FileName
-
-		metaData, err := g.meta.GetEntireFileMetaData(fileName)
-		if err != nil {
-			log.Errorf("Error getting metadata for file %s: %v", fileName, err)
-			err := stream.Send(&pb.MetadataResponse{
-				FileName: fileName,
-				Chunks:   []*pb.ChunkMetadata{},
-			})
-			if err != nil {
-				log.Errorf("Error sending metadata response: %v", err)
-			}
-			continue
-		} else {
-			// Prepare the chunks metadata
-			var chunkMetadataList []*pb.ChunkMetadata
-			for offset, hash := range metaData {
-				chunkMetadataList = append(chunkMetadataList, &pb.ChunkMetadata{
-					Offset:       offset,
-					Hash:         hash.Stronghash,
-					WeakChecksum: hash.Weakhash,
-				})
-			}
-
-			// Send the metadata response
-			err = stream.Send(&pb.MetadataResponse{
-				FileName: fileName,
-				Chunks:   chunkMetadataList,
-			})
-		}
-
-		if err != nil {
-			log.Errorf("Error sending metadata response: %v", err)
-			return err
-		} else {
-			log.Debugf("Sent metadata response for file %s", fileName)
-		}
+func validateEntry(f *pb.FileEntry) error {
+	if f == nil {
+		return fmt.Errorf("missing entry")
 	}
-}
-
-func (g *Grpc) RequestChunks(stream pb.FileSyncService_RequestChunksServer) error {
-	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			log.Errorf("Error receiving chunk request: %v", err)
-			return err
-		}
-
-		fileName := req.FileName
-		offsets := req.Offsets
-
-		filePath := filepath.Join(g.syncDir, fileName)
-		file, err := os.Open(filePath)
-		if err != nil {
-			log.Infof("Error opening file %s: %v", filePath, err)
-			continue
-		}
-		defer file.Close()
-
-		for _, offset := range offsets {
-			chunkData := make([]byte, conf.AppConfig.ChunkSize)
-			log.Debugf("Reading chunk at offset %d for file %s", offset, fileName)
-			n, err := file.ReadAt(chunkData, offset)
-			if err != nil && err != io.EOF {
-				log.Infof("Error reading file %s at offset %d: %v", filePath, offset, err)
-				continue
-			}
-
-			err = stream.Send(&pb.ChunkResponse{
-				FileName:  fileName,
-				Offset:    offset,
-				ChunkData: chunkData[:n],
-			})
-			if err != nil {
-				log.Errorf("Error sending chunk response: %v", err)
-				return err
-			}
-		}
-	}
-}
-
-// func (g *Grpc) GetFileList(ctx context.Context, req *pb.GetFileListRequest) (*pb.GetFileListResponse, error) {
-// 	fileList, err := g.buildFileList()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return &pb.GetFileListResponse{
-// 		FileList: fileList,
-// 	}, nil
-// }
-
-// func (g *Grpc) buildFileList() (*pb.FileList, error) {
-// 	files, err := pkg.GetFileList() // Function to get local file paths
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	var fileEntries []*pb.FileEntry
-// 	for _, filePath := range files {
-// 		fileInfo, err := os.Stat(filePath)
-// 		if err != nil {
-// 			continue // Skip if unable to stat file
-// 		}
-
-// 		fileEntries = append(fileEntries, &pb.FileEntry{
-// 			FileName:     filepath.Base(filePath),
-// 			FileSize:     fileInfo.Size(),
-// 			LastModified: fileInfo.ModTime().Unix(),
-// 		})
-// 	}
-
-// 	return &pb.FileList{
-// 		Files: fileEntries,
-// 	}, nil
-// }
-
-func (g *Grpc) HealthCheck(stream pb.FileSyncService_HealthCheckServer) error {
-	for {
-		recv, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			log.Errorf("Error receiving health check request: %v", err)
-		}
-		log.Debugf("Received ping sent from %s to %s at %v", recv.From, recv.To, recv.Time)
-		now := time.Now().Unix()
-		ctx, ok := peer.FromContext(stream.Context())
-		if !ok {
-			log.Errorf("Error getting peer from context: %v", err)
-			stream.Send(&pb.Pong{
-				Message: fmt.Sprintf("Sent pong from %v at %v", g.mdns.LocalIp(), now),
-				From:    g.mdns.LocalIp(),
-				To:      "",
-				Time:    now,
-			})
-		} else {
-			stream.Send(&pb.Pong{
-				Message: fmt.Sprintf("Sent pong from %v to %v at %v", g.mdns.LocalIp(), ctx.Addr.String(), now),
-				From:    g.mdns.LocalIp(),
-				To:      ctx.Addr.String(),
-				Time:    now,
-			})
-		}
-	}
-}
-
-// Handler for FileChunk messages
-func (g *Grpc) handleFileChunk(chunk *pb.FileChunk) error {
-	filePath := chunk.FileName
-	g.file.markFileAsInProgress(filePath)
-
-	// Open or get the file
-	file, err := g.file.getOrOpenFile(chunk.FileName)
-	if err != nil {
-		log.Printf("Failed to get or open file %s: %v", filePath, err)
+	if err := validName(f.FileName); err != nil {
 		return err
 	}
-
-	// Write the chunk data at the specified offset
-	_, err = file.WriteAt(chunk.ChunkData, chunk.Offset)
-	if err != nil {
-		log.Infof("Failed to write to file %s at offset %d: %v", filePath, chunk.Offset, err)
-		return err
-	} else {
-		log.Debugf("Wrote chunk to file %s at offset %d", filePath, chunk.Offset)
+	if f.Revision == 0 || f.Revision >= 1<<63 || len(f.Origin) != 32 || f.FileSize < 0 || f.Mode > 0777 {
+		return fmt.Errorf("invalid file metadata")
 	}
-
-	// Update the metadata
-	g.SaveMetaData(filePath, chunk.ChunkData, chunk.Offset)
-
-	// Check if all chunks have been received
-	if g.meta.allChunksReceived(chunk.FileName, chunk.TotalChunks) {
-		log.Printf("All chunks received for file %s", chunk.FileName)
-		g.file.markFileAsComplete(chunk.FileName)
-	}
-
-	log.Infof("Received and wrote chunk for file %s at offset %d", chunk.FileName, chunk.Offset)
-	return nil
-}
-
-// handleFileDelete deletes the specified file.
-func (g *Grpc) handleFileDelete(fileDelete *pb.FileDelete) error {
-	filePath := filepath.Clean(fileDelete.FileName)
-	if fileDelete.Offset != 0 {
-		// Delete specific chunk
-		err := g.DeleteFileChunk(filePath, fileDelete.Offset)
-		if err != nil {
-			log.Infof("Error deleting chunk at offset %d in file %s: %v", fileDelete.Offset, filePath, err)
-			return err
-		}
-		log.Infof("Deleted chunk at offset %d in file %s as per request", fileDelete.Offset, filePath)
-	} else {
-		// Delete entire file
-		err := os.Remove(filePath)
-		if err != nil {
-			log.Infof("Error deleting file %s: %v", filePath, err)
-			return err
-		}
-
-		g.meta.DeleteEntireFileMetaData(filePath)
-
-		g.file.markFileAsComplete(filePath)
-
-		log.Infof("Deleted file %s as per request", filePath)
-	}
-
-	return nil
-}
-
-func (g *Grpc) GetMissingFiles(stream pb.FileSyncService_GetMissingFilesServer) error {
-	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			log.Errorf("Error receiving missing files request: %v", err)
-			return err
-		}
-
-		ctx, ok := peer.FromContext(stream.Context())
-		if !ok {
-			log.Debugf("File list from peer: %v", req.Files)
-		} else {
-			log.Debugf("Peer %s file list %v", ctx.Addr.String(), req.Files)
-		}
-
-		localFileList, err := g.file.BuildLocalFileList()
-		if err != nil {
-			log.Errorf("Failed to build local file list: %v", err)
-			return err
-		}
-
-		missingFiles := g.file.CompareFileLists(req, localFileList)
-		if len(missingFiles) > 0 {
-			for _, fileName := range missingFiles {
-				cleanfile := filepath.Join(g.syncDir, filepath.Clean(fileName))
-				log.Debugf("Sending file %s to peer", cleanfile)
-				g.transferFile(cleanfile, stream, true)
-			}
-		} else {
-			log.Debug("Peer file list in sync with local file list")
-		}
-	}
-}
-
-// handleFileTruncate truncates the specified file to the given size.
-func (g *Grpc) handleFileTruncate(fileTruncate *pb.FileTruncate) error {
-	filePath := filepath.Join(g.syncDir, filepath.Clean(fileTruncate.FileName))
-	err := os.Truncate(filePath, fileTruncate.Size)
-	if err != nil {
-		log.Infof("Error truncating file %s to size %d: %v", filePath, fileTruncate.Size, err)
+	if _, err := hex.DecodeString(f.Origin); err != nil {
 		return err
 	}
-	log.Infof("Truncated file %s to size %d as per request", filePath, fileTruncate.Size)
+	if !f.IsDeleted && !f.IsDirectory {
+		b, err := hex.DecodeString(f.Hash)
+		if err != nil || len(b) != 32 || f.Hash != strings.ToLower(f.Hash) {
+			return fmt.Errorf("invalid content hash")
+		}
+	}
 	return nil
 }
-
-func (g *Grpc) DeleteFileChunk(filePath string, offset int64) error {
-	// Open the file for reading and writing
-	file, err := os.OpenFile(filePath, os.O_RDWR, 0644)
+func (s *Service) ReadFile(req *pb.FileEntry, stream pb.FileSyncService_ReadFileServer) error {
+	if err := validateEntry(req); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if req.IsDeleted || req.IsDirectory {
+		return status.Error(codes.InvalidArgument, "not a regular file")
+	}
+	s.Engine.mu.Lock()
+	current := s.Engine.files[req.FileName]
+	if !sameVersion(req, current) {
+		s.Engine.mu.Unlock()
+		return status.Error(codes.Aborted, "revision changed")
+	}
+	file, err := s.Engine.root.Open(req.FileName)
+	s.Engine.mu.Unlock()
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return err
 	}
 	defer file.Close()
-
-	// Get file info for size and other details
-	fileInfo, err := file.Stat()
+	info, err := file.Stat()
 	if err != nil {
-		return fmt.Errorf("failed to stat file: %w", err)
+		return err
 	}
-
-	// Define the chunk size
-	chunkSize := conf.AppConfig.ChunkSize
-
-	// Ensure the offset is valid
-	if offset < 0 || offset >= fileInfo.Size() {
-		return fmt.Errorf("invalid offset: %d", offset)
+	if !info.Mode().IsRegular() {
+		return status.Error(codes.InvalidArgument, "not a regular file")
 	}
-
-	// Calculate how many bytes to move after removing the chunk
-	bytesAfterChunk := fileInfo.Size() - (offset + chunkSize)
-
-	if bytesAfterChunk > 0 {
-		// Create a buffer to hold the data after the chunk to be deleted
-		buffer := make([]byte, bytesAfterChunk)
-
-		// Read the data after the chunk into the buffer
-		_, err := file.ReadAt(buffer, offset+chunkSize)
-		if err != nil && err != io.EOF {
-			return fmt.Errorf("error reading after chunk: %w", err)
+	size := s.ChunkSize
+	if size <= 0 || size > 1024*1024 {
+		size = 64 * 1024
+	}
+	buf := make([]byte, size)
+	var offset int64
+	for offset < req.FileSize {
+		n, err := file.Read(buf[:min(int64(len(buf)), req.FileSize-offset)])
+		if n > 0 {
+			if sendErr := stream.Send(&pb.FileChunk{ChunkData: buf[:n], Offset: offset}); sendErr != nil {
+				return sendErr
+			}
+			offset += int64(n)
 		}
-
-		// Move the data after the chunk to the start of the chunk to overwrite the deleted chunk
-		_, err = file.WriteAt(buffer, offset)
 		if err != nil {
-			return fmt.Errorf("error writing to file after deleting chunk: %w", err)
+			return status.Errorf(codes.Aborted, "file changed during read: %v", err)
 		}
 	}
-
-	// Truncate the file to remove the extra space left at the end
-	err = file.Truncate(fileInfo.Size() - chunkSize)
-	if err != nil {
-		return fmt.Errorf("error truncating file after chunk delete: %w", err)
-	}
-
-	err1, err2 := g.DeleteMetadata(filePath, offset)
-	if err1 != nil || err2 != nil {
-		return fmt.Errorf("error deleting metadata: %v, %v", err1, err2)
-	}
-
-	log.Infof("Deleted chunk at offset %d from file %s", offset, filePath)
 	return nil
 }
 
-func (g *Grpc) DeleteMetadata(filePath string, offset int64) (error, error) {
-	err1 := g.meta.DeleteMetaDataFromMem(filePath, offset)
-	err2 := g.meta.DeleteMetaDataFromDB(filePath, offset)
-	return err1, err2
-}
-
-func (g *Grpc) SaveMetaData(filename string, chunk []byte, offset int64) error {
-
-	// Save new metadata
-	Stronghash := g.meta.hashChunk(chunk)
-	Weakhash := pkg.NewRollingChecksum(chunk).Sum()
-
-	// Save new metadata
-	g.meta.SaveMetaDataToMem(filename, Stronghash, Weakhash, offset)
-	g.meta.SaveMetaDataToDB(filename, Stronghash, Weakhash, offset)
-
-	return nil
-}
-
-func (g *Grpc) transferFile(filePath string, stream pb.FileSyncService_GetMissingFilesServer, isNewFile bool) {
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Infof("Error opening file %s for transfer: %v", filePath, err)
-		return
+func (e *Engine) pull(ctx context.Context, client pb.FileSyncServiceClient, entry, expected *pb.FileEntry) error {
+	if err := validateEntry(entry); err != nil {
+		return err
 	}
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		log.Infof("Error getting file info for %s: %v", filePath, err)
-		return
+	if entry.IsDeleted || entry.IsDirectory {
+		return e.apply(entry, expected, "")
 	}
-	fileSize := fileInfo.Size()
-
-	buf := make([]byte, conf.AppConfig.ChunkSize)
-	var offset int64 = 0
-
+	temp, name, err := e.stage(entry.FileName)
+	if err != nil {
+		return err
+	}
+	defer e.root.Remove(name)
+	defer temp.Close()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stream, err := client.ReadFile(ctx, entry)
+	if err != nil {
+		return err
+	}
+	h := sha256.New()
+	var offset int64
 	for {
-		n, err := file.ReadAt(buf, offset)
-		if err != nil && err != io.EOF {
-			log.Infof("Error reading file %s: %v", filePath, err)
-			return
-		}
-		if n == 0 {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
 			break
 		}
-
-		totalchunks, err := g.meta.TotalChunks(filePath)
 		if err != nil {
-			log.Infof("Error getting total chunks for file %s: %v", filePath, err)
-			return
+			return err
 		}
-
-		stream.Send(&pb.FileChunk{
-			FileName:    filePath,
-			ChunkData:   buf[:n],
-			Offset:      offset,
-			IsNewFile:   isNewFile,
-			TotalChunks: totalchunks,
-			TotalSize:   fileSize,
-		})
-
-		offset += int64(n)
-
-		if isNewFile {
-			isNewFile = false
+		if chunk.Offset != offset || len(chunk.ChunkData) == 0 || int64(len(chunk.ChunkData)) > entry.FileSize-offset {
+			return fmt.Errorf("invalid chunk offset or length")
 		}
+		if _, err = io.MultiWriter(temp, h).Write(chunk.ChunkData); err != nil {
+			return err
+		}
+		offset += int64(len(chunk.ChunkData))
 	}
-
-	log.Infof("File %s transfer complete", filePath)
+	if offset != entry.FileSize || hex.EncodeToString(h.Sum(nil)) != entry.Hash {
+		return fmt.Errorf("incomplete or corrupt transfer for %s", entry.FileName)
+	}
+	if err = temp.Chmod(os.FileMode(entry.Mode)); err != nil {
+		return err
+	}
+	if err = temp.Sync(); err != nil {
+		return err
+	}
+	if err = temp.Close(); err != nil {
+		return err
+	}
+	return e.apply(entry, expected, name)
 }
