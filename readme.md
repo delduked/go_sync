@@ -3,14 +3,14 @@
 </p>
 
 <p align="center">
-  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.25%2B-66edc1?style=flat-square&labelColor=111c2d" alt="Go 1.25 or newer"></a>
-  <a href="docs/GUIDE.md#trusted-lan-setup"><img src="https://img.shields.io/badge/Transport-mutual_TLS_1.3-bba0ff?style=flat-square&labelColor=111c2d" alt="Mutual TLS 1.3"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.25.1%2B-66edc1?style=flat-square&labelColor=111c2d" alt="Go 1.25.1 or newer"></a>
+  <a href="docs/GUIDE.md#trusted-lan-setup"><img src="https://img.shields.io/badge/Optional-mutual_TLS_1.3-bba0ff?style=flat-square&labelColor=111c2d" alt="Optional mutual TLS 1.3"></a>
   <a href="docs/results/README.md"><img src="https://img.shields.io/badge/Docker-10_peers_tested-ffc477?style=flat-square&labelColor=111c2d" alt="Ten peers tested in Docker"></a>
 </p>
 
 <p align="center">
   <b>Edit anywhere. Sync while downloading. Keep a local copy on every peer.</b><br>
-  GoSync mirrors folders between trusted computers on your LAN.
+  GoSync discovers computers on your LAN and keeps their selected folders in sync.
 </p>
 
 <p align="center">
@@ -72,7 +72,7 @@ capacity, a single shared mount, and automatic NAS failover need separate servic
 | Feature | What it does |
 |:---|:---|
 | **LAN discovery** | Finds peers with mDNS. Explicit peer addresses work where multicast is unavailable. |
-| **Trusted connections** | Mutual TLS 1.3, per-peer identities, and named shared folders. |
+| **Simple LAN setup** | Select a folder once. Saved YAML configuration and mDNS handle subsequent starts and peer discovery. Optional mutual TLS provides authenticated connections. |
 | **Verified transfers** | Hash-checked snapshots become visible atomically on receivers. Text and binary files use the same transfer path. |
 | **Incremental updates** | Reuses matching fixed-size blocks for edits and appends, with resumable interrupted transfers. |
 | **Cascading distribution** | A preferred relay tree with default fanout two spreads upload work; fallback handles missing relays. |
@@ -82,13 +82,31 @@ capacity, a single shared mount, and automatic NAS failover need separate servic
 
 ## Get started
 
-Requires **Go 1.25+**. Build the service:
+Requires **Go 1.25.1+**. Build the service:
 
 ```sh
 git clone https://github.com/delduked/go_sync.git
 cd go_sync
 make build
 ```
+
+**Choose a folder once, then start GoSync.** Run this on each computer:
+
+```sh
+./gosync init --sync-folder "$HOME/Shared"
+./gosync
+```
+
+Local folder paths can differ. GoSync saves a YAML configuration and private state,
+then automatically discovers other peers in the default LAN group. No peer
+addresses, pairing codes, or certificates are needed. Existing files in the
+selected folder are included. On later starts, run just `gosync` (or `./gosync`
+when using the local build).
+
+The automatic LAN mode uses unencrypted, unauthenticated connections. It joins
+other instances in the same LAN group; mutual TLS remains an optional setup below.
+See [simple startup](docs/GUIDE.md#simple-lan-startup) for configuration locations,
+YAML/environment settings, and background startup.
 
 **Try the three-peer demo locally.** With Docker Compose and Python 3 installed:
 
@@ -102,7 +120,7 @@ It uses fresh test folders and identities. The [demo guide](docs/demo/README.md)
 explains how to regenerate the GIFs.
 
 <details>
-<summary><b>Set up trusted peers on your LAN</b></summary>
+<summary><b>Optional: authenticated, encrypted peers with mutual TLS</b></summary>
 
 On a provisioning machine, create a private authority and a separate identity
 bundle for each peer. Keep these outside your repository:

@@ -22,4 +22,6 @@ jobs:
         if: always()
         with:
           name: integration-results
-          path: /tmp/gosync-regression-*/
+          path: |
+            /tmp/gosync-regression-*/
+            /tmp/gosync-startup-*/

@@ -19,6 +19,8 @@ jobs:
           path: |
             /tmp/gosync-regression-*/results.json
             /tmp/gosync-regression-*/compose.log
+            /tmp/gosync-startup-*/results.json
+            /tmp/gosync-startup-*/compose.log
             /tmp/gosync-operations-*/results.json
             /tmp/gosync-operations-*/compose.log
             /tmp/gosync-mesh-*/results.json

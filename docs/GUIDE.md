@@ -2,7 +2,9 @@
 
 [← Back to GoSync](../readme.md)
 
-GoSync is a Go service that mirrors a directory between trusted peers. Peers
+GoSync is a Go service that mirrors a directory between peers. Automatic LAN
+setup needs only a folder selection; mutual TLS is available for authenticated,
+encrypted deployments. Peers
 find one another with mDNS or explicitly configured addresses, and exchange
 files over gRPC. It supports verified incremental growing-file transfers,
 bidirectional edits and conflict preservation, project exclusions, resumable
@@ -12,7 +14,7 @@ native macOS/Windows and a three-host physical LAN remain unvalidated.
 
 ## Build and test
 
-Requires Go 1.25 or newer. Generated protobuf files are checked in; `protoc` is
+Requires Go 1.25.1 or newer. Generated protobuf files are checked in; `protoc` is
 only needed when changing the protocol.
 
 ```sh
@@ -32,6 +34,79 @@ checks that both replicas grow during a continuous download and that a same-size
 binary patch propagates from another peer. It removes
 its containers/network in a `finally` block and prints the temporary location of
 its logs, fixtures, and JSON results. The test image and build cache remain reusable.
+`make integration` also runs the three-peer startup suite: folder-only initialization,
+saved YAML with environment expansion, automatic LAN discovery, and restart recovery.
+
+## Simple LAN startup
+
+Run once on each computer, choosing the local folder to synchronize:
+
+```sh
+gosync init --sync-folder /path/to/shared
+gosync
+```
+
+`init` saves a YAML configuration, selects a state directory outside the shared
+folder, and prepares local history. The following `gosync` command loads the saved
+configuration automatically. mDNS is enabled, and all default LAN setups join the
+`gosync-lan` group. Local folder names and paths can differ. Peer addresses,
+pairing codes, shared IDs, and certificate provisioning are unnecessary.
+
+The generated config uses `insecure: true`: peers in this LAN group may read and
+modify the selected folder without authentication, and transfers are unencrypted.
+Use `init --identity PATH` for the optional mutual-TLS configuration described
+below. Invalid identity bundles fail; they never fall back to LAN mode.
+
+The default configuration is `gosync/default.yaml` inside the operating system's
+user configuration directory:
+
+| Platform | Typical location |
+|:---|:---|
+| Linux | `~/.config/gosync/default.yaml` (respects `XDG_CONFIG_HOME`) |
+| macOS | `~/Library/Application Support/gosync/default.yaml` |
+| Windows | `%AppData%\gosync\default.yaml` |
+
+State defaults to the configuration filename with `.state` appended. Both paths
+are printed during setup. Keep state on that computer across restarts; do not copy
+it between peers. A saved `default.json` is also recognized when `default.yaml`
+is absent. Existing configurations are never overwritten by `init`.
+
+To choose a config location, use `gosync init --config ./peer.yaml --sync-folder
+/path/to/shared`, then `gosync --config ./peer.yaml`. Use `--state-dir` to override
+the state location. Config and state must stay outside the shared folder, including
+through symlinks. Each additional folder needs its own config/state and port; use
+an explicit `--folder-id` to create a separate LAN group when desired.
+
+LAN initialization intentionally publishes existing files in the selected folder.
+That one-time choice is stored in local history, **not** as a permanent bootstrap
+setting. `init --bootstrap join` instead archives existing contents before joining.
+Normal restarts keep the identity and deletion history; lost state with a nonempty
+folder still requires an explicit recovery choice. With `--identity`, the existing
+config-only setup behavior is preserved unless `init --bootstrap` is specified.
+
+### YAML and environment variables
+
+YAML files (`.yaml`/`.yml`) load through [gonfig](https://github.com/TypeTerrors/gonfig)
+v0.1.5. They support comments, `${NAME}`, and `${NAME:-default}`. Missing variables
+without defaults fail clearly. No `.env` files are loaded implicitly. For example,
+the generated settings can be edited to use:
+
+```yaml
+sync-folder: '${GOSYNC_FOLDER:-/data/shared}'
+state-dir: '${GOSYNC_STATE:-/data/gosync-state}'
+folder-id: gosync-lan
+insecure: true
+sync-interval: 1s
+fanout: 2
+```
+
+Environment substitution happens before YAML parsing; values must be valid within
+their YAML quoting. CLI flags override config values. Relative paths resolve beside
+the config file. Unknown keys, nested values, and invalid flag values are rejected.
+Legacy `.json` files still work with their existing literal-string behavior.
+`init --config peer.json` continues to write JSON. A manually created config does
+not perform initialization; for a nonempty folder without history, use the
+one-time bootstrap flags described below.
 
 ## Run
 
@@ -80,7 +155,7 @@ Other flags:
 | `--chunk-size` | `64` | Delta block size requested by this peer, in KiB; 1–1024 |
 | `--debug` | false | Log discovery and retry failures |
 | `--tls-cert`, `--tls-key`, `--tls-ca` | unset | Mutual TLS credentials |
-| `--insecure` | false | Explicitly permit unauthenticated plaintext for isolated tests |
+| `--insecure` | false | Enable automatic LAN access without peer authentication or encryption; saved by LAN `init` |
 
 Local roots may differ. Wire paths are relative and accessed through `os.Root`,
 which confines operations even if a path is replaced with an escaping symlink.
@@ -412,8 +487,8 @@ gosync --config ./host-b.json
 For a new peer whose root already contains files, deliberately select `seed` or
 `join` as described above. Leave that one-time bootstrap choice out of persistent
 configuration so lost state requires a new decision. Subsequent starts need only
-`gosync --config FILE`. Config keys are long flag names without `--`; durations
-are strings such as `"500ms"`, booleans/numbers are JSON values, and explicit flags
+`gosync --config FILE`. YAML and JSON are supported. Config keys are long flag names without `--`; durations
+are strings such as `"500ms"`, booleans/numbers are native values, and explicit flags
 override the file. Unknown keys fail. Relative filesystem paths resolve relative
 to the configuration file. Generated files and identity directories are private.
 
@@ -444,6 +519,16 @@ On Linux with a user systemd session:
 
 ```sh
 make install install-service
+gosync init --sync-folder /path/to/shared  # once, if not already configured
+systemctl --user daemon-reload
+systemctl --user enable --now gosync
+journalctl --user -u gosync -f
+```
+
+The `gosync.service` unit loads the default YAML/JSON config using the same bare
+startup command. Existing named JSON deployments still use the template unit:
+
+```sh
 # Save the configuration at ~/.config/gosync/project.json first.
 systemctl --user daemon-reload
 systemctl --user enable --now gosync@project
