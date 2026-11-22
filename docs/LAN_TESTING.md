@@ -7,7 +7,7 @@ and mutual-TLS certificates, and stops its processes when the run ends. Test
 files, state and logs remain available for inspection. Authentication uses your
 existing SSH configuration/agent or a per-peer SSH control socket; passwords are
 never accepted or stored by the harness. Python 3.8+ is required on each host,
-and Go 1.25+ on the controller to build the Linux/macOS binaries.
+and Go 1.25.1+ on the controller to build the Linux/macOS binaries.
 
 Copy `integration/lan.inventory.example.json` outside the repository and replace
 the documentation addresses with your actual LAN addresses. The entry without

@@ -15,7 +15,7 @@ they do not show measured packets or the actual relay path.
 
 ## Capture a new run
 
-Requires Go 1.25+, Python 3, Docker, and Docker Compose. Run from the repository root:
+Requires Go 1.25.1+, Python 3, Docker, and Docker Compose. Run from the repository root:
 
 ```sh
 python3 docs/demo/capture.py

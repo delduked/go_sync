@@ -6,6 +6,7 @@ test:
 	CGO_ENABLED=1 go test -race ./...
 integration:
 	python3 integration/smoke.py
+	python3 integration/startup.py
 install-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
@@ -20,6 +21,7 @@ PREFIX ?= $(HOME)/.local
 install: build
 	install -Dm755 gosync "$(DESTDIR)$(PREFIX)/bin/gosync"
 install-service:
+	install -Dm644 deploy/gosync.service "$(DESTDIR)$(HOME)/.config/systemd/user/gosync.service"
 	install -Dm644 deploy/gosync@.service "$(DESTDIR)$(HOME)/.config/systemd/user/gosync@.service"
 dist:
 	./scripts/build-release.sh

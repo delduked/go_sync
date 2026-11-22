@@ -52,13 +52,17 @@ func run() error {
 	if len(os.Args) > 1 && (os.Args[1] == "complete" || os.Args[1] == "verify-complete") {
 		return completionCommand(os.Args[1], os.Args[2:])
 	}
+	args, err := startupArgs(os.Args[1:])
+	if err != nil {
+		return err
+	}
 	flags := flag.NewFlagSet("gosync", flag.ContinueOnError)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: gosync --config FILE [options]\nCommands: init, trust, status, rescan, inspect, verify, history, restore, prune, complete, verify-complete")
+		fmt.Fprintln(flags.Output(), "Setup: gosync init --sync-folder /path/to/shared\nStart: gosync (saved default config), or gosync --config FILE [options]\nCommands: init, trust, status, rescan, inspect, verify, history, restore, prune, complete, verify-complete")
 		flags.PrintDefaults()
 	}
 	var configPath string
-	flags.StringVar(&configPath, "config", "", "JSON configuration file; explicit flags override it")
+	flags.StringVar(&configPath, "config", "", "YAML or JSON configuration file; explicit flags override it")
 	var cfg conf.Config
 	var chunkKB int64
 	var debug bool
@@ -76,12 +80,12 @@ func run() error {
 	flags.StringVar(&cfg.Port, "port", "50051", "Listening port")
 	flags.StringVar(&cfg.Peers, "peers", "", "Optional comma-separated peer host:port addresses")
 	flags.BoolVar(&cfg.NoMDNS, "no-mdns", false, "Disable multicast discovery")
-	flags.BoolVar(&cfg.Insecure, "insecure", false, "Explicitly allow unauthenticated plaintext (isolated tests only)")
+	flags.BoolVar(&cfg.Insecure, "insecure", false, "Allow automatic LAN access without peer authentication or encryption")
 	flags.StringVar(&cfg.TLSCert, "tls-cert", "", "PEM certificate for this peer")
 	flags.StringVar(&cfg.TLSKey, "tls-key", "", "PEM private key for this peer")
 	flags.StringVar(&cfg.TLSCA, "tls-ca", "", "PEM CA trusted for peer certificates")
 	flags.BoolVar(&debug, "debug", false, "Enable debug logs")
-	if err := parseConfigFlags(flags, os.Args[1:]); err != nil {
+	if err := parseConfigFlags(flags, args); err != nil {
 		if err == flag.ErrHelp {
 			return nil
 		}
@@ -212,7 +216,7 @@ func transport(cfg conf.Config) (credentials.TransportCredentials, credentials.T
 		return insecure.NewCredentials(), insecure.NewCredentials(), nil
 	}
 	if cfg.TLSCert == "" || cfg.TLSKey == "" || cfg.TLSCA == "" {
-		return nil, nil, fmt.Errorf("provide --tls-cert, --tls-key and --tls-ca, or explicitly use --insecure for isolated tests")
+		return nil, nil, fmt.Errorf("provide --tls-cert, --tls-key and --tls-ca, or use --insecure for automatic LAN access; for simple setup: gosync init --sync-folder /path/to/shared")
 	}
 	cert, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey)
 	if err != nil {
