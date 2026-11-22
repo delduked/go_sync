@@ -157,6 +157,7 @@ extended attributes are outside the current mirrored file model.
 | | |
 |:---|:---|
 | [**Operating guide**](docs/GUIDE.md) | Configuration, trust, file semantics, conflicts, recovery, and service deployment |
+| [**Releases**](docs/RELEASING.md) | Merge tags, downloadable builds, checksums, and release automation |
 | [**Performance & scaling**](docs/PERFORMANCE.md) | Delta transfer costs, relay measurements, resource limits, and validation boundaries |
 | [**LAN testing**](docs/LAN_TESTING.md) | Repeatable two- and three-machine validation |
 | [**Qualification reports**](docs/results/README.md) | Saved Docker and native LAN results |
