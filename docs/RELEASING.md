@@ -22,16 +22,25 @@ and historical merges are not backfilled.
 
 ## Tags and exact source versions
 
-Tags use `merge-<PR number>-<12-character merge SHA>`, for example
-`merge-42-1234567890ab`. These identify merge builds; they are not semantic-version
-stability promises. The merged PR's `merge_commit_sha` is used for both the tag and
+Tags use the project's original `v_<6-character SHA>.<hex Unix timestamp>` format.
+Release display names use `v_<6-character SHA>.<YYYYMMDD>`. For example, a merge
+of commit `1234567890ab…` at `2026-11-22T00:00:00Z` produces:
+
+- Tag: `v_123456.6b023080`
+- Release name: `v_123456.20261122`
+
+The timestamp and UTC date come from the PR's recorded merge time, rather than
+the runner's current clock. Delayed builds and reruns therefore reuse the same
+tag and release name, including when retried on another day. These identify merge
+builds; they are not semantic-version stability promises. The merged PR's
+`merge_commit_sha` is used for both the tag and
 checkout, covering GitHub merge, squash, and rebase merges. Later pushes cannot
 change which source gets built.
 
 The tag is created first, even if subsequent tests or builds fail. A failed build
 does not publish a release. An existing tag pointing elsewhere is an error; the
 workflow never moves it. Per-PR concurrency prevents overlapping reruns without
-cancelling unrelated merges.
+cancelling unrelated merges. Previously published tags and releases are retained.
 
 ## Release contents and checks
 
