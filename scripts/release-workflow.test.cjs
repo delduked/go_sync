@@ -19,12 +19,14 @@ function scriptFor(stepID) {
   while (end < lines.length && (!lines[end].trim() || lines[end].search(/\S/) >= indent)) end++;
   const source = lines.slice(start + 1, end).map(line => line.slice(indent)).join('\n');
   return new (Object.getPrototypeOf(async function () {}).constructor)(
-    'github', 'context', 'core', 'require', 'process', source);
+    'github', 'context', 'core', 'require', 'process', 'Date', source);
 }
 const tagScript = scriptFor('merge');
 const publishScript = scriptFor('publish');
 const sha = '1234567890abcdef1234567890abcdef12345678';
-const tag = `merge-42-${sha.slice(0, 12)}`;
+const mergedAt = '2026-11-22T00:00:00Z';
+const tag = 'v_123456.6b023080';
+const releaseName = 'v_123456.20261122';
 const binaries = ['gosync-darwin-amd64', 'gosync-darwin-arm64', 'gosync-linux-amd64',
   'gosync-linux-arm64', 'gosync-windows-amd64.exe', 'gosync-windows-arm64.exe'];
 const names = [...binaries, 'SHA256SUMS'].sort();
@@ -43,11 +45,16 @@ function fixture(t) {
   fs.writeFileSync(file('SHA256SUMS'), checksums);
   const context = {repo: {owner: 'example', repo: 'gosync'}, payload: {
     action: 'closed', repository: {default_branch: 'main'},
-    pull_request: {number: 42, merged: true, merge_commit_sha: sha, base: {ref: 'main'}},
+    pull_request: {number: 42, merged: true, merged_at: mergedAt, merge_commit_sha: sha, base: {ref: 'main'}},
   }};
   const outputs = {};
   const changes = [];
-  const state = {ref: undefined, release: undefined, assets: [], uploadFailure: undefined};
+  const state = {ref: undefined, release: undefined, assets: [], uploadFailure: undefined,
+    now: Date.parse('2026-11-22T00:10:00Z')};
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [state.now])); }
+    static now() { return state.now; }
+  }
   const github = {rest: {git: {
     async getRef() { if (!state.ref) throw missing(); return {data: state.ref}; },
     async createRef(args) {
@@ -91,18 +98,19 @@ function fixture(t) {
     lstatSync: filename => fs.lstatSync(path.join(root, filename)),
     readFileSync: filename => fs.readFileSync(path.join(root, filename)),
   } : require(name);
-  const environment = {env: {RELEASE_TAG: tag, RELEASE_SHA: sha}};
+  const environment = {env: {RELEASE_TAG: tag, RELEASE_NAME: releaseName, RELEASE_SHA: sha}};
   return {context, outputs, changes, state, file, checksums, environment, github,
-    tag: () => tagScript(github, context, core, localRequire, environment),
-    publish: () => publishScript(github, context, core, localRequire, environment)};
+    tag: () => tagScript(github, context, core, localRequire, environment, Clock),
+    publish: () => publishScript(github, context, core, localRequire, environment, Clock)};
 }
 
 test('main merge gets an exact, stable tag and a release decision', async t => {
   const f = fixture(t);
   await f.tag();
-  assert.deepEqual(f.outputs, {tag, sha, publish: 'true'});
+  assert.deepEqual(f.outputs, {tag, tagname: releaseName, sha, publish: 'true'});
   assert.equal(f.changes[0][1].sha, sha);
   assert.equal(f.changes[0][1].ref, `refs/tags/${tag}`);
+  f.state.now = Date.parse('2026-12-15T12:34:56Z');
   await f.tag();
   assert.equal(f.changes.length, 1, 'rerun must reuse the same tag');
 });
@@ -139,11 +147,48 @@ test('closed unmerged PRs and other activity types make no changes', async t => 
 });
 
 test('invalid merge identity cannot create a tag', async t => {
-  for (const change of [{merge_commit_sha: 'main'}, {number: -1}, {number: '42'}]) {
+  for (const change of [{merge_commit_sha: 'main'}, {number: -1}, {number: '42'},
+    {merged_at: undefined}, {merged_at: null}, {merged_at: 'not a timestamp'},
+    {merged_at: 1795305600}, {merged_at: '1969-12-31T23:59:59Z'}]) {
     const f = fixture(t);
     Object.assign(f.context.payload.pull_request, change);
     await assert.rejects(f.tag(), /invalid merged PR identity/);
     assert.equal(f.changes.length, 0);
+  }
+});
+
+test('hex timestamps and UTC release dates stay correct across midnight', async t => {
+  for (const [time, version, name] of [
+    ['2026-11-21T23:59:59Z', 'v_123456.6b02307f', 'v_123456.20261121'],
+    ['2026-11-22T00:00:01Z', 'v_123456.6b023081', 'v_123456.20261122'],
+  ]) {
+    const f = fixture(t);
+    f.context.payload.pull_request.merged_at = time;
+    f.state.now = Date.parse('2030-01-01T12:00:00Z');
+    await f.tag();
+    assert.equal(f.outputs.tag, version);
+    assert.equal(f.outputs.tagname, name);
+    f.environment.env.RELEASE_TAG = version;
+    f.environment.env.RELEASE_NAME = name;
+    await f.publish();
+    const creation = f.changes.find(([action]) => action === 'create')[1];
+    assert.equal(creation.tag_name, version);
+    assert.equal(creation.name, name);
+  }
+});
+
+test('publication rejects tags or display names from a different merge time', async t => {
+  for (const override of [
+    {RELEASE_TAG: 'merge-42-1234567890ab'},
+    {RELEASE_TAG: 'v_123456.6b023081'},
+    {RELEASE_NAME: 'v_123456.20261121'},
+    {RELEASE_NAME: `GoSync ${tag}`},
+  ]) {
+    const f = fixture(t);
+    await f.tag();
+    Object.assign(f.environment.env, override);
+    await assert.rejects(f.publish(), /default-branch merge|Release name does not match/);
+    assert.deepEqual(f.changes.map(([action]) => action), ['tag']);
   }
 });
 
@@ -168,6 +213,7 @@ test('six verified binaries and checksums upload before the draft is published',
   await f.publish();
   const creation = f.changes.find(([action]) => action === 'create')[1];
   assert.equal(creation.tag_name, tag);
+  assert.equal(creation.name, releaseName);
   assert.equal(creation.target_commitish, sha);
   assert.equal(creation.draft, true);
   assert.equal(creation.generate_release_notes, true);
